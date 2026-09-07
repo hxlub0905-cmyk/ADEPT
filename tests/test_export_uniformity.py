@@ -124,15 +124,43 @@ def test_the_profile_prints_the_slope_in_the_unit_it_is_measured_in(grid):
     assert "/ 100 px" in svg
 
 
-def test_the_heat_map_says_when_it_is_only_showing_one_region(grid):
-    """兩群疊在同一張 (x, y) 上，後畫的會蓋掉先畫的 —— **那件事要講出來**。"""
+def test_the_heat_map_tiles_every_region_in_one_go(grid):
+    """**所有區域一起鋪一次**（PEAR 的 `heat_cells(self._rois, …)`）。
+
+    這一條以前問的是相反的事（「只畫第一群，而且要講出來」）。那個設計是
+    我先製造問題再繞開它：一群鋪一次才會互相蓋，中線由全部的框一起決定就
+    不會 —— 2026-09-07 使用者定調「都按照 PEAR 一樣」。
+    """
     other = _note("mg", [70.0] * 6, [10, 20, 30, 40, 50, 60], [10] * 6)
     s = uc.chart_series([grid, other])
-    svg = uc.build_chart_svg(s, uc.CHART_MAP)
-    assert "not shown" in svg
-    # 只有一群時不該冒出那句話
-    assert "not shown" not in uc.build_chart_svg(uc.chart_series([grid]),
-                                                 uc.CHART_MAP)
+    one = uc.build_chart_svg(uc.chart_series([grid]), uc.CHART_MAP)
+    two = uc.build_chart_svg(s, uc.CHART_MAP)
+    assert "not shown" not in two, "不再有被藏起來的區域"
+    # 兩群的名字都要出現在底下那一行 —— 圖畫的是誰，圖上要說得出來
+    assert "epi" in two and "mg" in two
+    # 格子真的多了（第二群不是被丟掉）
+    assert two.count("<rect") > one.count("<rect")
+
+
+def test_the_heat_map_says_the_colour_scale_is_shared(grid):
+    """一起鋪的代價是**色階跨區域共用** —— 那件事圖上要看得到。
+
+    不然兩個區域各自最紅的地方會被讀成一樣紅，而它們差了一整個量級。
+    """
+    other = _note("mg", [70.0] * 6, [10, 20, 30, 40, 50, 60], [10] * 6)
+    two = uc.build_chart_svg(uc.chart_series([grid, other]), uc.CHART_MAP)
+    assert "one colour scale across 2 regions" in two
+    # 只有一群時不該冒出那句話（沒有「跨」可言）
+    assert "one colour scale" not in uc.build_chart_svg(
+        uc.chart_series([grid]), uc.CHART_MAP)
+
+
+def test_the_heat_map_scale_spans_every_region(grid):
+    """色條的兩端是**全部**的值，不是第一群的（PEAR 的 vmin/vmax 也是全取）。"""
+    other = _note("mg", [70.0] * 6, [10, 20, 30, 40, 50, 60], [10] * 6)
+    two = uc.build_chart_svg(uc.chart_series([grid, other]), uc.CHART_MAP)
+    lo = min(list(grid["spread"]["stats"].values())[0] + [70.0])
+    assert uc._fmt(lo) in two, "色條的下界要含到第二群那 70"
 
 
 def test_the_histogram_legend_carries_each_group_n(grid):
@@ -209,11 +237,11 @@ def test_the_heat_ramp_never_reuses_a_region_colour():
 
 
 def test_the_ramp_runs_cold_to_hot_and_clamps():
-    assert uc._heat_hex(0.0) == uc.HEAT_RAMP[0]
-    assert uc._heat_hex(1.0) == uc.HEAT_RAMP[-1]
-    assert uc._heat_hex(-5.0) == uc.HEAT_RAMP[0]
-    assert uc._heat_hex(9.0) == uc.HEAT_RAMP[-1]
-    assert uc._heat_hex(float("nan")) == uc._MUTED
+    assert uc.heat_hex(0.0) == uc.HEAT_RAMP[0]
+    assert uc.heat_hex(1.0) == uc.HEAT_RAMP[-1]
+    assert uc.heat_hex(-5.0) == uc.HEAT_RAMP[0]
+    assert uc.heat_hex(9.0) == uc.HEAT_RAMP[-1]
+    assert uc.heat_hex(float("nan")) == uc._MUTED
 
 
 # --------------------------------------------------------------------------- #

@@ -441,3 +441,141 @@ def test_profile_along_only_asks_when_that_chart_is_ticked():
     assert param_visible(rule, {"charts": "profile"})
     assert not param_visible(rule, {"charts": "box,map"})
     assert not param_visible(rule, {"charts": ""})
+
+
+# --------------------------------------------------------------------------- #
+# 熱圖疊回影像上（F87 第五刀）
+# --------------------------------------------------------------------------- #
+def _heat_ctx(bright=True):
+    """一張有梯度的影像 ＋ 6×5 格框，跑一次 GLV（`each box` ＋ report）。"""
+    import numpy as np
+
+    from d4t.core.algo.roi import MultiROISet
+    from d4t.core.pipeline import get_step
+    from d4t.core.pipeline.context import Context
+
+    h = w = 420
+    yy, xx = np.mgrid[0:h, 0:w]
+    img = (100.0 + 18.0 * xx / w + 9.0 * yy / h).astype(np.float32)
+    if bright:
+        img[180:220, 250:290] += 26.0
+    rois = MultiROISet()
+    for j in range(5):
+        for i in range(6):
+            rois.add_roi(((20 + 66 * i) / w, (20 + 66 * j) / h,
+                          46 / w, 46 / h), label="cells")
+    ctx = Context(images={"test": img}, rois=rois)
+    get_step("glv_stats")().run(ctx, {
+        "source": "test", "roi": "cells", "across_boxes": "each box",
+        "metrics": "glv_mean", "report": "cv_pct,slope_x,slope_y"})
+    return ctx
+
+
+_HEAT_PARAMS = {"folder": "/tmp/x", "metric": "glv_mean",
+                "charts": "box,histogram,profile,map"}
+
+
+def test_the_heat_overlay_is_the_same_tiles_as_the_written_chart():
+    """**畫面上那一格的顏色 = 報表裡那一格的顏色。**
+
+    這是這一刀唯一真正重要的不變量：兩份各算一次的話，它們會在某一天分岔，
+    而那一天兩張都畫得出來（這個 repo 最貴的那種 bug）。所以問的是
+    `overlay_heat` 交出來的色，跟 `heat_tiles` 直接算的**逐項相同**。
+    """
+    from d4t.core.export import uniformity_charts as uc
+    from d4t.core.pipeline import get_step
+
+    ctx = _heat_ctx()
+    card = get_step("output_uniformity")
+    cells, colours, legend = card.overlay_heat(ctx, _HEAT_PARAMS, "test")
+    assert len(cells) == 30 and len(colours) == 30
+
+    series = uc.chart_series(ctx.meta["glv_hist"], "glv_mean")
+    p = card.validate_params(_HEAT_PARAMS)
+    st = card()._style_for(uc.CHART_MAP, p, "glv_mean")
+    want_cells, want_cols, (lo, hi) = uc.heat_tiles(series, st,
+                                                    bounds=(420, 420))
+    assert colours == want_cols
+    assert legend[0] == lo and legend[1] == hi
+    # 座標是正規化的（同 `set_overlay` / `set_marks` 的契約）
+    for nx, ny, nw, nh in cells:
+        assert 0.0 <= nx <= 1.0 and 0.0 <= ny <= 1.0
+        assert 0.0 < nw <= 1.0 and 0.0 < nh <= 1.0
+    got = [(c[0] * 420, c[1] * 420, (c[0] + c[2]) * 420, (c[1] + c[3]) * 420)
+           for c in cells]
+    for a, b in zip(got, want_cells):
+        assert all(abs(x - y) < 1e-6 for x, y in zip(a, b))
+
+
+def test_the_heat_overlay_covers_every_region_not_just_the_first():
+    """一起鋪 —— 疊圖跟那張 SVG 走同一條路，所以這一條跟著成立。"""
+    import numpy as np
+
+    from d4t.core.algo.roi import MultiROISet
+    from d4t.core.pipeline import get_step
+    from d4t.core.pipeline.context import Context
+
+    h = w = 300
+    img = np.full((h, w), 120.0, dtype=np.float32)
+    img[:, 150:] += 30.0
+    rois = MultiROISet()
+    for i in range(4):
+        rois.add_roi(((10 + 30 * i) / w, 0.1, 20 / w, 20 / h), label="epi")
+    for i in range(4):
+        rois.add_roi(((160 + 30 * i) / w, 0.1, 20 / w, 20 / h), label="mg")
+    ctx = Context(images={"test": img}, rois=rois)
+    get_step("glv_stats")().run(ctx, {
+        "source": "test", "roi": "epi,mg", "across_boxes": "each box",
+        "metrics": "glv_mean", "report": "cv_pct"})
+    cells, colours, _legend = get_step("output_uniformity").overlay_heat(
+        ctx, {"folder": "/tmp/x", "metric": "glv_mean", "charts": "map"},
+        "test")
+    assert len(cells) == 8, "兩個區域的框都要鋪上去"
+    assert len(set(colours)) > 1, "色階跨區域共用 —— 兩邊不該同色"
+
+
+def test_nothing_is_painted_when_the_heat_map_is_not_ticked():
+    """畫面上的東西要跟「會寫出去什麼」對得起來 —— 沒勾就不鋪。"""
+    from d4t.core.pipeline import get_step
+
+    ctx = _heat_ctx()
+    got = get_step("output_uniformity").overlay_heat(
+        ctx, {"folder": "/tmp/x", "metric": "glv_mean",
+              "charts": "box,histogram"}, "test")
+    assert got == ([], [], None)
+
+
+def test_nothing_is_painted_for_a_stream_this_card_did_not_measure():
+    """量在別張影像上的結果不准塗在你正在看的這一張上（同 `overlay_marks`）。"""
+    from d4t.core.pipeline import get_step
+
+    ctx = _heat_ctx()
+    for note in ctx.meta["glv_hist"]:
+        note["stream"] = "test"
+    cells, _c, _l = get_step("output_uniformity").overlay_heat(
+        ctx, _HEAT_PARAMS, "ref")
+    assert cells == []
+
+
+def test_a_context_with_no_image_paints_nothing():
+    """正規化要影像尺寸 —— 拿不到就整組不畫（錯位的顏色指向錯的地方）。"""
+    from d4t.core.pipeline import get_step
+    from d4t.core.pipeline.context import Context
+
+    ctx = _heat_ctx()
+    bare = Context(images={})
+    bare.meta["glv_hist"] = ctx.meta["glv_hist"]
+    assert get_step("output_uniformity").overlay_heat(
+        bare, _HEAT_PARAMS, "") == ([], [], None)
+
+
+def test_every_card_can_be_asked_for_heat_without_blowing_up():
+    """`Step.overlay_heat` 的預設要對**每一張**卡成立 —— 加一張新卡不必動 UI。"""
+    from d4t.core.pipeline import list_steps
+    from d4t.core.pipeline.context import Context
+
+    ctx = Context(images={})
+    for card in list_steps():
+        cells, colours, legend = card.overlay_heat(ctx, {}, "")
+        assert list(cells) == [] or len(cells) == len(colours)
+        assert legend is None or len(tuple(legend)) == 3

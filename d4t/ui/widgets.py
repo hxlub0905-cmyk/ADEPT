@@ -37,6 +37,7 @@ from PySide6.QtGui import (
     QFont,
     QFontMetricsF,
     QImage,
+    QLinearGradient,
     QPainter,
     QPainterPath,
     QPen,
@@ -67,10 +68,11 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.algo import glv as algo_glv
+from ..core.export.uniformity_charts import heat_hex as uc_heat_hex
 from . import glyphs
 from . import region_words
 from . import theme
-from .numbers import format_feature_value
+from .numbers import format_feature_value, format_feature_value_short
 from .theme import TOKENS, region_hex
 
 #: 標記的**角色** → 主題的哪一個顏色權杖（F33）。
@@ -1375,6 +1377,14 @@ class ImageView(QWidget):
         #: 回溯面板點了哪個區域（PR-3）：命中的框全強度、其餘降 alpha。
         #: **不 overload focus** —— 顏色=哪塊、粗細=缺陷格、alpha=你問的那塊。
         self._overlay_emphasis: List[str] = []
+        #: 熱圖那一層（F87）：一塊一個色，鋪在影像上、框與標記**下面**。
+        #: 見 :meth:`set_heat`。
+        self._heat: List[Tuple[float, float, float, float]] = []
+        self._heat_colors: List[str] = []
+        self._heat_legend: Optional[Tuple[float, float, str]] = None
+        #: 疊上去的不透明度（PEAR 是 178/255 —— 底下的圖案還看得見，
+        #: 而顏色已經讀得出來）。
+        self._heat_alpha = 178
         #: 量測標記（F19）：線段、每條線上的點、要畫粗的那一條。見 :meth:`set_marks`。
         self._marks: List[Any] = []
         #: 這一組標記要不要畫滿（`Step.marks_solid`）。
@@ -1542,6 +1552,52 @@ class ImageView(QWidget):
         """現在點亮的區域名（測試讀這個，不去讀畫素）。"""
         return list(self._overlay_emphasis)
 
+    def set_heat(self, cells: Optional[Sequence[Sequence[float]]] = None,
+                 colours: Optional[Sequence[str]] = None,
+                 legend: Optional[Sequence[Any]] = None,
+                 alpha: int = 178) -> None:
+        """把**熱圖**鋪在影像上（正規化座標，同 :meth:`set_overlay`）。
+
+        ``cells`` 是 ``[(nx, ny, nw, nh), …]``、``colours`` 等長的 hex 色，
+        ``legend`` 是 ``(lo, hi, 一句話)``（沒有就不畫色條）。
+
+        為什麼是第三層，而不是 :meth:`set_overlay` 的一個模式
+        ----------------------------------------------------
+        框是**空心的線**，回答「recipe 說要看哪裡」；這一層是**填滿的色**，
+        回答「這一塊量出來多少」。而且它必須畫在框**底下** —— PEAR 的
+        `_paint_heat_cells` 就是這個順序，理由是框的用途是「這一塊的顏色是從
+        哪一格量來的」，被色塊蓋掉的話那句話就沒了。
+
+        資料由**卡片自己**交出來（`Step.overlay_heat`），跟
+        :meth:`set_marks` 同一條界線：meta 的形狀是那張卡的事，UI 只負責畫。
+
+        兩條保險跟 :meth:`set_overlay` 一字不差：座標正規化（縮放平移、換一顆
+        都跟著走），而**長度對不上就整組不畫** —— 錯位的顏色會把值畫在別的
+        地方，而畫面上沒有任何東西透露那件事。
+        """
+        boxes = [tuple(float(v) for v in tuple(c)[:4])
+                 for c in (cells or []) if c is not None and len(tuple(c)) >= 4]
+        cols = [str(c) for c in (colours or [])]
+        if len(cols) != len(boxes):
+            boxes, cols = [], []
+        self._heat = boxes
+        self._heat_colors = cols
+        got = tuple(legend or ())
+        self._heat_legend = ((float(got[0]), float(got[1]), str(got[2]))
+                             if len(got) >= 3 else None)
+        self._heat_alpha = int(max(0, min(255, int(alpha))))
+        self.update()
+
+    def clear_heat(self) -> None:
+        self.set_heat([], [], None)
+
+    def heat_count(self) -> int:
+        """現在鋪了幾塊 —— **測試讀這個**，不去讀畫素。"""
+        return len(self._heat)
+
+    def heat_legend(self) -> Optional[Tuple[float, float, str]]:
+        return self._heat_legend
+
     def set_marks(self, lines: Optional[Sequence[Any]] = None,
                   points: Optional[Sequence[Any]] = None,
                   focus: Any = -1,
@@ -1699,6 +1755,70 @@ class ImageView(QWidget):
     def kernel_hint(self) -> Optional[Tuple[float, str]]:
         """現在畫著的核心大小（沒有就 None）。測試讀這個，不去讀畫素。"""
         return self._kernel
+
+    def _paint_heat(self, p: QPainter) -> None:
+        """半透明的磚 ＋ 一條橫的色條（PEAR 的版型）。
+
+        磚**不描邊**：相鄰兩塊本來就該連成一片，描了邊之後一片梯度會讀成
+        一排小方塊 —— 那正是 `cell_boxes` 鋪滿中線要避免的事。
+        """
+        if self._pixmap is None or not self._heat:
+            return
+        iw, ih = self._pixmap.width(), self._pixmap.height()
+        s_ = self._scale or 1.0
+        p.setPen(Qt.NoPen)
+        for (nx, ny, nw, nh), hexcol in zip(self._heat, self._heat_colors):
+            col = QColor(hexcol)
+            if not col.isValid():
+                continue
+            col.setAlpha(self._heat_alpha)
+            p.setBrush(col)
+            # **相鄰兩塊之間不留縫**：各自四捨五入的話會露出一條背景色的細線，
+            # 而那條線看起來像資料裡的一道邊界。多畫半個像素蓋掉它。
+            p.drawRect(QRectF(self._offset.x() + nx * iw * s_,
+                              self._offset.y() + ny * ih * s_,
+                              max(1.0, nw * iw * s_) + 0.5,
+                              max(1.0, nh * ih * s_) + 0.5))
+        p.setBrush(Qt.NoBrush)
+        self._paint_heat_bar(p)
+
+    def _paint_heat_bar(self, p: QPainter) -> None:
+        """色條 —— **沒有它那些顏色不是資料，只是裝飾**（PEAR 同款：橫的、
+        150×12、壓在左下角，兩端寫值）。"""
+        if self._heat_legend is None:
+            return
+        lo, hi, label = self._heat_legend
+        f = QFont(p.font())
+        f.setPointSizeF(max(7.0, f.pointSizeF() - 1.0))
+        p.setFont(f)
+        fm = QFontMetricsF(f)
+        pad, w, h, line = 5.0, 150.0, 12.0, fm.height()
+        box = QRectF(6.0, self.height() - (line * 2 + h + pad * 2 + 8.0),
+                     w + pad * 2, line * 2 + h + pad * 2)
+        # **底下墊一塊**（同 `_paint_overlay_legend`）：色條會落在影像上，
+        # 而影像可以是任何亮度 —— 直接寫字的話，深色的圖上那兩個數字看不見，
+        # 於是那些顏色不再是資料、只是裝飾。
+        chip = QColor(TOKENS["bg_surface"])
+        chip.setAlpha(205)
+        p.setPen(Qt.NoPen)
+        p.setBrush(chip)
+        p.drawRoundedRect(box, 3.0, 3.0)
+        x, y = box.left() + pad, box.top() + pad + line
+        grad = QLinearGradient(x, 0.0, x + w, 0.0)
+        for t in (0.0, 0.2, 0.4, 0.6, 0.8, 1.0):
+            grad.setColorAt(t, QColor(uc_heat_hex(t)))
+        p.setBrush(grad)
+        p.drawRoundedRect(QRectF(x, y, w, h), 2.0, 2.0)
+        p.setPen(QColor(TOKENS["text_primary"]))
+        p.drawText(QRectF(x, box.top() + pad, w, line),
+                   Qt.AlignLeft | Qt.AlignVCenter, str(label))
+        p.setPen(QColor(TOKENS["text_secondary"]))
+        foot = QRectF(x, y + h, w, line)
+        p.drawText(foot, Qt.AlignLeft | Qt.AlignVCenter,
+                   format_feature_value_short(lo))
+        p.drawText(foot, Qt.AlignRight | Qt.AlignVCenter,
+                   format_feature_value_short(hi))
+        p.setBrush(Qt.NoBrush)
 
     def _paint_overlay(self, p: QPainter) -> None:
         if self._pixmap is None or not self._overlay:
@@ -1924,6 +2044,9 @@ class ImageView(QWidget):
                         self._pixmap.height() * self._scale)
         p.drawPixmap(target, self._pixmap, QRectF(self._pixmap.rect()))
         p.setRenderHint(QPainter.SmoothPixmapTransform, False)
+        # 順序就是意思：熱色在最底（它是「量出來多少」），框與標記畫在它上面
+        # （它們是「量的是哪一塊」）—— 反過來的話框會被色塊蓋掉。
+        self._paint_heat(p)
         self._paint_overlay(p)
         self._paint_marks(p)
         self._paint_measure(p)
