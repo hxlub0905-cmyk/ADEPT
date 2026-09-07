@@ -118,13 +118,29 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
     # ⚠ **四張圖要吃同一份設定。** 盒鬚圖是唯一走這一支的那一張，而
     # 「字級只對四張裡的兩張有效」是最難發現的那種不一致：使用者調了、
     # 有三張變了、一張沒有，而畫面上沒有任何線索說為什麼。
-    st = dict(style or {})
+    # ⚠ ``st`` 在下面的迴圈裡被**重新綁定**成每一組的統計量（`box_stats`），
+    # 所以設定那一份另外留一個名字 —— 迴圈之後還要用它畫軸名。
+    st_all = dict(style or {})
+    st = st_all
     tick_size = float(st.get("tick_size", 10) or 10)
     tick_w = "700" if st.get("tick_bold") else "400"
     tick_ink = str(st.get("tick_color", "") or "") or _TEXT
     axis_size = float(st.get("axis_size", 11) or 11)
     axis_w = "700" if st.get("axis_bold") else "400"
     axis_ink = str(st.get("axis_color", "") or "") or _TEXT
+    # ⚠ **線與記號也要吃設定**（F87 第七刀）。F87 第二刀只接了字 —— 而那一刀
+    # 的 commit 訊息自己寫著「四張圖要吃同一份設定，字級只對四張裡的兩張有效
+    # 是最難發現的那種不一致」。線寬與記號大小是同一句話的下半：使用者把
+    # `Lines width` 拉到 4，三張變粗、盒鬚圖沒有；`Whiskers` 關掉，什麼都沒
+    # 發生（那一格在這之前**沒有任何程式碼讀它**）。
+    #
+    # 做法是**按比例縮放既有的常數**，不是換成一個新數字：預設值下每一條線
+    # 的粗細逐位元組不變（`output_report` 的盒鬚圖沒給 style）。
+    k_line = float(st.get("line_width", 1.6) or 1.6) / 1.6
+    line_ink = str(st.get("line_color", "") or "")
+    k_dot = float(st.get("point_size", 2.6) or 2.6) / 2.6
+    dot_ink = str(st.get("point_color", "") or "")
+    whiskers = bool(st.get("whiskers", True))
     pad_l, pad_r, pad_t, pad_b = 66, 18, 34 if title else 14, 52
     plot_w = max(80, width - pad_l - pad_r)
     plot_h = max(80, height - pad_t - pad_b)
@@ -139,7 +155,18 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
 
     o: List[str] = ['<svg viewBox="0 0 %d %d" width="%d" height="%d" '
                     'xmlns="http://www.w3.org/2000/svg" class="boxplot" '
-                    'role="img">' % (width, height, width, height)]
+                    'role="img">' % (width, height, width, height),
+                    # **白底要畫出來**（F87 第七刀，使用者 2026-09-07：
+                    # 「暗色模式下 preview chart box plot 的表示會跟其他人不
+                    # 一樣」）。以前這一張沒有底：在報表的白色頁面上看不出來，
+                    # 但 Studio 的圖視窗會用主題色當底 —— 暗色主題下這張圖是
+                    # **透明**的，深灰的字落在近黑的底上幾乎看不見，而旁邊三
+                    # 張都是白卡片。
+                    #
+                    # 補的是**底**不是主題：這四張圖會被寫進 HTML 報表、貼進
+                    # 投影片，那些地方是白的。四張一致才是重點。
+                    '<rect width="%d" height="%d" fill="#fff"/>'
+                    % (width, height)]
     if title:
         o.append('<text x="%d" y="18" font-size="13" font-weight="600" '
                  'fill="%s">%s</text>' % (pad_l - 46, _TEXT, _esc(title)))
@@ -163,7 +190,7 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
         return pad_t + plot_h - (float(v) - lo) / (hi - lo) * plot_h
 
     # ---- 座標軸 ----
-    for t in _nice_ticks(lo, hi):
+    for t in _nice_ticks(lo, hi, int(st_all.get("yticks", 5) or 5)):
         y = y_of(t)
         o.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="%s"/>'
                  % (pad_l, y, pad_l + plot_w, y, _GRID))
@@ -188,27 +215,33 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
                      % (cx, pad_t + plot_h / 2, tick_size, tick_w, _MUTED))
         else:
             col = b["colour"]
+            ink = line_ink or col
+            dot = dot_ink or col
             y1, y3, ym = y_of(st["q1"]), y_of(st["q3"]), y_of(st["med"])
             ylo, yhi = y_of(st["lo"]), y_of(st["hi"])
-            o.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" '
-                     'stroke="%s" stroke-width="1.2"/>'
-                     % (cx, ylo, cx, yhi, col))
-            for yy in (ylo, yhi):      # 鬚的兩端各一橫
+            if whiskers:
                 o.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" '
-                         'stroke="%s" stroke-width="1.2"/>'
-                         % (cx - bw / 4, yy, cx + bw / 4, yy, col))
+                         'stroke="%s" stroke-width="%.1f"/>'
+                         % (cx, ylo, cx, yhi, ink, 1.2 * k_line))
+                for yy in (ylo, yhi):      # 鬚的兩端各一橫
+                    o.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" '
+                             'stroke="%s" stroke-width="%.1f"/>'
+                             % (cx - bw / 4, yy, cx + bw / 4, yy, ink,
+                                1.2 * k_line))
             o.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" '
                      'fill="%s" fill-opacity="0.18" stroke="%s" '
-                     'stroke-width="1.4" rx="2"/>'
+                     'stroke-width="%.1f" rx="2"/>'
                      % (cx - bw / 2, min(y1, y3), bw, max(1.0, abs(y1 - y3)),
-                        col, col))
+                        col, ink, 1.4 * k_line))
             o.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" '
-                     'stroke="%s" stroke-width="2.2"/>'
-                     % (cx - bw / 2, ym, cx + bw / 2, ym, col))
+                     'stroke="%s" stroke-width="%.1f"/>'
+                     % (cx - bw / 2, ym, cx + bw / 2, ym, ink, 2.2 * k_line))
             for v in st["outliers"]:
-                o.append('<circle cx="%.1f" cy="%.1f" r="2" fill="none" '
+                # 離群點是**資料**，不受 `points`（「一格框一個記號」）管 ——
+                # 關掉它們等於把「有一顆特別遠」這件事藏起來。
+                o.append('<circle cx="%.1f" cy="%.1f" r="%g" fill="none" '
                          'stroke="%s" stroke-width="1"/>'
-                         % (cx, y_of(v), col))
+                         % (cx, y_of(v), round(2.0 * k_dot, 2), dot))
             o.append('<title>%s: n=%d, median %s, q1 %s, q3 %s</title>'
                      % (_esc(name), st["n"], _fmt(st["med"]),
                         _fmt(st["q1"]), _fmt(st["q3"])))
@@ -222,6 +255,28 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
                  'fill="%s">n=%d</text>'
                  % (cx, pad_t + plot_h + 30, tick_size, tick_w, _MUTED,
                     st["n"] if st else 0))
+
+    # ---- 兩條軸的名字（F87 第七刀）------------------------------------------
+    # ⚠ 這一段以前**不存在**：於是設定編輯器 Box plot 那一頁的「Bottom axis
+    # name」「Side axis name」是兩個打得進去、卻什麼都不會發生的格子。
+    # 一格答了也沒用的設定比沒有那一格更糟（推廣鐵則），而它是
+    # `test_every_editor_moves_the_preview` 逐格試出來的。
+    #
+    # 位置與另外三張一字不差（`uniformity_charts._axis_names`）—— 四張圖擺在
+    # 同一頁上，軸名跳來跳去讀起來像四份不同的報表。
+    xl = str(st_all.get("xlabel") or "")
+    yl = str(st_all.get("ylabel") or "")
+    if xl:
+        o.append('<text x="%.1f" y="%d" font-size="%g" font-weight="%s" '
+                 'fill="%s" text-anchor="middle">%s</text>'
+                 % (pad_l + plot_w / 2, height - 8, axis_size, axis_w,
+                    axis_ink, _esc(xl)))
+    if yl:
+        cy = pad_t + plot_h / 2
+        o.append('<text x="12" y="%.1f" font-size="%g" font-weight="%s" '
+                 'fill="%s" text-anchor="middle" '
+                 'transform="rotate(-90 12 %.1f)">%s</text>'
+                 % (cy, axis_size, axis_w, axis_ink, cy, _esc(yl)))
     o.append("</svg>")
     return "\n".join(o)
 

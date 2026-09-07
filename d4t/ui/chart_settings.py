@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
 
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox, QColorDialog, QDialog, QDialogButtonBox, QDoubleSpinBox,
@@ -35,6 +36,7 @@ from PySide6.QtWidgets import (
 
 from ..core.export import uniformity_charts as uc
 from ..core.pipeline import chart_style as cs
+from .uniformity_window import ChartView, chart_style_for
 from .theme import TOKENS
 from .widgets import apply_button_cursors, small_button
 
@@ -95,6 +97,9 @@ _PER_TIPS: Dict[str, str] = {
 class ColourButton(QWidget):
     """一顆色塊 ＋ 一顆 ×。空字串＝**自動**（跟著區域色／主題走）。"""
 
+    #: 值變了（即時預覽接這個）。
+    changed = Signal(str)
+
     #: 色塊最小寬度 —— 高度是 QSS 的事，這一個是「`auto` 四個字要放得下」。
     SWATCH_W = 58
 
@@ -119,14 +124,18 @@ class ColourButton(QWidget):
         lay.addWidget(self.clear_btn, 0)
         lay.addStretch(1)
         self.setMinimumWidth(self.SWATCH_W + 4 + 24)
-        self._paint()
+        self._paint()          # 建構時只畫，不發訊號（還沒有人接）
 
     def value(self) -> str:
         return self._value
 
     def set_value(self, text: str) -> None:
-        self._value = str(text or "")
+        text = str(text or "")
+        if text == self._value:
+            return
+        self._value = text
         self._paint()
+        self.changed.emit(self._value)
 
     #: 兩顆都自己帶底 —— QSS 的 ``ghost`` 是**透明**的，套在這裡的話
     #: 「auto」那一格讀起來像一行字，而它是按得下去的東西（推廣鐵則：
@@ -187,6 +196,31 @@ def _num_value(box: QWidget) -> Any:
     return int(v) if isinstance(box, QSpinBox) else round(float(v), 4)
 
 
+def _sample_series() -> Dict[str, Any]:
+    """預覽用的樣本 —— **兩個區域、有斜率、有一顆離群**。
+
+    為什麼不是隨便一組數字：這幾格設定要調的東西各自需要不同的東西才看得出
+    來 —— 顏色要**兩群**、`slope` 那條線要有斜度、盒鬚的鬚要有離群點、
+    直方圖的柱數要有足夠的框。一組平的資料會讓半數設定「看起來沒反應」。
+    """
+    from ..core.export import uniformity_charts as uc
+
+    notes = []
+    for k, (name, base, x0) in enumerate(
+            (("region A", 112.0, 40), ("region B", 124.0, 520))):
+        n = 18
+        vals = [base + 0.8 * (i % 6) + 1.6 * (i // 6) for i in range(n)]
+        vals[4] += 6.0 if k == 0 else -5.0          # 一顆離群，鬚才看得出來
+        notes.append({"region": name, "prefix": name, "spread": {
+            "stats": {"value": vals},
+            "cx": [float(x0 + 80 * (i % 6)) for i in range(n)],
+            "cy": [float(40 + 80 * (i // 6)) for i in range(n)],
+            "rects": [[x0 + 80 * (i % 6), 40 + 80 * (i // 6), 56, 56]
+                      for i in range(n)],
+            "boxes": list(range(n))}})
+    return uc.chart_series(notes, "value")
+
+
 class ChartSettingsDialog(QDialog):
     """改 `chart_style` 那一格。``value()`` 回**格式化過的字串**。
 
@@ -194,9 +228,24 @@ class ChartSettingsDialog(QDialog):
     離散的設定，不是拖出來的形狀），而套用之後彈出視窗會當場重畫。
     """
 
+    #: 每一張預覽至少多高（再矮就只剩一團色塊）。
+    PREVIEW_H = 210
+
     def __init__(self, look: str = "", kinds: Optional[Sequence[str]] = None,
-                 parent: Optional[QWidget] = None):
+                 parent: Optional[QWidget] = None,
+                 series: Optional[Dict[str, Any]] = None,
+                 axis: str = uc.AXIS_X):
         super().__init__(parent)
+        #: profile 沿哪一個軸（只影響那一張）—— 卡片上那一格說了算。
+        self._axis = str(axis or uc.AXIS_X)
+        #: 預覽吃的那一顆。沒給就用內建的樣本 —— 一個**空**的預覽區讀起來是
+        #: 「壞了」，而使用者調的是外觀，樣本足以看出每一格的效果。
+        #: 是不是樣本會寫在預覽上方（不然他會以為那是自己的資料）。
+        self._series = dict(series or {})
+        self._is_sample = not (self._series.get("groups") or [])
+        if self._is_sample:
+            self._series = _sample_series()
+        self._live = True
         self.setWindowTitle("Chart settings")
         self.setModal(True)
         self.resize(1020, 680)
@@ -214,6 +263,7 @@ class ChartSettingsDialog(QDialog):
 
         self.globals: Dict[str, QWidget] = {}
         self.per: Dict[str, Dict[str, QWidget]] = {}
+        self.views: Dict[str, ChartView] = {}
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
@@ -265,7 +315,56 @@ class ChartSettingsDialog(QDialog):
         root.addWidget(buttons)
 
         self.set_value(style)
+        self._connect_live()
+        self.refresh_preview()
         apply_button_cursors(self)
+
+    # -- 即時預覽 -----------------------------------------------------------
+    def _connect_live(self) -> None:
+        """每一格改動 → 重畫預覽。
+
+        ⚠ **逐個型別接**，不要用一支泛用的 ``QWidget.changed`` —— Qt 沒有那個
+        東西，而漏接一種的下場是那一格「調了沒反應」，比沒有預覽更糟
+        （使用者會以為那個設定壞了）。有一條測試逐格檢查每一個 widget 都接上
+        了（`test_every_editor_moves_the_preview`）。
+        """
+        for w in list(self.globals.values()) + [
+                e for f in self.per.values() for e in f.values()]:
+            if isinstance(w, ColourButton):
+                w.changed.connect(self.refresh_preview)
+            elif isinstance(w, QCheckBox):
+                w.toggled.connect(self.refresh_preview)
+            elif isinstance(w, QLineEdit):
+                w.textChanged.connect(self.refresh_preview)
+            elif isinstance(w, (QSpinBox, QDoubleSpinBox)):
+                w.valueChanged.connect(self.refresh_preview)
+
+    def set_series(self, series: Optional[Dict[str, Any]]) -> None:
+        """換一份預覽資料（`Chart look` 那一列由 Studio 餵這一顆的）。"""
+        got = dict(series or {})
+        self._is_sample = not (got.get("groups") or [])
+        self._series = _sample_series() if self._is_sample else got
+        self.refresh_preview()
+
+    def refresh_preview(self, *_a) -> None:
+        """把現在畫面上的設定畫成圖。**壞值不准擋路** —— 使用者正在打字，
+        中途一定會經過打不完的狀態。"""
+        if not self._live or not self.views:
+            return
+        try:
+            style = self.value()
+        except Exception:                  # noqa: BLE001 — 見 docstring
+            return
+        metric = str(self._series.get("metric") or "")
+        for kind, view in self.views.items():
+            try:
+                # **跟寫出去的走同一支**（`chart_style_for`）。直接叫
+                # `chart_style.style_for` 的那一版少了卡片那一半，於是
+                # `Name of the value axis` 那一格在預覽上完全沒有反應。
+                view.set_data(self._series,
+                              chart_style_for(style, kind, self._axis, metric))
+            except Exception:              # noqa: BLE001 — 鐵則 7 的 UI 版
+                continue
 
     # -- 版型 ---------------------------------------------------------------
     def _section(self, title: str, parent: QWidget) -> QFrame:
@@ -377,6 +476,12 @@ class ChartSettingsDialog(QDialog):
 
     def _per_chart_group(self, parent: QWidget) -> QWidget:
         box = self._section("Each chart's own words", parent)
+        if self._is_sample:
+            said = QLabel("Previews below use sample data - your run's "
+                          "numbers are not loaded here.", box)
+            said.setWordWrap(True)
+            said.setObjectName("paramHint")
+            box.layout().addWidget(said)
         tabs = QTabWidget(box)
         # 四張分頁一定要同時看得見 —— 捲動箭頭後面那一張的標題就改不到了。
         tabs.setUsesScrollButtons(False)
@@ -386,7 +491,9 @@ class ChartSettingsDialog(QDialog):
             grid.setHorizontalSpacing(10)
             grid.setVerticalSpacing(6)
             fields: Dict[str, QWidget] = {}
-            for r, key in enumerate(cs.PER_CHART_KEYS):
+            keys = [k for k in cs.PER_CHART_KEYS
+                    if k in uc.PER_CHART_APPLIES.get(kind, cs.PER_CHART_KEYS)]
+            for r, key in enumerate(keys):
                 lab = QLabel(_PER_LABELS.get(key, key), page)
                 lab.setMinimumWidth(120)
                 lab.setToolTip(_PER_TIPS.get(key, ""))
@@ -407,7 +514,15 @@ class ChartSettingsDialog(QDialog):
                 grid.addWidget(w, r, 1)
                 fields[key] = w
             grid.setColumnStretch(1, 1)
-            grid.setRowStretch(len(cs.PER_CHART_KEYS), 1)
+            # **即時預覽**（使用者 2026-09-07：「Chart setting 我是希望能支援
+            # 即時 preview（在編輯器內就可以預覽）」）。放在**這一張圖自己的
+            # 分頁裡**：你在改 Box plot 的標題，那張 Box plot 就在正下方。
+            # 全域那幾格（字級、顏色、線寬）也會當場反映在這一張上。
+            view = ChartView(kind, page)
+            view.setMinimumHeight(self.PREVIEW_H)
+            grid.addWidget(view, len(keys), 0, 1, 2)
+            grid.setRowStretch(len(keys), 1)
+            self.views[kind] = view
             self.per[kind] = fields
             tabs.addTab(page, uc.CHART_LABELS.get(kind, kind))
         box.layout().addWidget(tabs, 1)
@@ -417,6 +532,9 @@ class ChartSettingsDialog(QDialog):
     def set_value(self, style: object) -> None:
         """把一份設定放進畫面上。缺的鍵＝預設（`chart_style.DEFAULTS`）。"""
         d = style if isinstance(style, dict) else cs.parse_style(style)
+        # 灌值的時候先關掉預覽：二十幾格各觸發一次，畫面會抖一下，而中途那
+        # 幾張畫的是**半套**設定。最後統一畫一次。
+        was, self._live = self._live, False
         for key, w in self.globals.items():
             got = d.get(key, cs.DEFAULTS[key])
             if isinstance(w, ColourButton):
@@ -435,6 +553,8 @@ class ChartSettingsDialog(QDialog):
                     w.setValue(int(got) if got is not None else w.minimum())
                 else:
                     w.setText(str(got or ""))
+        self._live = was
+        self.refresh_preview()
 
     def reset(self) -> None:
         """全部回預設 —— **包含收起來的那些覆寫**（按鈕上就是這樣寫的）。"""

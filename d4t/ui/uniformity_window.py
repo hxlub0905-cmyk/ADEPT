@@ -34,7 +34,32 @@ from ..core.export import uniformity_charts as uc
 from .theme import TOKENS
 from .widgets import small_button
 
-__all__ = ["ChartView", "UniformityWindow", "fit_into"]
+__all__ = ["ChartView", "UniformityWindow", "chart_style_for", "fit_into"]
+
+
+def chart_style_for(look: str, kind: str, axis: str = uc.AXIS_X,
+                    metric: str = "") -> Dict[str, Any]:
+    """一張圖真正要用的那一份設定 —— **跟寫出去的走同一支**。
+
+    ``chart_style.style_for`` 只做「全域 ＋ 這張圖的覆寫」；還有兩件事住在
+    **卡片**上（`OutputUniformityStep._style_for`）：這張圖預設叫什麼，以及
+    「值那一軸」的名字要落在哪一軸（直方圖是 X、profile 是 Y）。
+
+    ⚠ **UI 這一側只准有這一個入口。** 少走這一支的下場是真的踩過的：設定
+    編輯器裡的預覽直接叫 `chart_style.style_for`，於是改 `Name of the value
+    axis` 那一格**畫面完全沒有反應** —— 而那一格在寫出去的檔案裡是有作用的。
+    「預覽跟輸出不一樣」正是這整個功能最貴的那種 bug。
+    """
+    from ..core.pipeline import get_step
+
+    try:
+        card = get_step("output_uniformity")
+        p = card.validate_params({"folder": "x", "look": str(look or ""),
+                                  "axis": str(axis or uc.AXIS_X),
+                                  "metric": str(metric or "")})
+        return card()._style_for(str(kind), p, str(metric or ""))
+    except Exception:                     # noqa: BLE001 — 顯示用，不能擋畫面
+        return {}
 
 
 def fit_into(size: Any, box: QRectF) -> QRectF:
@@ -186,21 +211,8 @@ class UniformityWindow(QWidget):
             self.views[kind] = view
 
     def style_for(self, kind: str) -> Dict[str, Any]:
-        """一張圖的設定 —— **跟寫出去的走同一支**（`OutputUniformityStep._style_for`）。
-
-        各算一份的話，畫面上看到的跟檔案裡的會在某一天分岔，而那一天兩張都
-        畫得出來。
-        """
-        from ..core.pipeline import get_step
-
-        try:
-            card = get_step("output_uniformity")
-            p = card.validate_params({"folder": "x", "look": self._look,
-                                      "axis": self._axis,
-                                      "metric": self._metric})
-            return card()._style_for(kind, p, self._metric)
-        except Exception:                     # noqa: BLE001 — 顯示用
-            return {}
+        """一張圖的設定 —— 見 :func:`chart_style_for`（UI 這一側唯一的入口）。"""
+        return chart_style_for(self._look, kind, self._axis, self._metric)
 
     def _refresh(self) -> None:
         for kind, view in self.views.items():
@@ -217,7 +229,10 @@ class UniformityWindow(QWidget):
         """開設定，套用之後**當場重畫**並把新字串送出去。"""
         from .chart_settings import ChartSettingsDialog
 
-        dlg = ChartSettingsDialog(self._look, self._kinds, self)
+        # **把這一顆的資料帶進去** —— 編輯器裡的預覽畫的就是你正在看的那一批
+        # 框，不是樣本。調外觀最需要的正是「用我自己的資料看」。
+        dlg = ChartSettingsDialog(self._look, self._kinds, self,
+                                  series=self._series, axis=self._axis)
         if dlg.exec():
             self._look = dlg.value()
             self._refresh()
