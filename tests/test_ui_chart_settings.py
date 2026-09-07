@@ -28,6 +28,7 @@ import d4t.core.steps  # noqa: F401,E402
 from d4t.core.export import uniformity_charts as uc  # noqa: E402
 from d4t.core.pipeline import chart_style as cs  # noqa: E402
 from d4t.core.pipeline import get_step  # noqa: E402
+from d4t.ui import chart_settings  # noqa: E402
 from d4t.ui import studio as studio_mod  # noqa: E402
 from d4t.ui import theme as theme_mod  # noqa: E402
 from d4t.ui.chart_settings import (  # noqa: E402
@@ -212,6 +213,11 @@ def test_the_editors_match_the_kind_of_value(qapp):
                 assert isinstance(w, QCheckBox), key
             else:
                 assert isinstance(w, BoolChips), key
+        elif key in chart_settings.CHIP_VALUES:
+            # 值是字串、而它只有**兩種**（`ramp` 是單色階／彩虹）——
+            # 一個兩選一的東西做成文字框等於要使用者去記那兩個字。
+            # `CHIP_VALUES` 是那條例外的唯一出處（見它的說明）。
+            assert isinstance(w, BoolChips), key
         elif isinstance(default, str):
             assert isinstance(w, QLineEdit), key
         else:
@@ -254,11 +260,17 @@ def test_the_settings_reach_all_four_charts(qapp):
     盒鬚圖走 `boxplot.build_boxplot_svg`、熱圖以前寫死 10px —— 兩條不同的
     路，而「只有兩張跟著變」是使用者會以為自己按錯的那種 bug。
     """
+    from d4t.ui.chart_settings import SAMPLE_SPEC, _sample_frame
+
     s = _series()
+    # ⚠ 散佈圖吃的是**長表**，不是 series —— 少了它那一張畫的是「no boxes to
+    # plot」，而那句話對每一格設定都沒有反應（於是這支測試會說它壞了）。
+    extra = {"frame": _sample_frame(), "spec": SAMPLE_SPEC}
     for kind in uc.CHARTS:
-        a = uc.build_chart_svg(s, kind, cs.style_for("", kind))
+        a = uc.build_chart_svg(s, kind, cs.style_for("", kind), **extra)
         b = uc.build_chart_svg(
-            s, kind, cs.style_for('{"tick_size":22,"tick_bold":true}', kind))
+            s, kind, cs.style_for('{"tick_size":22,"tick_bold":true}', kind),
+            **extra)
         assert a != b, kind
 
 
@@ -821,8 +833,10 @@ def test_the_two_sides_of_a_switch_are_both_named(qapp):
     from d4t.ui.glyphs import CHIP_ICONS
 
     bools = {k for k, v in cs.DEFAULTS.items() if isinstance(v, bool)}
-    # 兩個粗體旗標是那一列裡的一個屬性，不是「要哪一種長相」的問題
-    assert set(BOOL_CHIPS) == bools - {"tick_bold", "axis_bold"}
+    # 兩個粗體旗標是那一列裡的一個屬性，不是「要哪一種長相」的問題；
+    # `CHIP_VALUES` 那幾格值不是 bool，但問的一樣是「要哪一種長相」。
+    assert (set(BOOL_CHIPS) - set(chart_settings.CHIP_VALUES)
+            == bools - {"tick_bold", "axis_bold"})
     for key, (off, on, off_help, on_help) in BOOL_CHIPS.items():
         assert off[0] and on[0] and off[0] != on[0], key
         assert off[1] in CHIP_ICONS and on[1] in CHIP_ICONS, key

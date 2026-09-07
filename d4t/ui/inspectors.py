@@ -3334,6 +3334,20 @@ class UniformityPreviewInspector(OutputPreviewInspector):
         return uc.chart_series(notes, metric=str(
             self.params.get("metric", "") or "").strip())
 
+    def frame(self) -> Any:
+        """一列一格框的長表 —— **跟 `boxes.csv` 走同一支** `build_frame`。
+
+        散佈圖吃的是這一份，不是 `series`（兩條軸是使用者自己挑的欄，而
+        `series` 只裝得下「一個統計量 ＋ 位置」）。UI 不自己再攤一次：畫面上
+        那張圖跟寫出去的 CSV 對不起來的話，沒有人看得出哪一份是對的。
+        """
+        from ..core.export import chart_frame
+
+        notes = self.meta.get("glv_hist")
+        if not isinstance(notes, list):
+            return chart_frame.build_frame([])
+        return chart_frame.build_frame(notes)
+
     def rows(self) -> List[Dict[str, Any]]:
         """小表的列 —— **報告頁上那一張表的同一支**。"""
         from ..core.export import uniformity_charts as uc

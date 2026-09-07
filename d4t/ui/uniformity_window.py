@@ -89,27 +89,44 @@ class ChartView(QWidget):
         self.kind = str(kind)
         self._series: Dict[str, Any] = {}
         self._style: Dict[str, Any] = {}
+        #: 散佈圖吃的那一份（一列一格框的長表 ＋ 哪一欄放到哪一個角色）。
+        #: 別的圖用不到 —— `build_chart_svg` 只把它轉給認得它的那一張。
+        self._frame: Any = None
+        self._spec: str = ""
         self.setMinimumSize(self.MIN_W, self.MIN_H)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     def set_data(self, series: Dict[str, Any],
-                 style: Optional[Dict[str, Any]] = None) -> None:
+                 style: Optional[Dict[str, Any]] = None,
+                 frame: Any = None, spec: object = None) -> None:
         self._series = dict(series or {})
         self._style = dict(style or {})
+        # ⚠ ``None`` 是「這一次沒有給」，不是「清掉」—— 四張老圖的呼叫端
+        # 一個字都沒改，而它們本來就不傳這兩個。
+        if frame is not None:
+            self._frame = frame
+        if spec is not None:
+            self._spec = str(spec)
         self.update()
 
     def svg(self) -> str:
         """這一格現在畫的那份 SVG（測試讀它，不去讀畫素）。"""
         return uc.build_chart_svg(self._series, self.kind, self._style,
                                   width=max(self.MIN_W, self.width()),
-                                  height=max(self.MIN_H, self.height()))
+                                  height=max(self.MIN_H, self.height()),
+                                  frame=self._frame, spec=self._spec)
 
     def paintEvent(self, event) -> None:      # noqa: D102, N802
         p = QPainter(self)
         try:
             p.setRenderHint(QPainter.Antialiasing, True)
             p.fillRect(self.rect(), QColor(TOKENS["bg_surface"]))
-            if not (self._series.get("groups") or []):
+            # ⚠ 散佈圖**不看 `groups`** —— 它吃的是長表，而一份有框的
+            # 長表配著一個空的 `groups` 是正常的（只有一格框、或走 pooled）。
+            # 拿這一條擋它的話，畫面上是一句「no boxes to plot」而檔案裡
+            # 有圖，兩邊說的話不一樣。
+            if self.kind != uc.CHART_SCATTER and not (
+                    self._series.get("groups") or []):
                 p.setPen(QColor(TOKENS["text_secondary"]))
                 p.drawText(QRectF(self.rect()), int(Qt.AlignCenter),
                            "no boxes to plot")
@@ -152,6 +169,8 @@ class UniformityWindow(QWidget):
         self._axis = uc.AXIS_X
         self._metric = ""
         self._kinds: List[str] = list(uc.CHARTS)
+        self._frame: Any = None
+        self._spec = ""
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 10, 12, 12)
@@ -180,9 +199,16 @@ class UniformityWindow(QWidget):
     # -- 資料 ---------------------------------------------------------------
     def set_context(self, series: Dict[str, Any], look: str = "",
                     axis: str = uc.AXIS_X, metric: str = "",
-                    kinds: Optional[Sequence[str]] = None) -> None:
-        """餵一顆 defect 的資料 ＋ 那張卡現在的設定。"""
+                    kinds: Optional[Sequence[str]] = None,
+                    frame: Any = None, spec: str = "") -> None:
+        """餵一顆 defect 的資料 ＋ 那張卡現在的設定。
+
+        ``frame`` / ``spec`` 是散佈圖那一張要的（一列一格框的長表 ＋ 哪一欄
+        放到哪一個角色）—— 別的圖用不到，沒給就是沒有散佈圖可畫。
+        """
         self._series = dict(series or {})
+        self._frame = frame
+        self._spec = str(spec or "")
         self._look = str(look or "")
         self._axis = str(axis or uc.AXIS_X)
         self._metric = str(metric or self._series.get("metric") or "")
@@ -214,7 +240,8 @@ class UniformityWindow(QWidget):
 
     def _refresh(self) -> None:
         for kind, view in self.views.items():
-            view.set_data(self._series, self.style_for(kind))
+            view.set_data(self._series, self.style_for(kind),
+                          frame=self._frame, spec=self._spec)
         groups = self._series.get("groups") or []
         boxes = sum(len(g.get("values") or ()) for g in groups)
         self.head.setText(
@@ -230,7 +257,8 @@ class UniformityWindow(QWidget):
         # **把這一顆的資料帶進去** —— 編輯器裡的預覽畫的就是你正在看的那一批
         # 框，不是樣本。調外觀最需要的正是「用我自己的資料看」。
         dlg = ChartSettingsDialog(self._look, self._kinds, self,
-                                  series=self._series, axis=self._axis)
+                                  series=self._series, axis=self._axis,
+                                  frame=self._frame, spec=self._spec)
         if dlg.exec():
             self._look = dlg.value()
             self._refresh()

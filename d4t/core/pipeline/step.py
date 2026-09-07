@@ -32,6 +32,10 @@ from .context import Context
 from .cellrois import CellRoiError, format_cell_rois, parse_cell_rois
 from .channels import ChannelMapError, format_channel_map, parse_channel_map
 from .curve import CurveError, format_curve, parse_curve
+from .chart_spec import (
+    ChartSpecError, format_spec as format_chart_spec,
+    parse_spec as parse_chart_spec,
+)
 from .chart_style import (
     ChartStyleError, format_style as format_chart_style,
     parse_style as parse_chart_style,
@@ -189,7 +193,8 @@ _CATEGORIES = (CATEGORY_IMAGE, CATEGORY_ALGO, CATEGORY_ADC, CATEGORY_BATCH)
 PARAM_TYPES = ("int", "float", "bool", "str", "expr",
                "feature_key", "feature_keys",
                "choice", "image_key",
-               "image_keys", "curve", "chart_style", "template",
+               "image_keys", "curve", "chart_style", "chart_spec",
+               "template",
                "multi_choice",
                "metric_chips", "metric_choice", "channel_map", "cell_rois",
                "region_key", "region_keys", "chip_choice")
@@ -683,6 +688,12 @@ class ParamSpec:
                 # 擋在這裡而不是等 run() 才炸（鐵則 4）。順便正規化：
                 # 排序、去空白、統一小數位 —— 手打的字串與 UI 拉出來的一樣。
                 v = format_curve(parse_curve(value))
+            elif self.type == "chart_spec":
+                # 同 `chart_style`：擋在打字的當下（鐵則 4）並正規化 ——
+                # 排序過的 JSON、空的角色不寫出來，round-trip 是 identity
+                # （鐵則 9）。⚠ **不驗欄位存不存在** —— 那要有資料才知道，
+                # 見 `chart_spec` 的模組說明。
+                v = format_chart_spec(parse_chart_spec(value))
             elif self.type == "chart_style":
                 # 同 `curve`：擋在打字的當下（鐵則 4）並正規化 —— 排序、
                 # 丟掉等於預設的、整數存成整數，好讓 round-trip 是 identity
@@ -718,7 +729,7 @@ class ParamSpec:
         except ParamError:
             raise
         except (CurveError, ChannelMapError, CellRoiError,
-                ChartStyleError) as exc:
+                ChartStyleError, ChartSpecError) as exc:
             # 這幾個的訊息已經是白話的，別被下面的通用訊息蓋掉
             # （「'{"tick_size":99}' cannot be converted to chart_style」對
             # 使用者沒有意義；「tick_size is 99, which is outside 5–28」有）

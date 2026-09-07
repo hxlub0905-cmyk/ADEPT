@@ -88,6 +88,7 @@ CHIP_ICONS = (
     "cells_equal", "cells_true",          # 熱圖每一格一樣大還是照實鋪
     "cells_plain", "cells_values",        # 熱圖每一格印不印值
     "range_auto", "range_locked",         # 數值範圍自己挑還是鎖死
+    "ramp_mono", "ramp_rainbow",          # 顏色代表大小時走單色階還是彩虹
 )
 
 #: 「原本就在那裡的東西」的透明度。跟 `widgets._draw_profile_glyph` 同一個值
@@ -822,6 +823,21 @@ def _cell_values(g: _Pad, values: bool) -> None:
                 g.blk(x, y, x + 0.28, y + 0.08, True)
 
 
+def _ramp(g: _Pad, rainbow: bool) -> None:
+    # 一條色階。**單色**是一路變深的四段；**彩虹**是四段各自跳一次
+    # （差別做在「有沒有台階」而不是顏色 —— 這一排圖示只有一種墨色）。
+    n = 4
+    for i in range(n):
+        x = 0.08 + i * (0.84 / n)
+        if rainbow:
+            # 高低交錯：讀起來是「一段一段跳」，那正是彩虹階的問題。
+            top = 0.24 if i % 2 else 0.52
+            g.blk(x, top, x + 0.84 / n - 0.03, 0.86, True)
+        else:
+            # 一路長高：讀起來是「由淺到深」。
+            g.blk(x, 0.80 - i * 0.16, x + 0.84 / n - 0.03, 0.86, True)
+
+
 def _range(g: _Pad, locked: bool) -> None:
     # 一條軸。**auto** 是兩端開口的箭頭；**locked** 是兩端被夾住的短槓。
     g.line(0.10, 0.5, 0.90, 0.5, True, 0.08)
@@ -920,6 +936,8 @@ _DRAW = {
     "cells_values": lambda g: _cell_values(g, True),
     "range_auto": lambda g: _range(g, False),
     "range_locked": lambda g: _range(g, True),
+    "ramp_mono": lambda g: _ramp(g, False),
+    "ramp_rainbow": lambda g: _ramp(g, True),
     "adc_number": _adc_number,
     "adc_question": _adc_question,
     "adc_tray": _adc_tray,

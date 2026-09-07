@@ -107,10 +107,12 @@ def test_every_defect_gets_a_page_and_one_file_per_figure(dataset, tmp_path):
     assert len(pages) == len(rows) > 0
     for page in pages:
         stem = page.stem
-        for kind in uc.CHARTS:
+        # ⚠ **預設勾的那幾張**，不是全部 —— 散佈圖的兩條軸要使用者自己挑
+        # （`DEFAULT_CHARTS` 的說明）。
+        for kind in uc.DEFAULT_CHARTS:
             assert (out / ("%s-%s.svg" % (stem, kind))).is_file(), kind
         text = page.read_text(encoding="utf-8")
-        assert text.count("<svg") == len(uc.CHARTS)
+        assert text.count("<svg") == len(uc.DEFAULT_CHARTS)
     assert str(out) in bctx.outputs
 
 
@@ -357,7 +359,10 @@ def test_the_look_is_one_parameter_not_twenty_five(dataset, tmp_path):
     for gone in ("value_name", "value_lo", "value_hi", "points", "bins",
                  "percent"):
         assert gone not in names, "%s 應該折進 look 了" % gone
-    assert len(names) <= 8, "面板又長回去了：%s" % names
+    # ⚠ 上限從 8 變 9（F88 第二刀的 `spec`）。**它預設是收起來的**
+    # （沒勾散佈圖就看不到），所以「面板有多長」實際上沒有變 —— 但這個上限
+    # 存在的理由是「不要一格一格加回去」，所以每加一格都要在這裡動一次手。
+    assert len(names) <= 9, "面板又長回去了：%s" % names
 
 
 @pytest.mark.parametrize("kind", ["box", "histogram", "profile", "map"])

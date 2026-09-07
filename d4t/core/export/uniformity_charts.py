@@ -53,7 +53,7 @@ from .boxplot import (  # noqa: PLC2701 — 見上
 )
 
 __all__ = [
-    "resolve_style",
+    "resolve_style", "SEQ_RAMP", "seq_hex",
     "CHARTS", "CHART_LABELS", "REGION_COLOURS", "AXES", "UNIF_COLUMNS",
     "chart_series", "build_chart_svg", "build_charts_page",
     "summary_rows", "build_index_page",
@@ -62,7 +62,19 @@ __all__ = [
 #: 四種圖的值（recipe / 參數用的 id，不要改）。
 CHART_BOX, CHART_HIST = "box", "histogram"
 CHART_PROFILE, CHART_MAP = "profile", "map"
-CHARTS: Tuple[str, ...] = (CHART_BOX, CHART_HIST, CHART_PROFILE, CHART_MAP)
+#: F88 第二刀：**第一張由 spec 決定長相的圖**（`chart_spec` ＋ `chart_draw`）。
+#: 其餘四張在第四刀會變成同一個引擎的預設組合。
+CHART_SCATTER = "scatter"
+CHARTS: Tuple[str, ...] = (CHART_BOX, CHART_HIST, CHART_PROFILE, CHART_MAP,
+                           CHART_SCATTER)
+
+#: **預設勾哪幾張** —— 刻意**不是** :data:`CHARTS` 全部。
+#:
+#: 散佈圖的兩條軸是使用者自己挑的（`pipeline.chart_spec`），所以預設勾著它
+#: 等於「一張全新的卡片預設就會寫一個畫不出來的檔案」，而畫布上還會掛著一條
+#: 說設定沒做完的黃字。那四張不必問任何問題就畫得出來，這一張要問兩個。
+DEFAULT_CHARTS: Tuple[str, ...] = (CHART_BOX, CHART_HIST, CHART_PROFILE,
+                                   CHART_MAP)
 
 #: 畫面與檔名上的字（使用者 2026-09-07 定調 ``position profile``）。
 CHART_LABELS: Dict[str, str] = {
@@ -70,6 +82,7 @@ CHART_LABELS: Dict[str, str] = {
     CHART_HIST: "Histogram",
     CHART_PROFILE: "Position profile",
     CHART_MAP: "Heat map",
+    CHART_SCATTER: "Scatter",
 }
 
 #: 每張圖**用得到**哪幾格「自己的字」（`chart_style.PER_CHART_KEYS` 的子集）。
@@ -89,6 +102,8 @@ PER_CHART_APPLIES: Dict[str, Tuple[str, ...]] = {
     # 也沒有軸名（「X (px)」對讀圖的人不是一句話，底下那一行
     # `區域 - 統計量` 才是）。所以它只剩標題。
     CHART_MAP: ("title",),
+    # 散佈圖的兩條軸是**使用者自己挑的欄**，所以名字與刻度數都用得到。
+    CHART_SCATTER: ("title", "xlabel", "ylabel", "xticks", "yticks"),
 }
 
 #: 哪幾格**全域**設定只對某幾張圖有意思（沒列的就是四張都用得到）。
@@ -107,12 +122,14 @@ GLOBAL_APPLIES: Dict[str, Tuple[str, ...]] = {
     "map_values": (CHART_MAP,),
     # 一格框一個記號：profile 的散點，以及熱圖照實鋪時描出來的那個框
     "points": (CHART_PROFILE, CHART_MAP),
-    "point_fill": (CHART_PROFILE,),
+    "point_fill": (CHART_PROFILE, CHART_SCATTER),
     "fill_strength": (CHART_BOX, CHART_HIST, CHART_PROFILE),
     "fill_color": (CHART_BOX, CHART_HIST, CHART_PROFILE),
     # 盒鬚圖的 X 是類別、熱圖兩軸是位置 —— 兩張都沒有「橫著幾個刻度」
-    "xticks": (CHART_HIST, CHART_PROFILE),
-    "yticks": (CHART_BOX, CHART_HIST, CHART_PROFILE),
+    "xticks": (CHART_HIST, CHART_PROFILE, CHART_SCATTER),
+    "yticks": (CHART_BOX, CHART_HIST, CHART_PROFILE, CHART_SCATTER),
+    # 色階只有「顏色代表大小」的那兩張用得到
+    "ramp": (CHART_MAP, CHART_SCATTER),
 }
 
 #: `profile` 沿哪一個軸。
@@ -129,6 +146,20 @@ REGION_COLOURS: Tuple[str, ...] = (
 #: 決定現在是哪一種。
 HEAT_RAMP: Tuple[str, ...] = (
     "#2b3a67", "#3d6fa8", "#4aa3a2", "#c9c05a", "#e8913c", "#c0392b")
+
+#: **單色階**（由淺到深的藍）—— 表示「大小」的預設。
+#:
+#: 通用規則是「表示大小用**單一色相、由淺到深**，不要彩虹」：彩虹在中段會製造
+#: 出資料裡沒有的假邊界，而讀圖的人會把那道邊界當成一件事。
+#: 但半導體的 wafer map 慣例就是彩虹 —— 所以**兩種都留**，預設單色
+#: （使用者 2026-09-07：「兩種都可 預設單色」）。切換是 `chart_style` 的
+#: `ramp` 那一格。
+#:
+#: 藍色是這個介面的重音色（`theme.accent` 是 `#3574d6`），所以這一階跟畫面
+#: 其他地方是同一個家族。
+SEQ_RAMP: Tuple[str, ...] = (
+    "#eaf1fc", "#c2d6f2", "#8fb6ec", "#5a8fdd", "#3574d6", "#2b5eb0",
+    "#1d3f77")
 
 _AXIS = "#98a2b3"
 _TEXT = "#444"
@@ -332,6 +363,11 @@ def _opacity(value: float) -> str:
     return text or "0"
 
 
+def seq_hex(t: float) -> str:
+    """0–1 → **單色階**上的一個顏色（見 :data:`SEQ_RAMP`）。"""
+    return _ramp_hex(SEQ_RAMP, t)
+
+
 def _is_dark(hex_colour: str) -> bool:
     """這個底色上該用白字還是黑字（同 PEAR 的 `_is_dark`）。"""
     t = str(hex_colour or "").strip()
@@ -372,18 +408,23 @@ def _slot_labels(o: List[str], centers: Sequence[float], origin: float,
 
 
 def heat_hex(t: float) -> str:
-    """0–1 → 色階上的一個顏色（線性內插，兩端夾住）。
+    """0–1 → **彩虹色階**上的一個顏色（線性內插，兩端夾住）。
 
     **色階唯一的出處** —— 寫出去的 SVG、疊在影像上的那一層、以及影像上那條
     色條都問這一支。抄一份的那天，畫面上的紅跟報表裡的紅會是兩個紅。
     """
+    return _ramp_hex(HEAT_RAMP, t)
+
+
+def _ramp_hex(ramp: Sequence[str], t: float) -> str:
+    """一階色 ＋ 0–1 → 一個顏色（線性內插，兩端夾住）。"""
     if not math.isfinite(t):
         return _MUTED
     t = min(1.0, max(0.0, float(t)))
-    pos = t * (len(HEAT_RAMP) - 1)
-    i = min(len(HEAT_RAMP) - 2, int(pos))
+    pos = t * (len(ramp) - 1)
+    i = min(len(ramp) - 2, int(pos))
     f = pos - i
-    a, b = HEAT_RAMP[i], HEAT_RAMP[i + 1]
+    a, b = ramp[i], ramp[i + 1]
     out = []
     for k in (1, 3, 5):
         ca, cb = int(a[k:k + 2], 16), int(b[k:k + 2], 16)
@@ -666,7 +707,10 @@ def _heat_values(series: Dict[str, Any], style: Optional[Dict[str, Any]] = None
         return [], [], [], (0.0, 0.0)
     lo, hi = _span(vals, st.get("hlock"))
     span = (hi - lo) or 0.0
-    cols = [heat_hex(0.5 if span <= 0 else (v - lo) / span) for v in vals]
+    # 單色還是彩虹（`chart_style.ramp`，使用者 2026-09-07 定調預設單色）。
+    # **兩種鋪法與疊在影像上的那一層都走這裡**，所以切換一次全部跟著。
+    ink = heat_hex if str(st.get("ramp", "")) == "rainbow" else seq_hex
+    cols = [ink(0.5 if span <= 0 else (v - lo) / span) for v in vals]
     return vals, rects, cols, (lo, hi)
 
 
@@ -846,12 +890,12 @@ def _svg_map(series: Dict[str, Any], style: Dict[str, Any],
 
     # ---- 色條 -------------------------------------------------------------
     bx, bw_ = width - pad_r + 16, 14
+    ink = heat_hex if str(style.get("ramp", "")) == "rainbow" else seq_hex
     for i in range(64):
         t = 1.0 - i / 63.0
         o.append("<rect x='%.1f' y='%.2f' width='%d' height='%.2f' fill='%s' "
                  "stroke='none'/>"
-                 % (bx, pad_t + i * ph / 64.0, bw_, ph / 64.0 + 0.6,
-                    heat_hex(t)))
+                 % (bx, pad_t + i * ph / 64.0, bw_, ph / 64.0 + 0.6, ink(t)))
     o.append("<rect x='%.1f' y='%.1f' width='%d' height='%.1f' fill='none' "
              "stroke='%s' stroke-width='1'/>" % (bx, pad_t, bw_, ph, _AXIS))
     for t, ty in ((hi, pad_t + 4), (lo, pad_t + ph)):
@@ -883,7 +927,9 @@ def _svg_map(series: Dict[str, Any], style: Dict[str, Any],
 # --------------------------------------------------------------------------- #
 def build_chart_svg(series: Dict[str, Any], kind: str = CHART_BOX,
                     style: Optional[Dict[str, Any]] = None,
-                    width: int = 640, height: int = 420) -> str:
+                    width: int = 640, height: int = 420,
+                    frame: Optional[Any] = None,
+                    spec: Optional[Any] = None) -> str:
     """一張圖。``kind`` 見 :data:`CHARTS`；認不得的字當 ``box``。
 
     ``style`` 的每一格都是**選填的覆寫**（空的就自己決定）::
@@ -913,6 +959,18 @@ def build_chart_svg(series: Dict[str, Any], kind: str = CHART_BOX,
         return _svg_profile(series, st, width, height)
     if k == CHART_MAP:
         return _svg_map(series, st, width, height)
+    if k == CHART_SCATTER:
+        # ⚠ **這一張吃的是長表，不是 series**（F88 第二刀）—— 兩條軸是使用者
+        # 自己挑的欄，而 series 只裝得下「一個統計量 ＋ 位置」。
+        #
+        # 走**同一個入口**是刻意的：呼叫端（卡片、圖的視窗、設定編輯器的預覽）
+        # 只要問這一支就好，「哪一種圖要哪一種資料」是這裡的事。少一份 frame
+        # 就說出來，不要畫一張空白。
+        from .chart_draw import draw as _draw
+
+        if frame is None or not len(frame):
+            return _empty(width, height, "no boxes to plot")
+        return _draw(frame, spec, st, width, height)
     # 盒鬚圖走 `boxplot` 那一支（同一組 Tukey 鬚，見檔頭）
     groups = [g for g in series.get("groups") or [] if g.get("values")]
     if not groups:
@@ -927,7 +985,9 @@ def build_chart_svg(series: Dict[str, Any], kind: str = CHART_BOX,
 
 def build_charts_page(series: Dict[str, Any], kinds: Sequence[str],
                       title: str, subtitle: str = "",
-                      style: Optional[Dict[str, Any]] = None) -> str:
+                      style: Optional[Dict[str, Any]] = None,
+                      frame: Optional[Any] = None,
+                      spec: Optional[Any] = None) -> str:
     """幾張圖一頁（由上往下）—— 走 `boxplot.build_boxplot_page` 的版型。
 
     版型共用而不是抄一份：兩頁在同一份報表資料夾裡並排，字級不一樣的那天
@@ -944,7 +1004,8 @@ def build_charts_page(series: Dict[str, Any], kinds: Sequence[str],
         one = dict(st)
         one.setdefault("title", CHART_LABELS.get(kk, kk))
         charts.append({"name": CHART_LABELS.get(kk, kk),
-                       "svg": build_chart_svg(series, kk, one)})
+                       "svg": build_chart_svg(series, kk, one,
+                                              frame=frame, spec=spec)})
     return build_boxplot_page(charts, title, subtitle=subtitle)
 
 

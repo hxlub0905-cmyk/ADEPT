@@ -94,13 +94,39 @@ def test_asking_for_a_metric_nobody_measured_gives_nothing(grid):
 # --------------------------------------------------------------------------- #
 # 2. 四種圖都畫得出來
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("kind", uc.CHARTS)
+@pytest.mark.parametrize("kind", uc.DEFAULT_CHARTS)
 def test_every_chart_renders_valid_xml(grid, kind):
+    """⚠ **預設勾的那幾張** —— 只有它們光靠 `series` 就畫得出來。散佈圖吃的
+    是長表 ＋ 一份角色配置，見下面那一支。"""
     svg = uc.build_chart_svg(uc.chart_series([grid]), kind,
                              {"title": uc.CHART_LABELS[kind]})
     doc = _xml(svg)
     assert doc.documentElement.tagName == "svg"
     assert uc.CHART_LABELS[kind] in svg
+
+
+def test_the_scatter_needs_a_frame_and_a_spec(grid):
+    """散佈圖走的是另一條路（長表），而**兩份都要**。"""
+    from d4t.core.export import chart_frame
+
+    frame = chart_frame.build_frame([grid])
+    metric = uc.chart_series([grid])["metric"]
+    st = {"title": uc.CHART_LABELS[uc.CHART_SCATTER]}
+    spec = '{"mark":"point","x":"x","y":"%s"}' % metric
+
+    svg = uc.build_chart_svg({}, uc.CHART_SCATTER, st, frame=frame, spec=spec)
+    _xml(svg)
+    assert uc.CHART_LABELS[uc.CHART_SCATTER] in svg
+    assert svg.count("<circle") == len(frame)
+
+    # 少了 spec **要說出原因**，不是畫一張空白（同 `_empty` 那條規矩）。
+    said = uc.build_chart_svg({}, uc.CHART_SCATTER, st, frame=frame)
+    _xml(said)
+    assert "pick x and y" in said
+    # 少了長表也一樣。
+    none = uc.build_chart_svg({}, uc.CHART_SCATTER, st, spec=spec)
+    _xml(none)
+    assert "no boxes to plot" in none
 
 
 @pytest.mark.parametrize("kind", uc.CHARTS)
@@ -248,7 +274,13 @@ def test_the_ramp_runs_cold_to_hot_and_clamps():
 # 5. 一頁 —— 版型跟盒鬚圖那一頁共用
 # --------------------------------------------------------------------------- #
 def test_the_page_holds_every_chart_that_was_asked_for(grid):
-    page = uc.build_charts_page(uc.chart_series([grid]), uc.CHARTS, "Uniformity")
+    from d4t.core.export import chart_frame
+
+    metric = uc.chart_series([grid])["metric"]
+    page = uc.build_charts_page(
+        uc.chart_series([grid]), uc.CHARTS, "Uniformity",
+        frame=chart_frame.build_frame([grid]),
+        spec='{"mark":"point","x":"x","y":"%s"}' % metric)
     assert page.count("<svg") == len(uc.CHARTS)
     for label in uc.CHART_LABELS.values():
         assert label in page
