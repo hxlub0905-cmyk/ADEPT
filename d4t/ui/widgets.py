@@ -4579,6 +4579,16 @@ class ParamForm(QWidget):
             if isinstance(row.editor, ChartStyleField):
                 row.editor.set_series(series)
 
+    def set_chart_frame(self, frame: Any) -> None:
+        """把這一顆的**長表**交給 `chart_spec` 那一列（散佈圖的選單）。
+
+        同 :meth:`set_chart_series` 的理由：UI 不自己再攤一次 —— 畫面上那張
+        圖跟寫出去的 `boxes.csv` 對不起來的話，沒有人看得出哪一份是對的。
+        """
+        for row in self._rows.values():
+            if isinstance(row.editor, ChartSpecField):
+                row.editor.set_frame(frame)
+
     def _chart_kinds(self) -> List[str]:
         """`chart_style` 的編輯器要開哪幾個分頁 —— **那張卡說的**。
 
@@ -5007,6 +5017,13 @@ class ParamForm(QWidget):
             if text in choices:
                 w.setCurrentIndex(choices.index(text))
             w.currentTextChanged.connect(lambda t, n=name: self._emit(n, str(t)))
+            return w
+
+        if ptype == "chart_spec":
+            # 一格參數 ＋ 專屬編輯器（同 `chart_style` / `curve`）。
+            w = ChartSpecField()
+            w.set_text("" if value is None else str(value))
+            w.spec_changed.connect(lambda t, n=name: self._emit(n, str(t)))
             return w
 
         if ptype == "chart_style":
@@ -5584,6 +5601,66 @@ class ChartStyleField(QWidget):
                     self.style_changed.emit(got)
         finally:
             self._dialog = None
+
+
+class ChartSpecField(QWidget):
+    """`chart_spec` 那一格：**一句摘要 ＋ 一顆 `Chart\u2026`**（同 `ChartStyleField`）。
+
+    為什麼一樣不能是文字框：那一格的值是 ``{"mark":"point","x":"glv_mean",
+    "y":"glv_std"}``。目標使用者是不會寫 code 的製程工程師（推廣鐵則）。
+
+    ⚠ **選單要從資料長出來**，所以這一支要拿得到那一顆的長表
+    （:meth:`set_frame`）。沒有的時候按鈕照開 —— 選單是空的，而對話框上那
+    一句話說得出為什麼（總比一顆按不下去的按鈕好）。
+    """
+
+    spec_changed = Signal(str)
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._text = ""
+        self._frame: Any = None
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+        self.summary = QLabel("", self)
+        self.summary.setObjectName("paramHint")
+        self.button = small_button(
+            "Chart\u2026", shape="wide",
+            tip=("Pick which measured number runs across the bottom, which "
+                 "one runs up the side, and what the colour and marker size "
+                 "mean."),
+            parent=self)
+        self.button.clicked.connect(self.open_dialog)
+        lay.addWidget(self.button, 0)
+        lay.addWidget(self.summary, 1)
+
+    def text(self) -> str:
+        return self._text
+
+    def set_text(self, text: str) -> None:
+        from ..core.pipeline import chart_spec
+
+        self._text = str(text or "")
+        try:
+            said = chart_spec.describe(self._text)
+        except Exception:                  # noqa: BLE001 — 壞掉的值也要顯示
+            said = "not readable - press the button to start over"
+        self.summary.setText(said)
+
+    def set_frame(self, frame: Any) -> None:
+        """選單要從哪一份資料長出來（Studio 餵目前選著的那一顆）。"""
+        self._frame = frame
+
+    def open_dialog(self) -> None:
+        from .graph_builder import GraphBuilderDialog
+
+        dlg = GraphBuilderDialog(self._text, self._frame, self)
+        if dlg.exec():
+            got = dlg.value()
+            if got != self._text:
+                self.set_text(got)
+                self.spec_changed.emit(got)
 
 
 class CurveDialog(QDialog):

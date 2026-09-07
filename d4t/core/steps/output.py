@@ -93,6 +93,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from ..export import boxplot as export_boxplot
 from ..export import chart_frame as export_frame
 from ..export import uniformity_charts as export_unif
+from ..pipeline import chart_spec
 from ..pipeline import chart_style
 from ..export import html as export_html
 from ..export import klarf_out, overlay
@@ -1541,7 +1542,8 @@ class OutputUniformityStep(_OutputStep):
         ),
         ParamSpec(
             name="charts", type="multi_choice",
-            default=",".join(export_unif.CHARTS),
+            # ⚠ **不是 `CHARTS` 全部** —— 見 `DEFAULT_CHARTS`。
+            default=",".join(export_unif.DEFAULT_CHARTS),
             choices=list(export_unif.CHARTS),
             label="Which charts",
             choice_help={
@@ -1590,6 +1592,16 @@ class OutputUniformityStep(_OutputStep):
             },
             help=("Which way the position profile runs. It only changes that "
                   "one chart."),
+        ),
+        ParamSpec(
+            name="spec", type="chart_spec", default="",
+            label="Scatter: what goes where",
+            # 同 `axis` 的理由（F87）：沒勾那張圖就別問這件事。
+            show_when=("charts", (export_unif.CHART_SCATTER,)),
+            help=("Which measured number runs across the bottom, which one "
+                  "runs up the side, and what the colour and marker size "
+                  "mean. Press \u201cChart\u2026\u201d beside this row to "
+                  "pick them. It only changes the scatter chart."),
         ),
         ParamSpec(
             name="boxes_csv", type="bool", default=False,
@@ -1666,15 +1678,30 @@ class OutputUniformityStep(_OutputStep):
         # 說「你什麼都沒勾」。第一版就是這樣寫的，`test_output_convergence`
         # 抓到 —— 那支測試存在的理由正是這種「每張卡各自寫一遍」的規則。
         kinds = [k for k in parse_key_list(str(
-            params.get("charts", ",".join(export_unif.CHARTS))
+            params.get("charts", ",".join(export_unif.DEFAULT_CHARTS))
             if params.get("charts") is not None
-            else ",".join(export_unif.CHARTS)))
+            else ",".join(export_unif.DEFAULT_CHARTS)))
                  if k in export_unif.CHARTS]
         if not kinds:
             # 一張圖都沒勾 ⇒ 這張卡只會寫出四個空白頁面。講在畫布上，
             # 不要等跑完一批。
             out.append("No charts are ticked, so this card would write empty "
                        "pages. Tick at least one under “Which charts”.")
+        if export_unif.CHART_SCATTER in kinds:
+            # 散佈圖是唯一一張**兩條軸都要使用者自己挑**的圖，所以它是唯一
+            # 一張「勾了卻畫不出來」畫得出來的圖。講在畫布上，不要等跑完一批
+            # 才發現那個檔案裡是一句「pick x and y」（同上面那條的理由）。
+            try:
+                need = chart_spec.missing_roles(params.get("spec", ""))
+            except Exception:      # noqa: BLE001 — 壞掉的值 validate 會講
+                need = []
+            if need:
+                out.append(
+                    "The scatter chart has no %s yet, so it would be drawn "
+                    "empty. Press “Chart…” beside "
+                    "“Scatter: what goes where” to pick which "
+                    "number goes on each side."
+                    % " or ".join(need))
         return out
 
     # ---- 跑 ----------------------------------------------------------------
@@ -1826,11 +1853,18 @@ class OutputUniformityStep(_OutputStep):
             # 前綴是給疊圖用的，而這幾張是圖表 —— 借它等於讓檔名說一件錯的事。
             # 要的只有消毒那一半。
             stem = overlay.safe_stem(did)
+            # 散佈圖吃的是**長表**（一列一格框），不是 series —— 兩條軸是
+            # 使用者自己挑的欄。⚠ 只在真的要畫的時候建：`build_frame` 要走
+            # 一遍所有區域的所有框，而沒勾散佈圖也沒勾表的人不該付那個錢。
+            frame = None
+            if export_unif.CHART_SCATTER in kinds or bool(p["boxes_csv"]):
+                frame = export_frame.build_frame(notes)
             try:
                 charts = []
                 for k in kinds:
                     st = self._style_for(k, p, metric)
-                    svg = export_unif.build_chart_svg(series, k, st)
+                    svg = export_unif.build_chart_svg(
+                        series, k, st, frame=frame, spec=p.get("spec", ""))
                     charts.append({"name": export_unif.CHART_LABELS[k],
                                    "svg": svg})
                     _write_text(svg, os.path.join(
@@ -1851,8 +1885,7 @@ class OutputUniformityStep(_OutputStep):
                     os.path.join(folder, stem + self.PAGE_EXT))
                 index.append({"name": did, "href": stem + self.PAGE_EXT,
                               "rows": rows})
-                if bool(p["boxes_csv"]):
-                    frame = export_frame.build_frame(notes)
+                if bool(p["boxes_csv"]) and frame is not None:
                     for one in frame.rows:
                         # **哪一顆**要在表上 —— 20 顆的框混在一起而沒有這一
                         # 欄的話，那張表回答不了任何問題。

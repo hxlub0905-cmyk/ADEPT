@@ -122,6 +122,12 @@ _TEXT: Dict[str, str] = {
     #: ⚠ 接兩個以上區域時填成同一色，圖例就分不出誰是誰 —— 跟
     #: `point_color` / `line_color` 同一個取捨。
     "fill_color": AUTO,
+    #: 表示「大小」的色階：``""`` = 單色（由淺到深），``"rainbow"`` = 彩虹。
+    #:
+    #: 通用規則是單一色相：彩虹在中段會製造出資料裡沒有的假邊界。但半導體的
+    #: wafer map 慣例就是彩虹 —— **兩種都留，預設單色**
+    #: （使用者 2026-09-07：「兩種都可 預設單色」）。
+    "ramp": AUTO,
     #: 值那一軸要叫什麼（`glv_mean` → `Gray level`）。四張圖共用 ——
     #: 它在盒鬚圖是 Y、直方圖是 X、profile 是 Y、熱圖是色條，而那正是使用者
     #: 會想改的那一個。**其餘的軸名是每張圖自己的**（見 PER_CHART_KEYS）。
@@ -213,6 +219,13 @@ def _coerce(name: str, value: Any, where: str) -> Any:
             return value
         raise ChartStyleError("%s should be true or false, not %r"
                               % (where, value))
+    if name == "ramp":
+        text = "" if value is None else str(value).strip()
+        if text not in ("", "rainbow"):
+            raise ChartStyleError(
+                "%s should be empty (a light-to-dark single colour) or "
+                "'rainbow'" % where)
+        return text
     if name in _TEXT or name in _PER_TEXT:
         text = "" if value is None else str(value)
         if name.endswith("_color") and text and not _is_hex(text):

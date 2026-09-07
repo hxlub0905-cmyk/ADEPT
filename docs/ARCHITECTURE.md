@@ -267,10 +267,15 @@ d4t/
 │   │   ├── channels.py       #   這一顆的第幾張圖 → 叫什麼流名
 │   │   ├── cellrois.py       #   標在 Golden Cell 上的具名區域（一個名字、好幾個矩形）
 │   │   ├── curve.py          #   tone curve 控制點的字串編碼（parse／format）
-│   │   └── chart_style.py    #   圖表長什麼樣 —— **一格參數裝得下的一整組設定**（F87）
-│   │                         #     同 `curve` 的形狀：複雜的值裝一格，配一個專屬
-│   │                         #     編輯器。⚠ 它**不認識任何一張圖的名字**（那會讓
-│   │                         #     `pipeline/` 反過來依賴 `export/`）
+│   │   ├── chart_style.py    #   圖表長什麼樣 —— **一格參數裝得下的一整組設定**（F87）
+│   │   │                     #     同 `curve` 的形狀：複雜的值裝一格，配一個專屬
+│   │   │                     #     編輯器。⚠ 它**不認識任何一張圖的名字**（那會讓
+│   │   │                     #     `pipeline/` 反過來依賴 `export/`）
+│   │   └── chart_spec.py     #   圖表**畫什麼** —— 哪一欄放到哪一個角色上（x/y/
+│   │                         #     顏色/大小）＋ 一種記號（F88 第二刀）。跟
+│   │                         #     `chart_style` 分家：畫什麼 vs 長什麼樣。
+│   │                         #     ⚠ 驗的是形狀，**不驗欄位存不存在**（存 recipe
+│   │                         #     的時候沒有資料）
 │   ├── steps/                # 步驟卡片 —— **註冊 19 張，卡片庫可見 18 張**（`align` 收起來）
 │   │                         #   ⚠ 卡片庫由上而下的順序 ＝ `__init__.py` 的 import 順序
 │   │   ├── load.py           #   load_patch／load_single（**一種 source 一張卡**）
@@ -289,6 +294,9 @@ d4t/
 │   │   ├── chart_frame.py    #   **一列一格框**的長表（F88 第一刀）——「一份資料、
 │   │   │                     #   很多種看法」的那個「一份資料」。`row`/`col` 走
 │   │   │                     #   `cell_edges` 的同一套分群，**整張表一起分**
+│   │   ├── chart_draw.py     #   長表 ＋ 一份角色配置 → 一張圖（F88 第二刀）。
+│   │   │                     #   現在只認得 `point`（散佈圖），四張老圖之後會
+│   │   │                     #   改走這裡變成預設（第四刀）
 │   │   └── overlay.py        #   缺陷疊圖：把「機器看到什麼」畫成人看得懂的圖
 │   ├── store/results.py      # SQLite 批次歷史 ＋ rescore
 │   └── calibration.py        # nm/px 校正 profile
@@ -315,6 +323,9 @@ d4t/
     │                         #     畫面上跟寫出去的逐位元組相同
     ├── chart_settings.py     #   上面那顆 `Chart settings…`：一列一個東西、屬性橫著擺
     │                         #     （列怎麼分住在 `chart_style.ROWS`，不在這裡）
+    ├── graph_builder.py      #   `chart_spec` 那一格的編輯器：**哪一欄放到哪一個
+    │                         #     角色上**（F88 第二刀）。⚠ 選單是從資料長出來的
+    │                         #     （`Frame.columns`），不是一張寫死的清單
     ├── gc_generator.py gc_paint.py  #   **反過來**：貼一張 GC 進來，鋪成整批擬真
     │                         #     資料（F60）＋ 在那一張上畫出「缺陷可能在哪」
     │                         #     （F61 —— 畫一個週期＝畫每一個重複）

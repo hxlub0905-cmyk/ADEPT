@@ -1,0 +1,174 @@
+# F88 第二刀：`chart_spec` 那一格的編輯器（`ui/graph_builder`）。
+"""鎖的都是不變量：
+
+* 選單是**從資料長出來的**（`Frame.columns`），不是一張寫死的清單；
+* **不拿第一欄當預設** —— 一張沒有人設定過的圖不准看起來像設定好了；
+* 預覽走的是**寫出去的同一支** `build_chart_svg`；
+* 卡片上那一格是「摘要 ＋ 一顆按鈕」，不是一個要手寫 JSON 的文字框。
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+
+pytest.importorskip("PySide6")
+
+from PySide6.QtWidgets import QApplication, QLineEdit  # noqa: E402
+
+import d4t.core.steps  # noqa: F401,E402
+from d4t.core.export import uniformity_charts as uc  # noqa: E402
+from d4t.core.export.chart_frame import build_frame  # noqa: E402
+from d4t.core.pipeline import chart_spec as cspec  # noqa: E402
+from d4t.core.pipeline import get_step  # noqa: E402
+from d4t.ui import theme as theme_mod  # noqa: E402
+from d4t.ui.graph_builder import (  # noqa: E402
+    NONE_WORD, PICK_WORD, GraphBuilderDialog, SpecEditor,
+)
+from d4t.ui.widgets import ChartSpecField, ParamForm  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def qapp():
+    app = QApplication.instance() or QApplication([])
+    theme_mod.apply_theme(app, "light")
+    yield app
+
+
+def _note(name, base, x0=40, cols=3, rows=2):
+    n = cols * rows
+    return {"region": name, "prefix": name, "spread": {
+        "stats": {"glv_mean": [base + i for i in range(n)],
+                  "glv_std": [1.0 + 0.4 * i for i in range(n)]},
+        "cx": [float(x0 + 90 * (i % cols)) for i in range(n)],
+        "cy": [float(40 + 90 * (i // cols)) for i in range(n)],
+        "rects": [[x0 + 90 * (i % cols), 40 + 90 * (i // cols), 60, 60]
+                  for i in range(n)],
+        "boxes": list(range(n))}}
+
+
+@pytest.fixture
+def frame():
+    return build_frame([_note("epi", 110.0), _note("mg", 128.0, x0=400)])
+
+
+# --------------------------------------------------------------------------- #
+# 1. 選單從資料長出來
+# --------------------------------------------------------------------------- #
+def test_the_menus_are_built_from_the_data(qapp, frame):
+    """寫死一份的那天，使用者的欄位在選單上找不到。"""
+    ed = SpecEditor("", frame.columns, numeric=frame.numeric_columns())
+    got = [ed.boxes["x"].itemText(i) for i in range(ed.boxes["x"].count())]
+    assert "glv_mean" in got and "glv_std" in got and "region" in got
+
+
+def test_size_only_offers_numbers(qapp, frame):
+    """「region B 比 region A 大」沒有意義。"""
+    ed = SpecEditor("", frame.columns, numeric=frame.numeric_columns())
+    got = [ed.boxes["size"].itemText(i)
+           for i in range(ed.boxes["size"].count())]
+    assert "region" not in got and "row" not in got
+    assert "glv_mean" in got
+
+
+def test_a_role_this_mark_cannot_use_is_not_shown(qapp, frame):
+    """一格答了也沒用的設定比沒有那一格更糟（同 `GLOBAL_APPLIES`）。"""
+    ed = SpecEditor("", frame.columns)
+    for role in ed.boxes:
+        assert cspec.uses("", role), role
+
+
+# --------------------------------------------------------------------------- #
+# 2. 不拿第一欄當預設
+# --------------------------------------------------------------------------- #
+def test_nothing_is_picked_until_the_user_picks_it(qapp, frame):
+    """第一版就是拿第一欄當預設的：打開對話框，X 與 Y 都落在 `region` 上，
+    於是一張沒有人設定過的圖**看起來像設定好了** —— 而它畫出來是一團疊在
+    同一個點上的圓。"""
+    ed = SpecEditor("", frame.columns, numeric=frame.numeric_columns())
+    assert ed.spec() == ""
+    assert ed.boxes["x"].currentText() == PICK_WORD
+    assert ed.boxes["color"].currentText() == NONE_WORD
+
+
+def test_what_the_recipe_says_is_what_the_menus_show(qapp, frame):
+    text = '{"color":"region","mark":"point","x":"glv_mean","y":"glv_std"}'
+    ed = SpecEditor(text, frame.columns, numeric=frame.numeric_columns())
+    assert ed.boxes["x"].currentText() == "glv_mean"
+    assert ed.boxes["color"].currentText() == "region"
+    assert ed.spec() == text, "round-trip 不是 identity（鐵則 9 的 UI 側）"
+
+
+def test_a_broken_value_does_not_take_the_dialog_down(qapp, frame):
+    ed = SpecEditor("{not json", frame.columns)
+    assert ed.spec() == ""
+
+
+# --------------------------------------------------------------------------- #
+# 3. 預覽
+# --------------------------------------------------------------------------- #
+def test_the_preview_is_the_svg_that_would_be_written(qapp, frame):
+    """畫面上的圖跟寫出去的圖不一樣、而兩張都畫得出來，是這個 repo 最貴的
+    那種 bug。"""
+    text = '{"mark":"point","x":"glv_mean","y":"glv_std"}'
+    dlg = GraphBuilderDialog(text, frame)
+    mine = dlg.view.svg()
+    theirs = uc.build_chart_svg(
+        {}, uc.CHART_SCATTER,
+        uc.resolve_style("", uc.CHART_SCATTER, uc.AXIS_X, ""),
+        width=max(dlg.view.MIN_W, dlg.view.width()),
+        height=max(dlg.view.MIN_H, dlg.view.height()),
+        frame=frame, spec=text)
+    assert mine == theirs
+    assert mine.count("<circle") == len(frame)
+
+
+def test_picking_a_column_moves_the_preview(qapp, frame):
+    dlg = GraphBuilderDialog("", frame)
+    before = dlg.view.svg()
+    assert "pick x and y" in before
+    dlg.editor.boxes["x"].setCurrentText("glv_mean")
+    dlg.editor.boxes["y"].setCurrentText("glv_std")
+    after = dlg.view.svg()
+    assert after != before and after.count("<circle") == len(frame)
+
+
+def test_no_data_yet_still_opens_and_says_why(qapp):
+    """按鈕照開 —— 一顆按不下去的按鈕沒有告訴使用者任何事。"""
+    dlg = GraphBuilderDialog("", None)
+    assert dlg.editor.boxes["x"].count() == 1      # 只有那句「還沒挑」
+    assert "no boxes to plot" in dlg.view.svg()
+
+
+# --------------------------------------------------------------------------- #
+# 4. 卡片上那一格
+# --------------------------------------------------------------------------- #
+def test_the_card_row_is_a_summary_not_a_json_box(qapp, frame):
+    """目標使用者是不會寫 code 的製程工程師（推廣鐵則）—— 那一格掉進表單的
+    預設分支的話，它是一個要手寫 JSON 的文字框。"""
+    form = ParamForm()
+    form.set_step(get_step("output_uniformity").describe(),
+                  {"charts": uc.CHART_SCATTER, "folder": "/tmp/x",
+                   "spec": '{"mark":"point","x":"glv_mean","y":"glv_std"}'})
+    row = form._rows["spec"]
+    assert isinstance(row.editor, ChartSpecField)
+    assert not isinstance(row.editor, QLineEdit)
+    assert "glv_std" in row.editor.summary.text()
+    assert "{" not in row.editor.summary.text()
+
+    form.set_chart_frame(frame)
+    assert row.editor._frame is frame
+
+
+def test_the_row_is_hidden_when_the_scatter_is_not_ticked(qapp):
+    """沒勾那張圖就別問這件事（同 `Profile along`，F87）。"""
+    from d4t.core.pipeline.step import param_visible
+
+    spec = [p for p in get_step("output_uniformity").params
+            if p.name == "spec"][0]
+    assert not param_visible(spec.show_when, {"charts": "box,histogram"})
+    assert param_visible(spec.show_when, {"charts": "box,scatter"})

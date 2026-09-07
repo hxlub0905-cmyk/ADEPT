@@ -78,6 +78,8 @@ _TIPS: Dict[str, str] = {
                    "to scale - it has to line up with the picture.",
     "map_values": "Print the number inside each heat map cell, where the cell "
                   "is wide enough to hold it.",
+    "ramp": "Which colour scale is used wherever colour stands for a number - "
+            "the heat map's cells and a scatter coloured by a statistic.",
     "lock": "Pin the value scale to the range below, so two runs can be put "
             "side by side. Off means every chart picks its own range - which "
             "is right for one run and misleading for two.",
@@ -184,7 +186,7 @@ def _esc(text: str) -> str:
 def _chips(key: str, parent: Optional[QWidget] = None) -> "BoolChips":
     """`BOOL_CHIPS` 的一列 → 一個 `BoolChips`。"""
     off, on, off_help, on_help = BOOL_CHIPS[str(key)]
-    return BoolChips(off, on, bool(cs.DEFAULTS[str(key)]),
+    return BoolChips(off, on, _chip_on(key, cs.DEFAULTS[str(key)]),
                      helps={"off": off_help, "on": on_help}, parent=parent)
 
 
@@ -317,36 +319,91 @@ BOOL_CHIPS: Dict[str, Any] = {
              "Every chart picks its own range - right for one run.",
              "Pin the scale to the range below, so two runs can be read side "
              "by side."),
+    "ramp": (("One colour", "ramp_mono"), ("Rainbow", "ramp_rainbow"),
+             "Light to dark in one colour - the order reads straight off the "
+             "page, and it survives being printed in grey.",
+             "Blue through red. Easier to name a cell by its colour, but the "
+             "steps between the colours are not equal, so a rainbow invents "
+             "edges that are not in the numbers."),
 }
 
+#: `BOOL_CHIPS` 裡**值不是 bool** 的那幾格：``鍵 -> (關的值, 開的值)``。
+#: 沒列的就是 ``(False, True)``。
+#:
+#: ⚠ **為什麼不給它自己一張表**：那一格的長相、說明、圖示與那七格一字不差，
+#: 差別只有「這個開關對應到哪兩個值」。多開一張表就是多開一個家，而
+#: `test_every_setting_has_a_home_on_the_page` 守的正是「一格設定只有一個家」。
+CHIP_VALUES: Dict[str, Tuple[Any, Any]] = {"ramp": ("", "rainbow")}
 
-def _sample_series() -> Dict[str, Any]:
+
+def _chip_on(key: str, value: Any) -> bool:
+    """那一格現在的值 → 膠囊是不是在「開」那一顆上。"""
+    pair = CHIP_VALUES.get(str(key))
+    return str(value) == str(pair[1]) if pair else bool(value)
+
+
+def _chip_value(key: str, on: bool) -> Any:
+    """膠囊 → 那一格要存回去的值。"""
+    pair = CHIP_VALUES.get(str(key))
+    return pair[1 if on else 0] if pair else bool(on)
+
+
+def _sample_notes() -> List[Dict[str, Any]]:
     """預覽用的樣本 —— **兩個區域、有斜率、有一顆離群**。
 
     為什麼不是隨便一組數字：這幾格設定要調的東西各自需要不同的東西才看得出
     來 —— 顏色要**兩群**、`slope` 那條線要有斜度、盒鬚的鬚要有離群點、
     直方圖的柱數要有足夠的框。一組平的資料會讓半數設定「看起來沒反應」。
-    """
-    from ..core.export import uniformity_charts as uc
 
-    # ⚠ **格子數要少**：預覽只有 380×210，12 欄的話一格只剩 20 px —— 那個
-    # 尺寸下什麼都看不出來，而「每一格裡印出值」那一格會**看起來沒反應**
-    # （它有一條「放不下就不印」的規矩，印一半的數字比不印糟）。
-    # 3×3 兩群 = 6 欄，一格約 40 px，剛好放得下一個數字。
-    notes = []
+    ⚠ **格子數要少**：預覽只有 380×210，12 欄的話一格只剩 20 px —— 那個
+    尺寸下什麼都看不出來，而「每一格裡印出值」那一格會**看起來沒反應**
+    （它有一條「放不下就不印」的規矩，印一半的數字比不印糟）。
+    3×3 兩群 = 6 欄，一格約 40 px，剛好放得下一個數字。
+
+    ⚠ **兩個統計量，不是一個**：散佈圖的兩條軸是兩個不同的欄，而拿同一欄
+    畫兩次得到的是一條 45° 直線 —— 那張預覽看起來像壞了。
+    """
+    notes: List[Dict[str, Any]] = []
     for k, (name, base, x0) in enumerate(
             (("region A", 112.0, 40), ("region B", 124.0, 340))):
         n = 9
         vals = [base + 1.4 * (i % 3) + 2.6 * (i // 3) for i in range(n)]
         vals[4] += 6.0 if k == 0 else -5.0          # 一顆離群，鬚才看得出來
+        # 跟 `value` 有關係但不是它的一份（散佈圖才有東西可讀）。
+        spread = [2.0 + 0.35 * (v - base) + (0.8 if i % 2 else -0.4)
+                  for i, v in enumerate(vals)]
         notes.append({"region": name, "prefix": name, "spread": {
-            "stats": {"value": vals},
+            "stats": {"value": vals, "spread": spread},
             "cx": [float(x0 + 80 * (i % 3)) for i in range(n)],
             "cy": [float(40 + 80 * (i // 3)) for i in range(n)],
             "rects": [[x0 + 80 * (i % 3), 40 + 80 * (i // 3), 56, 56]
                       for i in range(n)],
             "boxes": list(range(n))}})
-    return uc.chart_series(notes, "value")
+    return notes
+
+
+def _sample_series() -> Dict[str, Any]:
+    """樣本的 series（四張老圖吃這一份）。"""
+    from ..core.export import uniformity_charts as uc
+
+    return uc.chart_series(_sample_notes(), "value")
+
+
+#: 樣本資料上的散佈圖畫哪兩欄。**樣本一定要畫得出東西** —— 一個永遠停在
+#: 「pick x and y」的分頁，使用者調的每一格看起來都沒有反應（真的踩過：
+#: `Title` 那一格在那張分頁上完全沒有效果，因為那張圖根本沒在畫）。
+SAMPLE_SPEC = '{"color":"region","mark":"point","x":"value","y":"spread"}'
+
+
+def _sample_frame() -> Any:
+    """樣本的長表（散佈圖吃這一份）—— **跟 series 同一組 notes**。
+
+    各造一份的話，同一個預覽區裡兩張圖畫的是兩批不同的資料，而那正是這整個
+    功能最貴的那種 bug 的縮小版。
+    """
+    from ..core.export import chart_frame
+
+    return chart_frame.build_frame(_sample_notes())
 
 
 class ChartSettingsDialog(QDialog):
@@ -362,7 +419,8 @@ class ChartSettingsDialog(QDialog):
     def __init__(self, look: str = "", kinds: Optional[Sequence[str]] = None,
                  parent: Optional[QWidget] = None,
                  series: Optional[Dict[str, Any]] = None,
-                 axis: str = uc.AXIS_X, words: bool = True):
+                 axis: str = uc.AXIS_X, words: bool = True,
+                 frame: Any = None, spec: str = ""):
         super().__init__(parent)
         #: 右半要不要「每張圖自己的字」（`Step.chart_words`）。一次畫好幾張
         #: 同一種圖的卡片（`Write report`）沒有那件事 —— 一組標題套到五張上
@@ -377,6 +435,17 @@ class ChartSettingsDialog(QDialog):
         self._is_sample = not (self._series.get("groups") or [])
         if self._is_sample:
             self._series = _sample_series()
+        #: 散佈圖那一張的預覽要的兩份（長表 ＋ 角色配置）。沒有的時候
+        #: 那一格畫出來是一句說得出原因的話，不是一張空白（`chart_draw`）。
+        if frame is not None:
+            self._frame = frame
+            self._spec = str(spec or "")
+        else:
+            # 樣本自己配一份角色 —— 見 `SAMPLE_SPEC`。⚠ 只在**沒有資料**的
+            # 時候：有資料而還沒挑欄的人要看到那句「pick x and y」，不是一張
+            # 畫著別的欄的圖。
+            self._frame = _sample_frame()
+            self._spec = str(spec or "") or SAMPLE_SPEC
         self._live = True
         self.setWindowTitle("Chart settings")
         self.setModal(True)
@@ -520,7 +589,8 @@ class ChartSettingsDialog(QDialog):
                 # `chart_style.style_for` 的那一版少了卡片那一半，於是
                 # `Name of the value axis` 那一格在預覽上完全沒有反應。
                 view.set_data(self._series,
-                              chart_style_for(style, kind, self._axis, metric))
+                              chart_style_for(style, kind, self._axis, metric),
+                              frame=self._frame, spec=self._spec)
             except Exception:              # noqa: BLE001 — 鐵則 7 的 UI 版
                 continue
 
@@ -640,6 +710,8 @@ class ChartSettingsDialog(QDialog):
                   box, _chips("equal_cells"))
         self._row(grid, 9, "map_values", "Heat map labels",
                   box, _chips("map_values"))
+        self._row(grid, 10, "ramp", "When colour means a number",
+                  box, _chips("ramp"))
         box.layout().addLayout(grid)
         return box
 
@@ -738,7 +810,7 @@ class ChartSettingsDialog(QDialog):
             if isinstance(w, ColourButton):
                 w.set_value(str(got or ""))
             elif isinstance(w, (QCheckBox, BoolChips)):
-                w.setChecked(bool(got))
+                w.setChecked(_chip_on(key, got))
             elif isinstance(w, QLineEdit):
                 w.setText(str(got or ""))
             else:
@@ -766,7 +838,7 @@ class ChartSettingsDialog(QDialog):
             if isinstance(w, ColourButton):
                 out[key] = w.value()
             elif isinstance(w, (QCheckBox, BoolChips)):
-                out[key] = bool(w.isChecked())
+                out[key] = _chip_value(key, bool(w.isChecked()))
             elif isinstance(w, QLineEdit):
                 out[key] = w.text().strip()
             else:

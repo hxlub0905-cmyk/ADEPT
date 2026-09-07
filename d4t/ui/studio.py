@@ -5008,7 +5008,10 @@ class StudioWindow(QMainWindow):
         win.set_context(series, look=str(insp.params.get("look", "") or ""),
                         axis=str(insp.params.get("axis", "") or "x"),
                         metric=str(series.get("metric") or ""),
-                        kinds=insp.charts())
+                        kinds=insp.charts(),
+                        # 散佈圖吃的那兩份（別的圖用不到）。
+                        frame=insp.frame() if hasattr(insp, "frame") else None,
+                        spec=str(insp.params.get("spec", "") or ""))
 
     def _on_chart_style_changed(self, look: str) -> None:
         """視窗裡改完設定 → 寫回那張卡的 ``look`` 那一格。
@@ -5094,6 +5097,10 @@ class StudioWindow(QMainWindow):
         # 同 `set_histogram` 的先例：數字只有引擎那一份，UI 不再算一次。
         self.param_form.set_chart_series(
             insp.series() if hasattr(insp, "series") else None)
+        # 散佈圖那一格的選單是從**這一顆的長表**長出來的（欄名跟著量測卡走，
+        # 寫死一份的話使用者的欄位在選單上找不到）。
+        self.param_form.set_chart_frame(
+            insp.frame() if hasattr(insp, "frame") else None)
         # 分頁鈕的字由**儀表現在畫的東西**決定（使用者 2026-08-21：「title 要
         # 更詳細一點」）。放不下的那半句進 tooltip。
         if hasattr(insp, "tab_title"):
