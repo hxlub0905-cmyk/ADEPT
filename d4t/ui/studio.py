@@ -4980,7 +4980,7 @@ class StudioWindow(QMainWindow):
                 self.model.available_regions(before_node=nid))
 
     def _on_charts_requested(self) -> None:
-        """`Write uniformity` 儀表上的 `Preview charts…`（F87）。
+        """`Write charts` 儀表上的 `Preview charts…`（F87）。
 
         視窗**只有一個**（開第二次是把同一個抬到最前面）—— 每按一次多開一個
         的話，改設定會只改到其中一個，而其他幾個還畫著舊的樣子。

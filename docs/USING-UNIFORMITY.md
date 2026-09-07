@@ -1,8 +1,8 @@
 # 怎麼看一片區域均不均勻
 
 > **d4t — defect**　·　Measure 段的 `Gray level`（`glv_stats`）＋
-> Output 段的 `Write uniformity`（`output_uniformity`）
-> 這一份是**給使用者的操作手冊**：每一格是什麼、四張圖各回答哪一句話、
+> Output 段的 `Write charts`（`output_uniformity`）
+> 這一份是**給使用者的操作手冊**：每一格是什麼、那幾張圖各回答哪一句話、
 > 出事了照什麼順序查。設計上的來龍去脈在
 > [`docs/plans/F85-uniformity.md`](plans/F85-uniformity.md)，那一份不必讀。
 
@@ -13,6 +13,10 @@
 **最快的路是不要自己搭**：工具列 `Open recipe…` → **`one-image-uniformity`**，
 然後 `Open image…` 挑你那張圖。跑一次就有四張圖。
 
+> ⚠ **那張卡以前叫 `Write uniformity`**（2026-09-07 改名 `Write charts` ——
+> 它現在還畫一張**你自己配的圖**，不只均勻度那四張）。**recipe 裡的鍵沒有
+> 變**（`output_uniformity`），所以舊檔案照樣開得起來，檔名也一樣。
+
 ⚠ **開起來之後先做兩件事**：
 
 1. **`Write to` 換成完整路徑**（例 `D:\uniformity\my_field`）。出貨的檔案裡
@@ -22,7 +26,7 @@
 自己搭的話五張卡：
 
 ```
-                              ┌──→ [Write uniformity]   四張圖
+                              ┌──→ [Write charts]   那幾張圖
 [Load one image] ─→ [ROI] ┄┄→ [Gray level]
         └──────實線───────────→ ┘   └──→ [Write report]      defects.csv
 ```
@@ -36,7 +40,7 @@
    **`Odd box out`** —— 那顆鈕會幫你把 `Boxes in the region` 設成 `each box`。
    （三顆鈕在還沒拉區域虛線之前是灰的，所以順序是**先拉線、再按鈕**。）
    然後 `How even are the boxes` 勾你要的數字。
-4. **`Write uniformity`**：`Write to` 填**完整路徑**的資料夾。
+4. **`Write charts`**：`Write to` 填**完整路徑**的資料夾。
 5. **`Write report`**：`Write to` 填**同一個**資料夾，`What to put in the
    folder` 勾 `table` —— 數字才有 CSV 可以進 Excel。
 
@@ -80,7 +84,8 @@
 
 ## 2. 那幾張圖各回答哪一句話
 
-在 `Write uniformity` 的 **`Which charts`** 勾選。每一張的**一個點都是一格框**。
+在 `Write charts` 的 **`Which charts`** 勾選。每一張的**一個點都是一格框**。
+前四張不必設定就畫得出來；第五張（`Your own chart`）兩條軸你自己挑，見下面。
 
 **看圖請按儀表右下角那顆 `Preview charts…`** —— 四張圖會開在自己的視窗裡，
 大到讀得動，而且**不用跑整批**（選了 defect、跑過一次預覽就有）。
@@ -216,7 +221,7 @@ regions`）。如果兩個區域量的是不同材質，整張圖會被「兩種
 
 ### Heat map 也**直接疊在影像上**
 
-點 `Write uniformity` 那張卡，**預覽影像上當場就鋪上熱色**（半透明，ROI 框
+點 `Write charts` 那張卡，**預覽影像上當場就鋪上熱色**（半透明，ROI 框
 畫在它上面，左下角一條色條）—— 跟 PEAR 一樣。
 
 那才是這張圖真正的用法：「不均勻在**哪裡**」的答案要對得到晶圓上的位置，
@@ -252,7 +257,7 @@ auto —— **兩格的數字會留著**，所以比完一批再回到 auto 不�
 
 ## 3.5 圖要長什麼樣：`Chart settings…`
 
-**兩個入口，同一個對話框**：`Write uniformity` 卡上 **`Chart look`** 那一列
+**兩個入口，同一個對話框**：`Write charts` 卡上 **`Chart look`** 那一列
 的按鈕（那一列旁邊寫著現在改了幾格），或 `Preview charts…` 視窗右上角。
 從視窗開的話改完**當場重畫**，按 OK 就寫回卡片的
 `Chart look` 那一格 —— 也就是**跟著 recipe 走**：下一次跑、換一台機器跑、
@@ -361,11 +366,11 @@ auto —— **兩格的數字會留著**，所以比完一批再回到 auto 不�
 
 | 我要看什麼 | 去哪 | 什麼時候 |
 |---|---|---|
-| **四張圖**（確認設定對不對）| 點 `Write uniformity` 卡 → `Preview charts…` | **馬上**，不用跑 |
+| **四張圖**（確認設定對不對）| 點 `Write charts` 卡 → `Preview charts…` | **馬上**，不用跑 |
 | **四張圖**（放進報告）| `Write to` 那個資料夾 | `Run all & write` 之後 |
 | **數字**（cv%、斜率）| 點 `Gray level` 卡，特徵表 | 跑一次預覽之後 |
 | **數字**（進 Excel）| 同一個資料夾的 `defects.csv` | 要有 `Write report` 那張卡 |
-| **每一格框的數字**（進 Excel）| 同一個資料夾的 `boxes.csv` | 打開 `Write uniformity` 的 **`Also write a table, one row per box`** |
+| **每一格框的數字**（進 Excel）| 同一個資料夾的 `boxes.csv` | 打開 `Write charts` 的 **`Also write a table, one row per box`** |
 
 ### ⚠ `defects.csv` 跟 `boxes.csv` 不是同一種表
 
@@ -374,7 +379,7 @@ auto —— **兩格的數字會留著**，所以比完一批再回到 auto 不�
 | | 一列是 | 誰寫的 |
 |---|---|---|
 | `defects.csv` | **一顆 defect** | `Write report` |
-| `boxes.csv` | **一格框** | `Write uniformity`（要打開那一格） |
+| `boxes.csv` | **一格框** | `Write charts`（要打開那一格） |
 
 要看「這一張影像裡哪幾格特別高」就是 `boxes.csv` —— 它帶著每一格的區域、
 位置、**第幾列第幾欄**，以及量在它身上的每一個數字。
@@ -427,14 +432,14 @@ cells    glv_mean    0.25     -        -        0.13         0.03        100
 | | 一個盒子是 | 一個點是 |
 |---|---|---|
 | **Write report** | 判定樹的一片葉子 | **一顆 defect**（整批的圖）|
-| **Write uniformity** | 一個區域 | **一格框**（一張圖之內）|
+| **Write charts** | 一個區域 | **一格框**（一張圖之內）|
 
 一批 400 顆的分類結果 → `Write report`。
-一張圖上幾百個框均不均勻 → `Write uniformity`。
+一張圖上幾百個框均不均勻 → `Write charts`。
 
 **兩張圖現在吃同一種設定。** `Write report` 也有一格 `Chart look`，開的是同一個
 `Chart settings…` 編輯器 —— 所以同一份投影片裡的兩張盒鬚圖可以調成一樣的字級、
-線寬、刻度數與鎖定範圍。以前只有 `Write uniformity` 吃得到，於是兩張並排時長得
+線寬、刻度數與鎖定範圍。以前只有 `Write charts` 吃得到，於是兩張並排時長得
 不一樣，而畫面上沒有任何線索說為什麼。
 
 ⚠ **兩張卡各存各的一份**（各自的 `Chart look` 那一格）—— 它們可以不一樣，

@@ -684,7 +684,7 @@ def test_the_report_box_plot_takes_the_same_settings(qapp):
     → 先做「讓兩張圖長得一樣」。
 
     兩張卡畫的本來就是**同一支** `build_boxplot_svg`，但以前只有
-    `Write uniformity` 吃得到 `Chart settings` —— 於是同一份投影片裡兩張盒鬚圖
+    `Write charts` 吃得到 `Chart settings` —— 於是同一份投影片裡兩張盒鬚圖
     的字級、線寬、鎖定範圍都不一樣，而畫面上沒有任何線索說為什麼。
     """
     from d4t.core.pipeline import get_step

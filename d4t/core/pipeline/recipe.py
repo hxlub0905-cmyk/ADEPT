@@ -3060,7 +3060,7 @@ def _late_normalize(step_cls, p: Dict[str, Any], nid: str, k: str,
 
 def _chart_metric_issues(recipe: "Recipe", step_cls, p: Dict[str, Any],
                          nid: str, k: str, registry) -> List["Issue"]:
-    """`Write uniformity` 要畫的統計量，上游真的有量嗎（F86）。
+    """`Write charts` 要畫的統計量，上游真的有量嗎（F86）。
 
     使用者打成 ``glv_mena`` 的下場是**四張圖全空，而且沒有任何訊息** ——
     那一格是自由文字，而 d4t 對「指名上游東西」的欄位向來是有型別的
