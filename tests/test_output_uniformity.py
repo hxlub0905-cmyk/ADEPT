@@ -52,7 +52,7 @@ def dataset(lot):
 
 
 def recipe_for(folder, glv=None, **over):
-    """一張大圖 → 鋪一組 ROI → Gray level(each box) → Write uniformity。
+    """一張大圖 → 鋪一組 ROI → Gray level(each box) → Write charts。
 
     **這就是使用者的用法**（PEAR 的替代品），所以測試走的是同一條路。
     """

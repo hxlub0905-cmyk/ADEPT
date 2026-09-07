@@ -238,7 +238,7 @@ GLYPH_ICONS = (
     # F85：**一張大圖**那個入口（`Open image…`）。四顆 Open 並排，所以它是
     # 唯一內部有東西的那一個 —— 外框空的話它跟 `stack` 的最上層一樣。
     "image",
-    # F85：`Write uniformity` 的「profile 沿哪一個軸」。兩顆並排，差別是
+    # F85：`Write charts` 的「profile 沿哪一個軸」。兩顆並排，差別是
     # **箭頭的方向**，而底下那條軸線相同 —— 那是它們是同一個問題的兩個答案。
     "axis_x", "axis_y",
     # 畫布彈出視窗（F8-UI D 案）
@@ -4592,7 +4592,7 @@ class ParamForm(QWidget):
     def _chart_kinds(self) -> List[str]:
         """`chart_style` 的編輯器要開哪幾個分頁 —— **那張卡說的**。
 
-        `Step.chart_kinds`（`Write uniformity` 是勾了哪幾張、`Write report`
+        `Step.chart_kinds`（`Write charts` 是勾了哪幾張、`Write report`
         只有盒鬚圖）。卡片沒說就給全部：一個空的分頁區讀起來是「壞了」。
         沒勾的那幾張的覆寫不會因此消失（`ChartSettingsDialog` 原封不動帶回）。
         """

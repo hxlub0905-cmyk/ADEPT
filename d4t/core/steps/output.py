@@ -680,7 +680,7 @@ class OutputReportStep(_OutputStep):
             help=("Heading to put at the top of the pages this card writes. "
                   "Leave it empty to use the recipe's name."),
         ),
-        # F87 第九刀：**這張卡的盒鬚圖跟 `Write uniformity` 的是同一支程式碼，
+        # F87 第九刀：**這張卡的盒鬚圖跟 `Write charts` 的是同一支程式碼，
         # 但以前只有後者吃得到設定** —— 於是同一份投影片裡兩張盒鬚圖的字級、
         # 線寬、鎖定範圍都不一樣，而畫面上沒有任何線索說為什麼。
         ParamSpec(
@@ -1506,7 +1506,7 @@ class OutputUniformityStep(_OutputStep):
 
     先例是 `pair_source` ↔ `Write comparison`：一張量測卡配一張輸出卡。
     這裡是 **Gray level（``each box`` ＋ ``How even are the boxes``）↔
-    Write uniformity**。
+    Write charts**。
 
     一顆寫五個檔
     ------------
@@ -1518,12 +1518,20 @@ class OutputUniformityStep(_OutputStep):
     """
 
     key = "output_uniformity"
-    label = "Write uniformity"
+    #: ⚠ **只有 `label` 改過**（F88 第六刀，使用者 2026-09-07：「改成 write
+    #: charts」）。`key` 是 recipe 的鍵、資料夾裡的檔名沿用它 —— 兩者都不動，
+    #: 所以這一次改名的代價是零（CLAUDE.md 那張價目表的最後一列）。
+    #:
+    #: 為什麼名字該換：F85 的時候它只寫均勻度那四張圖，「uniformity」講得完；
+    #: F88 之後它還寫一張**使用者自己配的圖**（五種記號、兩條軸自己挑），而
+    #: 那張圖問的可以是任何一句話。
+    label = "Write charts"
     PATH = "folder"
     WHAT = "folder"
-    help = ("Write the four uniformity charts for each defect: a box plot, a "
-            "histogram, a position profile and a heat map - one point per "
-            "measurement box. They come from the Gray level card, so set it "
+    help = ("Write a page of charts for each defect - one point per "
+            "measurement box. Four of them are ready-made (a box plot, a "
+            "histogram, a position profile and a heat map) and one you build "
+            "yourself. They come from the Gray level card, so set it "
             "to “each box” and tick something under “How even are the boxes” "
             "first. For one row per defect across the whole lot use “Write "
             "report” instead - these charts are about one image at a time.")
@@ -1934,14 +1942,14 @@ class OutputUniformityStep(_OutputStep):
             # **一個檔都沒寫要講**：一個空資料夾跟「這張卡沒被跑到」在畫面上
             # 長得一模一樣，而原因通常是 Gray level 那張卡還停在 pooled。
             bctx.warn(
-                "Write uniformity: nothing was drawn. These charts need the "
+                "Write charts: nothing was drawn. These charts need the "
                 "Gray level card set to “each box” with something ticked "
                 "under “How even are the boxes” - that is where the "
                 "box-by-box numbers come from.")
         elif no_spread:
-            bctx.warn("Write uniformity: %d defect(s) had no box-by-box "
+            bctx.warn("Write charts: %d defect(s) had no box-by-box "
                       "numbers and were skipped." % no_spread)
         if skipped:
-            bctx.warn("Write uniformity: %d defect(s) could not be redrawn "
+            bctx.warn("Write charts: %d defect(s) could not be redrawn "
                       "(no image, or the pipeline did not run for them)."
                       % skipped)

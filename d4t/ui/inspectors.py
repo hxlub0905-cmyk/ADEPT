@@ -3274,7 +3274,7 @@ class CharPreviewInspector(OutputPreviewInspector):
 
 
 class UniformityPreviewInspector(OutputPreviewInspector):
-    """F85：`Write uniformity` 會寫哪幾個檔 —— **而且這一顆量出來是多少**。
+    """F85：`Write charts` 會寫哪幾個檔 —— **而且這一顆量出來是多少**。
 
     為什麼圖不在這裡（F87，使用者 2026-09-07：「右側 Uniformity folder 直接
     把預覽的圖放上來好像也很奇怪」）
@@ -3293,7 +3293,7 @@ class UniformityPreviewInspector(OutputPreviewInspector):
     """
 
     STEP_KEY = "output_uniformity"
-    title = "Uniformity folder"
+    title = "Charts folder"
 
     #: 按了要開圖的視窗 —— 這一份不開視窗（儀表不認識主視窗），只說出請求，
     #: 跟 `CrossInspector.param_requested` 同一條界線。

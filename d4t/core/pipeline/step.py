@@ -1127,7 +1127,7 @@ class Step(ABC):
         """這張卡的 ``chart_style`` 那一格**管到哪幾種圖**。
 
         設定編輯器右半是「一張圖一個分頁」，而分頁該有幾個是**那張卡的事**：
-        `Write uniformity` 是使用者勾了哪幾張，`Write report` 只畫盒鬚圖。
+        `Write charts` 是使用者勾了哪幾張，`Write report` 只畫盒鬚圖。
         UI 問這一支，所以加一張用 `chart_style` 的新卡不必動 UI（同 F7-17）。
 
         回空的就由 UI 決定（全部給）—— 一個空的分頁區讀起來是「壞了」。

@@ -298,7 +298,8 @@ UNIF = RECIPES / "one-image-uniformity.json"
 def test_the_uniformity_recipe_gets_the_numbers_out_too():
     """**只有圖拿不到數字。**
 
-    F85 出貨的第一版只有 `Write uniformity` —— 四張 SVG 加一頁 HTML，而
+    F85 出貨的第一版只有 `Write charts`（那時叫 `Write uniformity`）——
+    四張 SVG 加一頁 HTML，而
     `cv_pct` / `slope_x` 那些數字**沒有任何檔案裝得下**（使用者當場問
     「結果要在哪看」）。一份「看均勻度」的 recipe 拿不到均勻度的數字，
     那是漏了一半。
@@ -326,7 +327,7 @@ def test_the_uniformity_recipe_measures_box_by_box():
     charts = next(n for n in recipe.nodes.values()
                   if n.step == "output_uniformity")
     assert str(charts.params["metric"]) in str(glv.params["metrics"]), \
-        "Write uniformity 要畫的統計量不在 Gray level 的 Statistics 裡 —— 圖會是空的"
+        "Write charts 要畫的統計量不在 Gray level 的 Statistics 裡 —— 圖會是空的"
 
 
 def test_the_uniformity_recipe_wires_the_region_not_types_it():
