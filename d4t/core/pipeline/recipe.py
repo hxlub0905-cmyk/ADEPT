@@ -3005,6 +3005,73 @@ def _late_normalize(step_cls, p: Dict[str, Any], nid: str, k: str,
     return out
 
 
+def _chart_metric_issues(recipe: "Recipe", step_cls, p: Dict[str, Any],
+                         nid: str, k: str, registry) -> List["Issue"]:
+    """`Write uniformity` 要畫的統計量，上游真的有量嗎（F86）。
+
+    使用者打成 ``glv_mena`` 的下場是**四張圖全空，而且沒有任何訊息** ——
+    那一格是自由文字，而 d4t 對「指名上游東西」的欄位向來是有型別的
+    （``image_key`` / ``region_key`` / ``feature_key``）。它不是特徵名（是統計量
+    id），所以套不上那幾種型別，也就落在既有的 ``stale-feature-ref`` 之外。
+
+    為什麼這一支住在 `recipe.py` 而不是卡片上：`configuration_issues` 只看得到
+    **這張卡自己**的參數，而這個問題的答案在**別的節點**上（上游 Gray level 的
+    ``Statistics``）。同一條路上的 `_late_normalize` / `_uneven_treatment` 也是
+    這個形狀。
+
+    兩種都是 **warning**：卡片照樣跑得完、資料夾照樣出得來，只是裡面的圖是空的。
+    """
+    if step_cls.key != "output_uniformity":
+        return []
+    metric = str(p.get("metric", "") or "").strip()
+    if not metric:
+        return []       # 空的 = 「用上游量的第一個」，那是合法而且是預設
+    # **這條 route 上的每一張 GLV 卡都算數，不看先後**：問的是「有沒有人量
+    # 這個統計量」，而順序那件事已經有 `execution_order` 在管。第一版寫了
+    # `for other in order: if other == nid: break`，而 `Recipe` 根本沒有
+    # `route()` —— 於是那個迴圈一次都沒跑，正常的 recipe 也被報一句話。
+    have: List[str] = []
+    each_box = False
+    for other in list(recipe.routes.get(k, []) or []):
+        if other == nid:
+            continue
+        node = recipe.nodes.get(other)
+        if node is None or not getattr(node, "enabled", True):
+            continue
+        if node.step != "glv_stats":
+            continue
+        cls2 = registry.get("glv_stats")
+        if cls2 is None:
+            continue
+        try:
+            q = cls2.validate_params(dict(node.params))
+        except Exception:              # noqa: BLE001 — lint 不准當機
+            q = dict(node.params)
+        if str(q.get("across_boxes", "")) == "each box":
+            each_box = True
+        have.extend(x.strip() for x in
+                    str(q.get("metrics", "") or "").split(",") if x.strip())
+    if not each_box:
+        return [Issue(
+            code="charts-need-each-box", level="warning", node_id=nid,
+            title=f"step '{nid}' has no box-by-box numbers to draw",
+            detail=(f"route '{k}': every one of these charts is one point per "
+                    f"measurement box, and no Gray level card upstream is set "
+                    f"to “each box”. This card will run and write nothing. "
+                    f"Set the Gray level card to “each box” (its “Odd box "
+                    f"out” preset does it) and tick something under “How even "
+                    f"are the boxes”."))]
+    if metric not in have:
+        return [Issue(
+            code="unknown-chart-metric", level="warning", node_id=nid,
+            title=f"step '{nid}' plots a statistic nobody measured",
+            detail=(f"route '{k}': “Which number to plot” is '{metric}', but "
+                    f"the Gray level card upstream measures {sorted(set(have))}"
+                    f". The charts would come out empty. Fix the spelling, or "
+                    f"tick '{metric}' under Statistics on that card."))]
+    return []
+
+
 def _uneven_treatment(step_cls, p: Dict[str, Any], nid: str, k: str,
                       history: Dict[str, List[Any]],
                       from_input: Set[str], registry) -> List[Issue]:
@@ -3572,6 +3639,8 @@ def validate(recipe: Recipe, kind: Optional[str] = None,
             issues.extend(_late_normalize(step_cls, p, nid, k, history))
             issues.extend(_uneven_treatment(step_cls, p, nid, k, history,
                                             from_input, registry))
+            issues.extend(_chart_metric_issues(recipe, step_cls, p, nid, k,
+                                               registry))
             if step_cls.resolve_group() == GROUP_ENHANCE:
                 sig = _treatment_sig(step_cls, p)
                 for key in step_cls.resolve_writes(p):
