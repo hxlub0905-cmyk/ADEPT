@@ -4568,6 +4568,19 @@ class ParamForm(QWidget):
         if gamma is not None and not gamma.has_error():
             gamma.set_dimmed(active, "Not used while a custom curve is drawn.")
 
+    def _chart_kinds(self) -> List[str]:
+        """`chart_style` 的編輯器要開哪幾個分頁 —— **這張卡勾了哪幾張圖**。
+
+        沒有那一格（或還沒填）就給全部：一個空的分頁區讀起來是「壞了」。
+        沒勾的那幾張的覆寫不會因此消失（`ChartSettingsDialog` 原封不動帶回）。
+        """
+        from ..core.export.uniformity_charts import CHARTS
+
+        got = [c.strip() for c in
+               str(self._values.get("charts", "") or "").split(",")]
+        want = [k for k in CHARTS if k in got]
+        return want or list(CHARTS)
+
     def step_key(self) -> Optional[str]:
         return None if not self._describe else str(self._describe.get("key"))
 
@@ -4963,6 +4976,13 @@ class ParamForm(QWidget):
             if text in choices:
                 w.setCurrentIndex(choices.index(text))
             w.currentTextChanged.connect(lambda t, n=name: self._emit(n, str(t)))
+            return w
+
+        if ptype == "chart_style":
+            # 一格參數 ＋ 專屬編輯器（同 `curve`）—— 見 `ChartStyleField`。
+            w = ChartStyleField(self._chart_kinds())
+            w.set_text("" if value is None else str(value))
+            w.style_changed.connect(lambda t, n=name: self._emit(n, str(t)))
             return w
 
         if ptype == "curve":
@@ -5444,6 +5464,76 @@ class CurveField(QWidget):
 
     def _on_changed(self, text: str) -> None:
         self.curve_changed.emit(text)
+
+
+class ChartStyleField(QWidget):
+    """`chart_style` 那一格：**一句摘要 ＋ 一顆 `Chart settings…`**。
+
+    為什麼那一格不能是一個文字框（F87 第六刀，使用者 2026-09-07：
+    「Chart look 是什麼? 我沒看到 Chart setting 沒看到編輯器」）
+    ------------------------------------------------------------------
+    `chart_style` 的值是一串 JSON（``{"tick_size":14,"box.title":"…"}``）。
+    沒有這一支的時候它掉進表單的預設分支 —— 一個**可以打字的文字框，裡面是
+    生 JSON**。目標使用者是不會寫 code 的製程工程師（推廣鐵則），而那一格
+    等於在要他手寫設定檔；更糟的是編輯器**存在**，只是掛在別的地方
+    （圖的彈出視窗），所以畫面上那一格看起來就是「這個功能沒做」。
+
+    `tone` 的 ``type="curve"`` 早就立了規矩：**一個複雜的值裝在一格參數裡，
+    配一個專屬編輯器**。我寫下了那句話卻只把編輯器接到視窗上 —— 這一支是把
+    它接回它本來就該在的地方。兩個入口改的是同一格參數，開的是同一個對話框。
+    """
+
+    style_changed = Signal(str)
+
+    def __init__(self, kinds: Optional[Sequence[str]] = None,
+                 parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._text = ""
+        self._kinds = [str(k) for k in (kinds or [])]
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+        self.summary = QLabel("", self)
+        self.summary.setObjectName("paramHint")
+        self.button = small_button(
+            "Chart settings\u2026", shape="wide",
+            tip=("Titles, axis names, tick counts, text size and colour, "
+                 "marker and line width - and whether the value scale is "
+                 "locked. It travels with the recipe."),
+            parent=self)
+        self.button.clicked.connect(self.open_dialog)
+        lay.addWidget(self.button, 0)
+        lay.addWidget(self.summary, 1)
+
+    def text(self) -> str:
+        return self._text
+
+    def set_text(self, text: str) -> None:
+        from ..core.pipeline import chart_style
+
+        self._text = str(text or "")
+        try:
+            said = chart_style.describe(self._text)
+        except Exception:                  # noqa: BLE001 — 壞掉的值也要顯示
+            said = "not readable - press the button to start over"
+        self.summary.setText(said)
+
+    def set_charts(self, kinds: Optional[Sequence[str]]) -> None:
+        """對話框右半要開哪幾個分頁 —— **就是這張卡勾了哪幾張圖**。
+
+        沒勾的那幾張的覆寫不會被清掉（`ChartSettingsDialog` 原封不動帶回去）。
+        """
+        self._kinds = [str(k) for k in (kinds or [])]
+
+    def open_dialog(self) -> None:
+        from .chart_settings import ChartSettingsDialog
+
+        dlg = ChartSettingsDialog(self._text, self._kinds or None, self)
+        if dlg.exec():
+            got = dlg.value()
+            if got != self._text:
+                self.set_text(got)
+                self.style_changed.emit(got)
 
 
 class CurveDialog(QDialog):

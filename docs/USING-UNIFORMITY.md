@@ -145,8 +145,8 @@ regions`）。如果兩個區域量的是不同材質，整張圖會被「兩種
 
 ## 3. 兩批要比的時候：**先鎖住尺度**
 
-`Preview charts…` → `Chart settings…` → **`Value scale`**：打開 `Lock the
-scale`，填 `Bottom` 與 `Top`。
+`Chart settings…`（卡上 `Chart look` 那一列的按鈕，或圖的視窗右上角）
+→ **`Value scale`**：打開 `Lock the scale`，填 `Bottom` 與 `Top`。
 
 **這是這張卡上唯一非設不可的一格。** auto 縮放在你看**一批**的時候是對的，
 兩批擺在一起就會騙人：每一張各自挑各自的範圍，於是
@@ -164,7 +164,9 @@ auto —— **兩格的數字會留著**，所以比完一批再回到 auto 不�
 
 ## 3.5 圖要長什麼樣：`Chart settings…`
 
-`Preview charts…` 那個視窗右上角。改完**當場重畫**，按 OK 就寫回卡片的
+**兩個入口，同一個對話框**：`Write uniformity` 卡上 **`Chart look`** 那一列
+的按鈕（那一列旁邊寫著現在改了幾格），或 `Preview charts…` 視窗右上角。
+從視窗開的話改完**當場重畫**，按 OK 就寫回卡片的
 `Chart look` 那一格 —— 也就是**跟著 recipe 走**：下一次跑、換一台機器跑、
 把 recipe 給別人跑，出來的圖長得一模一樣。改錯了 `Ctrl+Z` 撤得掉。
 

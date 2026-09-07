@@ -381,3 +381,78 @@ def test_the_studio_hands_the_view_what_the_card_says(qapp, window):
     # 還沒跑過就什麼都沒有（熱色來自 context，不是 model）
     assert window.heat_tiles("test") == ([], [], None)
     assert window.image_view.heat_count() == 0
+
+
+# --------------------------------------------------------------------------- #
+# 卡片上的那一格（F87 第六刀）
+# --------------------------------------------------------------------------- #
+def test_the_chart_look_row_has_a_button_not_a_json_box(qapp):
+    """使用者 2026-09-07：「Chart look 是什麼? 我沒看到 Chart setting
+    沒看到編輯器」。
+
+    `chart_style` 的值是一串 JSON。沒有專屬編輯器的話那一格會掉進表單的預設
+    分支 —— 一個**可以打字的文字框，裡面是生 JSON** —— 而目標使用者是不會寫
+    code 的製程工程師。更糟的是編輯器**存在**、只是掛在別的地方，所以畫面上
+    那一格看起來就是「這個功能沒做」。
+    """
+    from d4t.core.pipeline import get_step
+    from d4t.ui.widgets import ChartStyleField, ParamForm
+
+    form = ParamForm()
+    form.set_step(get_step("output_uniformity").describe(),
+                  {"folder": "out", "charts": "box,map",
+                   "look": '{"tick_size":14,"box.title":"EPI"}'}, [], [])
+    row = form._rows["look"]
+    assert isinstance(row.editor, ChartStyleField)
+    # **原字串照放，不偷偷正規化** —— 這一格只是顯示，改寫 recipe 的值
+    # 要有人真的按了 OK（同 `CurveField` 只在 `curve_changed` 時才送出）。
+    assert row.editor.text() == '{"tick_size":14,"box.title":"EPI"}'
+    assert "2 changes" in row.editor.summary.text()
+    assert row.editor.button.text().startswith("Chart settings")
+
+
+def test_every_chart_style_param_gets_that_editor(qapp):
+    """**registry 全掃** —— 下一張用 `chart_style` 的卡不必再發現一次。"""
+    from d4t.core.pipeline import list_steps
+    from d4t.ui.widgets import ChartStyleField, ParamForm
+
+    seen = 0
+    for card in list_steps():
+        spec = card.describe()
+        names = [q["name"] for q in spec["params"]
+                 if q["type"] == "chart_style"]
+        if not names:
+            continue
+        form = ParamForm()
+        form.set_step(spec, {}, [], [])
+        for name in names:
+            assert isinstance(form._rows[name].editor, ChartStyleField), name
+            seen += 1
+    assert seen, "沒有任何一格是 chart_style —— 這條測試就沒在守東西了"
+
+
+def test_the_editor_only_offers_the_charts_this_card_writes(qapp):
+    """右半的分頁 = 這張卡勾了哪幾張圖。沒勾的那幾張的覆寫**不准被清掉**。"""
+    from d4t.core.pipeline import get_step
+    from d4t.ui.widgets import ParamForm
+
+    form = ParamForm()
+    form.set_step(get_step("output_uniformity").describe(),
+                  {"folder": "out", "charts": "box",
+                   "look": '{"map.title":"Where"}'}, [], [])
+    assert form._chart_kinds() == ["box"]
+    dlg = ChartSettingsDialog(form._rows["look"].editor.text(),
+                              form._chart_kinds())
+    assert sorted(dlg.per) == ["box"]
+    assert "map.title" in dlg.value()
+
+
+def test_an_empty_charts_box_still_opens_on_all_four(qapp):
+    """一個空的分頁區讀起來是「壞了」—— 沒勾就全部給。"""
+    from d4t.core.pipeline import get_step
+    from d4t.ui.widgets import ParamForm
+
+    form = ParamForm()
+    form.set_step(get_step("output_uniformity").describe(),
+                  {"folder": "out", "charts": ""}, [], [])
+    assert form._chart_kinds() == list(uc.CHARTS)

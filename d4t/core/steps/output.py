@@ -1556,11 +1556,12 @@ class OutputUniformityStep(_OutputStep):
         ParamSpec(
             name="look", type="chart_style", default="",
             label="Chart look",
-            help=("Titles, axis names, tick counts, text size and colour, "
-                  "marker and line width - and whether the value scale is "
-                  "locked. Open it with “Chart settings…” in the chart "
-                  "window. It travels with the recipe, so a reopened recipe "
-                  "draws the charts you left."),
+            help=("How the charts look: titles, axis names, tick counts, "
+                  "text size and colour, marker and line width - and whether "
+                  "the value scale is locked. Press “Chart settings…” "
+                  "beside this row to change any of it (the chart window has "
+                  "the same button). It travels with the recipe, so a "
+                  "reopened recipe draws the charts you left."),
         ),
         ParamSpec(
             name="limit", type="int", default=20, min=0, max=100000,
