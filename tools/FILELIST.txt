@@ -40,8 +40,8 @@ c1049c4ae6c2505db6e37b7edeaf364e1244b026 d4t/core/algo/quality.py
 df85cecb3e142f94a5ccb6d8775cd3540d99fa97 d4t/core/export/klarf_out.py
 fdc1943f600c67dbe0adc223dcb84690cedf9334 d4t/core/export/overlay.py
 ab5031e7056134aa94c5551aba9b80a774b6397a d4t/core/export/report.py
-4599be07de9d76b7a008bdc400e22cfaa0c7acd2 d4t/core/ingest/__init__.py
-987ec64e2830c1e9e7ee535c3aa91e020f5bd0be d4t/core/ingest/dataset.py
+d68c0a05f05bcfc3fcd7fe2a51929c7c6d6e3d76 d4t/core/ingest/__init__.py
+fce8f2d36c5bdf0d41cee5d2ddba4ae365f46dc4 d4t/core/ingest/dataset.py
 8e73de19c7ae0e640d64a03465ef96248f7ae28c d4t/core/ingest/glas_export.py
 42948c7ff7901d48434530d524790904d1466be4 d4t/core/ingest/imageio.py
 feece8d9078b06698750267a9be1ea0ef0f73eb8 d4t/core/ingest/klarf_core.py
@@ -106,8 +106,8 @@ b84bf1bc094c091fd59540687dab0984b7a6e4b2 d4t/ui/inspectors.py
 df21676870089851d0ab5bdaa1834e23270ac9da d4t/ui/results_table.py
 1d1ca0ee2e4ebbedfa11b027bb9e7d735500ad2d d4t/ui/route_badge.py
 11a38b9e760697b23510805b56706f1eb8f6c85e d4t/ui/route_panel.py
-85bbff1c801c8f2e03a8003b39a376c1392757d1 d4t/ui/scope.py
-f187aaaad866d9085c4f24c3bd44eeb68f84859d d4t/ui/studio.py
+48102a906c01ac71c1459cd42589c273c8f5fcd2 d4t/ui/scope.py
+dccfcb8260e625bf1e086206360c5ea950be2284 d4t/ui/studio.py
 0a1d057639f34635416673d9dc38a3daf999530e d4t/ui/template_dialog.py
 59abf797245c11d53cffc81e3e738c6eeaba4fe4 d4t/ui/theme.py
 3cc7d61199e03eaba0eb61f5a749b9f6cfca9ba5 d4t/ui/threshold_view.py
@@ -117,9 +117,9 @@ c894b98548a3a06f98ed531901518a429768879f d4t/ui/verdict_band.py
 a1ad68f330e46c2fe585db66f88fbfbc39b4c9e3 d4t/ui/viewmodel.py
 db2453e83e06e1bde6fdcbb000f1a38cc16b3dcd d4t/ui/welcome.py
 34b6365ad97cc503caf8390297720e538dc26f6e d4t/ui/why_panel.py
-9d2960430608acc1fb17c4c6835580d400dde0f8 d4t/ui/widgets.py
+d2bd481b2d12afe9f79f729b5b3797e7c34ab4fb d4t/ui/widgets.py
 768dbb379b84127e9cbb7ec62df8d51c34dd0100 d4t/ui/wiring_slot.py
-e02cb1ea64a7ed413716379b9da789937729f3e3 d4t/ui/workers.py
+1a85c6e48b270775b997593c94aa048bc4d66feb d4t/ui/workers.py
 e3a13ded16b79cc3dd711555bc71b85bd4c881ad docs/ARCHITECTURE.md
 5c5462254b7bbe61dbb28741f4a5feb034749315 docs/FAB-VALIDATION.md
 1365e450a6a568fb0520113e40af42a87cb907df docs/GLAS-INTERFACE.md
@@ -327,7 +327,7 @@ a3a5c0ab3ec4243abb72f3b35e2d744697d7c9ac tests/test_ui_gc_generator.py
 048341b32a47804f097f6ede40c1c35b31b0da8a tests/test_ui_glv_intent.py
 f480eedce6d10f8e192050bdbe65d03676911df0 tests/test_ui_ground_truth.py
 46b4c2bc498be5f3641b2d66d44117424d375bed tests/test_ui_info_level.py
-f6a8f5fde90667317b98ab75b71f1ed5f10d68ef tests/test_ui_input_kinds.py
+66d7c6847d236db830907c6214c34fef8289b1ce tests/test_ui_input_kinds.py
 e3e49bd93c88cbdd895acc07f678123e17806f3c tests/test_ui_inspectors.py
 e080d7615bf2f2b8df2c17b6bd0d9b4e4c1b9107 tests/test_ui_layout_follows_the_wires.py
 26e65c59a96f1b4eb97e59b6647752e5c9f388fc tests/test_ui_lot_strip.py

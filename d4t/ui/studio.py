@@ -4101,6 +4101,32 @@ class StudioWindow(QMainWindow):
         self._status("Loading folder: %s" % d)
         return True
 
+    def load_image_path(self, path: Any, sync: bool = False) -> bool:
+        """載入**一個影像檔**（F85）—— `load_folder_path` 的單檔版。
+
+        沒有 KLARF、沒有座標，那一張圖就是唯一的一顆 defect。資料集標籤上
+        仍然寫 ``folder``（`ingest.load_image_file` 的 docstring 有理由）。
+        """
+        f = str(path)
+        if not os.path.isfile(f):
+            self._status("Not a file: %s" % f)
+            return False
+        self._pending_dataset_name = os.path.splitext(os.path.basename(f))[0]
+        if sync:
+            try:
+                ds = DatasetLoadWorker.run_sync_image_file(f)
+            except Exception as e:      # noqa: BLE001 — UI 邊界，一律回報
+                self._status("Could not load image: %s: %s"
+                             % (type(e).__name__, e), "error")
+                return False
+            return self._on_dataset_loaded(ds)
+        if not self.dataset_worker.start_image_file(f):
+            self._status("A dataset is already loading — please wait.")
+            return False
+        self._progress_busy("Loading %s…" % os.path.basename(f))
+        self._status("Loading image: %s" % f)
+        return True
+
     def _on_dataset_loaded(self, dataset: Any) -> bool:
         # F7-1：型別要到載完才知道，所以擋在這裡而不是 load_dataset_path。
         # 擋下來時**不動既有狀態** —— 使用者手上原本那份資料集還在，
@@ -6652,6 +6678,14 @@ class StudioWindow(QMainWindow):
         if not d:
             return
         self.load_folder_path(d)
+
+    def _on_open_image(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open image", "",
+            "Images (*.png *.tif *.tiff *.jpg *.jpeg *.bmp);;All files (*)")
+        if not path:
+            return
+        self.load_image_path(path)
 
     def _on_open_recipe(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
