@@ -787,6 +787,14 @@ def qualified_feature_name(prefix: str, name: str) -> str:
 #: 定義）：任何一張卡宣告 ``variant="outlier_box"``，那個數字就是一個框號。
 VARIANT_UNITS: Dict[str, str] = {
     "outlier_box": "box",
+    # ---- 均勻度（F85）：這一群框「之間」的量 ---------------------------
+    # `range` 刻意不在這裡 —— 它跟本尊同單位（灰階的全距還是灰階），
+    # 而 `feature_units` 已經由 metric 那一層答得出來。
+    "range_pct": "%", "cv_pct": "%",
+    # ⚠ **單位就是那個 100 住的地方之一。** 斜率報的是「每 100 px 變多少」，
+    # 而每 px 的版本在真實影像上是 0.00x —— 整欄印成 0.000，讀起來是「很平」。
+    # 單位少了那個 100，數字本身不會變，但**沒有人看得出它被換過**。
+    "slope_x": "gray / 100 px", "slope_y": "gray / 100 px",
 }
 
 

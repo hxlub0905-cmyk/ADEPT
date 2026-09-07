@@ -6569,6 +6569,19 @@ VARIANT_GLOSS = {
     "nm2": "%s, in square nanometres",
     "raw": "%s, before it was scaled against the batch",
     "rescued": "%s - kept under this name because a later card wrote over it",
+    # ---- 均勻度（F85）：這一群框「之間」的量 ----------------------------
+    # ⚠ 這五句話都要明講**它們講的是整群，不是某一格** —— 名字上唯一沒有的
+    # 資訊正是那個（`glv_median_cv_pct` 讀起來很像又一個灰階值）。
+    # 兩個斜率**必須把 100 說出來**：數字被換成每 px 的版本時，它不會變成
+    # 錯的，它會變成 0.00x —— 而那讀起來是「很平」。
+    "range": "%s - the gap between the brightest box and the darkest one",
+    "range_pct": "%s - that same gap, as a percentage of the average",
+    "cv_pct": "%s - how spread out the boxes are, as a percentage of the "
+              "average; 0 means every box reads the same",
+    "slope_x": "%s - how much it changes from left to right, per 100 pixels; "
+               "0 means no tilt",
+    "slope_y": "%s - how much it changes from top to bottom, per 100 pixels; "
+               "0 means no tilt",
 }
 
 

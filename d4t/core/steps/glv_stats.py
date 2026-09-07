@@ -104,6 +104,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from ..algo import glv as algo_glv
+from ..algo import uniformity as algo_unif
 from ..pipeline.context import Context
 from ..pipeline.step import (
     ANY_VALUE, CATEGORY_ALGO, MEASURE, PATCH_KINDS, REFERENCE,
@@ -273,6 +274,44 @@ OUTLIER_BOX_SUFFIX = "_outlier_box"
 #: 而在這之前只有 ``glv_worst_value``（judge 那一個量）拿得到 —— 想要那一格的
 #: 別的統計量，只能把 judge 改成它，於是「照什麼挑」與「要報什麼」被綁死。
 WORST_SUFFIX = "_worst"
+
+#: **這一群框均不均勻**（F85，2026-09-07）—— PEAR 的 uniformity 搬過來的那一組。
+#:
+#: 為什麼是這張卡的一格參數，不是一張新卡（使用者問「是有必要新開卡嗎」）：
+#: ``each box`` **已經**逐框量出一串值了，這幾個數字只是那一串值的另一種
+#: 收尾。它問的跟 ``_typical`` / ``_outlier`` 是**同一個樣品、同一組框、
+#: 同一批像素** —— 分成兩張卡的代價是使用者要接兩次線、設兩次 ``metrics``，
+#: 而那兩份**可以設得不一樣，畫面上看不出來**（`roi_compare` 併進這張卡時
+#: 罵過的同一件事）。
+#:
+#: 五個各自回答一句話：
+#:
+#: ================  ==================================================
+#: ``range``         最亮那格 − 最暗那格
+#: ``range_pct``     ↑ 佔平均的 %
+#: ``cv_pct``        標準差佔平均的 %（灰階均勻度慣用的那一個）
+#: ``slope_x``       左到右**每 100 px** 變多少（0 = 平的）
+#: ``slope_y``       上到下每 100 px 變多少
+#: ================  ==================================================
+#:
+#: ⚠ **只套在絕對統計量上（``metrics``），不套在 ``cmp_*`` 上。** 均勻度問的
+#: 是「這一塊自己亮得均不均勻」—— 那是區域的性質。比出來的量要不要也問一次
+#: 是另一個問題，而現在多開它等於每一格 CSV 欄數再乘二。
+UNIF_RANGE, UNIF_RANGE_PCT = "range", "range_pct"
+UNIF_CV_PCT = "cv_pct"
+UNIF_SLOPE_X, UNIF_SLOPE_Y = "slope_x", "slope_y"
+UNIF_CHOICES = (UNIF_RANGE, UNIF_RANGE_PCT, UNIF_CV_PCT,
+                UNIF_SLOPE_X, UNIF_SLOPE_Y)
+
+#: 預設勾哪三個（使用者定調 2026-09-07）：「均不均勻」＋「有沒有斜掉」。
+#: 兩句話就是這個問題的全部，其餘三個要的人自己勾 —— 全開的話 3 群 × 3 個
+#: 統計量就是 45 欄，而打開卡片的人沒有要求那個。
+DEFAULT_REPORT = "%s,%s,%s" % (UNIF_CV_PCT, UNIF_SLOPE_X, UNIF_SLOPE_Y)
+
+#: ⚠ **不做「幾格是 Tukey 離群」**（F85 §3.3，本來列在計畫書第一版裡）。
+#: :data:`BOXES_OVER_K`（F68「超過 k σ 的有幾格」）已經在回答同一句話，而
+#: ``_outlier``（最極端那格的**值**）與 ``_outliers``（**幾格**）只差一個
+#: 字母、會在同一份 CSV 上並排 —— 一個是灰階，一個是計數。
 
 #: 疊圖上「贏家那一格」的**角色**（不是區域名 —— `!` 開頭是慣例，見
 #: `ui.widgets.MARK_ROLE_TOKENS`）。UI 據此畫琥珀色粗框，跟報表同一個語言。
@@ -467,6 +506,17 @@ def _pairs_per_box(params: Dict[str, Any]) -> bool:
     return (got if got in REF_PAIRINGS else PER_BOX_REF) == PER_BOX_REF
 
 
+def _report_of(params: Dict[str, Any]) -> List[str]:
+    """勾了哪幾個均勻度數字（F85）。認不得的字**丟掉**，不當機。
+
+    這一格只有在 ``each box`` 時才顯示，但 `validate_params` 照樣會補預設值
+    —— 所以判斷「要不要算」的是呼叫端（`_measure_each_box` 只在 each box 那
+    條路上走到這裡），不是這一支。
+    """
+    got = parse_key_list(params.get("report", DEFAULT_REPORT))
+    return [k for k in got if k in UNIF_CHOICES]
+
+
 def _direction_of(params: Dict[str, Any]) -> str:
     """往哪一邊找（F68）。不認得的字當 ``both``（＝ F68 之前的唯一行為）。"""
     got = str(params.get("direction", algo_glv.BOTH) or algo_glv.BOTH).strip()
@@ -643,6 +693,33 @@ class GlvStatsStep(MultiSourceStep):
                   "them as one pile of pixels; each box measures every box on "
                   "its own and reports the typical one, the odd one out, and "
                   "which box that was."),
+        ),
+        ParamSpec(
+            name="report", type="multi_choice", default=DEFAULT_REPORT,
+            choices=list(UNIF_CHOICES),
+            section="3 \u00b7 How to find it",
+            show_when=("across_boxes", (EACH_BOX,)),
+            label="How even are the boxes",
+            choice_help={
+                UNIF_RANGE: "The brightest box minus the darkest one, in "
+                            "gray levels.",
+                UNIF_RANGE_PCT: "The same gap, as a percentage of the "
+                                "average - the form you quote when two "
+                                "images sit at different brightness.",
+                UNIF_CV_PCT: "How spread out the boxes are, as a percentage "
+                             "of the average. The usual number for gray "
+                             "level uniformity: 0 means every box reads the "
+                             "same.",
+                UNIF_SLOPE_X: "How much the value changes from left to "
+                              "right, per 100 pixels. 0 means no tilt.",
+                UNIF_SLOPE_Y: "How much the value changes from top to "
+                              "bottom, per 100 pixels. 0 means no tilt.",
+            },
+            help=("Numbers about how alike the boxes are, rather than about "
+                  "any one of them: whether they all read the same, and "
+                  "whether there is a tilt across the field. Tick nothing to "
+                  "leave them out. They only make sense when every box is "
+                  "measured on its own, so they appear with each box above."),
         ),
         ParamSpec(
             name="judge", type="metric_choice", default=JUDGE_DEFAULT,
@@ -954,13 +1031,20 @@ class GlvStatsStep(MultiSourceStep):
                                           (OUTLIER_SUFFIX, "outlier"),
                                           (OUTLIER_BOX_SUFFIX, "outlier_box"),
                                           (WORST_SUFFIX, "worst"))]
+            # 均勻度（F85）：**只掛在絕對統計量上**，而且是「這一群框之間」
+            # 的身分 —— variant 用 key 本人（`cv_pct` / `slope_x`…），家族
+            # 仍是 `glv`（它量的是灰階，不是比出來的量）。
+            # ⚠ 宣告是「**可能**會產出的」（同 snr/tstat 那行）：只剩一格可量
+            # 的 defect 上「之間」不存在，那一顆就不會有這幾格。
+            unif = [("%s_%s" % (m, key), m, "", key, "glv")
+                    for m in mids for key in _report_of(params)]
             worst = [(str(n), str(n), "", "", "glv")
                      for n in [BOX_COUNT] + list(WORST_FEATURES)
                      + list(SCORE_FEATURES)]
             if float(params.get("over_k") or 0.0) > 0:
                 worst += [(n, n, "", "", "glv")
                           for n in (BOXES_OVER_K, BOXES_OVER_K_FRAC)]
-            return spread + worst + extra
+            return spread + unif + worst + extra
         return base + extra
 
     @classmethod
@@ -1414,6 +1498,29 @@ class GlvStatsStep(MultiSourceStep):
             out[name + TYPICAL_SUFFIX] = typical
             out[name + OUTLIER_SUFFIX] = float(values[k])
             out[name + OUTLIER_BOX_SUFFIX] = float(kept_index[k])
+
+        # ---- 這一群框均不均勻（F85）-----------------------------------------
+        # 值已經在 `per_box` 裡了 —— 這一段**不再量一次像素**，只是把同一串
+        # 數字換一種收尾（那是它住在這張卡上而不是另一張卡上的理由）。
+        wanted = _report_of(p)
+        if wanted:
+            cx, cy = algo_unif.rect_centers([rects[i] for i in kept_index])
+            for name in mids:
+                values = [b[name] for b in per_box if name in b]
+                if len(values) < 2:
+                    # 一格框沒有「之間」可言。**不寫**（不是 0）—— 一個 0 的
+                    # cv_pct 讀起來是「完全均勻」，而真相是「這件事問不出來」。
+                    continue
+                stats = algo_unif.uniformity_stats(values)
+                for key in (UNIF_RANGE, UNIF_RANGE_PCT, UNIF_CV_PCT):
+                    if key in wanted:
+                        out["%s_%s" % (name, key)] = float(stats[key])
+                for key, pos in ((UNIF_SLOPE_X, cx), (UNIF_SLOPE_Y, cy)):
+                    if key not in wanted:
+                        continue
+                    slope = algo_unif.slope_per_100px(pos, values)
+                    if slope is not None:
+                        out["%s_%s" % (name, key)] = slope
 
         # ---- 總冠軍（F31）：照 `judge` 挑出最異常的那一格 -------------------
         # 只有一格可量的時候**不吐**（沒有「其他格」可比）—— 不是 0：一個 0
