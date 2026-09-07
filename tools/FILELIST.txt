@@ -92,7 +92,7 @@ a2bef1c5504ba66b2165727e27800c5d72de791b d4t/ui/assets/d4t.svg
 87bce11608d08f4302947e917b2b24d076571775 d4t/ui/branding.py
 454769fb6531a5a30558a418a4d2f565d59f0832 d4t/ui/canvas.py
 3b58b7e078d58ad84a8939734b65952a75a029f3 d4t/ui/cell_canvas.py
-f229d878ad50741145e68925bca7a4a995a012ac d4t/ui/chart_settings.py
+2d9050a677c39039a77606371217d06a6df5c547 d4t/ui/chart_settings.py
 d95b5c98fdb13f64f60bc20a101e4f1938d73552 d4t/ui/decide_panel.py
 8deaa6bc59894a0fb5cb04f3d7b2c5b2b2579c21 d4t/ui/feature_panel.py
 ccd233c8486ce68c52818e2a4cbc2a7613658f95 d4t/ui/feature_tree.py
