@@ -286,6 +286,9 @@ d4t/
 │   │   ├── klarf_out.py      #   KLARF 三種寫回模式：inplace／annotate／topn
 │   │   ├── report.py html.py boxplot.py  #   CSV／Excel／HTML 報表／box plot（手寫 SVG，零新相依）
 │   │   ├── uniformity_charts.py  #   均勻度四種圖（同上手寫 SVG）⚠ 一個點＝一格框，不是一顆 defect
+│   │   ├── chart_frame.py    #   **一列一格框**的長表（F88 第一刀）——「一份資料、
+│   │   │                     #   很多種看法」的那個「一份資料」。`row`/`col` 走
+│   │   │                     #   `cell_edges` 的同一套分群，**整張表一起分**
 │   │   └── overlay.py        #   缺陷疊圖：把「機器看到什麼」畫成人看得懂的圖
 │   ├── store/results.py      # SQLite 批次歷史 ＋ rescore
 │   └── calibration.py        # nm/px 校正 profile
