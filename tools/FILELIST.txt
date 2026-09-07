@@ -144,6 +144,7 @@ cd9b6800b5941de35efed2464b7c0a0db05e4a49 docs/plans/F79-grid-tells-the-truth.md
 66963820c4b69d360394697ecd9d3ab2a8f2a46d docs/plans/F81-flat-for-real.md
 5f93bd942e201992944b1ba7359ffde449b14bbb docs/plans/F82-drag-magnet.md
 758faea8a5a3997d48096cc08bcae3181a7c20ca docs/plans/F85-uniformity.md
+9bb5ad97b1eed52a899f65d69487a91e524a8817 docs/plans/F88-graph-builder.md
 81236a2c24b1a65f3021e5f578777644484fa874 fab_probe/README.md
 de08d63cbd4c1415acb2e0737c5b99db6ff57d54 fab_probe/probe_klarf.py
 368cc8e63736446813cc47ccc1fcc49b11abeec6 fab_probe/probe_stats.py
