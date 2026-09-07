@@ -55,9 +55,15 @@ NUMERIC_ONLY = (cspec.ROLE_SIZE,)
 #: 每一種記號的圖示（`ui.glyphs`）。**一格選項＝一排膠囊（圖 + 字）**，
 #: 不是下拉 —— 這是 F68 那條規矩，而它在這裡尤其站得住腳：三種記號講的正是
 #: 「這張圖長什麼形狀」，那本來就畫得出來。
+#:
+#: ⚠ **盒子與格子借的是既有的兩張圖**（`whisk_on` / `cells_equal`）。它們畫的
+#: 正是這兩種記號，而 `ui.glyphs` 是一套**共用的字彙**，不是一張一對一的表 ——
+#: 再畫兩張長得幾乎一樣的圖，維護的人以後要猜哪一張才是「真的那個盒子」。
 MARK_ICONS = {cspec.MARK_POINT: "mark_dots",
               cspec.MARK_LINE: "mark_line",
-              cspec.MARK_BAR: "mark_bars"}
+              cspec.MARK_BAR: "mark_bars",
+              cspec.MARK_BOX: "whisk_on",
+              cspec.MARK_CELL: "cells_equal"}
 
 
 class SpecEditor(QWidget):

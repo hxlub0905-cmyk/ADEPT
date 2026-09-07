@@ -126,17 +126,23 @@ PER_CHART_APPLIES: Dict[str, Tuple[str, ...]] = {
 #:
 #: ⚠ **收起來不等於清掉**：值仍然留在那一格參數裡（把 Heat map 取消勾選再
 #: 勾回來，設定要還在），編輯器只是不顯示。
+#: ⚠ **`CHART_CUSTOM` 用得到哪幾格，看的是它現在能畫哪幾種記號**
+#: （`pipeline.chart_spec.MARKS`）—— 盒子讀 `whiskers` 與填色、格子讀
+#: `map_values`、線與盒子讀 `points`。加一種記號而忘了在這裡登記的話，那一格
+#: 在編輯器裡是收起來的，而它**在檔案裡是有作用的**：使用者改不到一個真的
+#: 會變的東西。`test_every_editor_moves_the_preview` 守著反過來的那一半。
 GLOBAL_APPLIES: Dict[str, Tuple[str, ...]] = {
     "bins": (CHART_HIST,),
     "percent": (CHART_HIST,),
-    "whiskers": (CHART_BOX,),
+    "whiskers": (CHART_BOX, CHART_CUSTOM),
     "equal_cells": (CHART_MAP,),
-    "map_values": (CHART_MAP,),
-    # 一格框一個記號：profile 的散點，以及熱圖照實鋪時描出來的那個框
-    "points": (CHART_PROFILE, CHART_MAP),
+    "map_values": (CHART_MAP, CHART_CUSTOM),
+    # 一格框一個記號：profile 的散點、熱圖照實鋪時描出來的那個框，以及
+    # 自己配的那一張畫成線或盒子的時候
+    "points": (CHART_PROFILE, CHART_MAP, CHART_CUSTOM),
     "point_fill": (CHART_PROFILE, CHART_CUSTOM),
-    "fill_strength": (CHART_BOX, CHART_HIST, CHART_PROFILE),
-    "fill_color": (CHART_BOX, CHART_HIST, CHART_PROFILE),
+    "fill_strength": (CHART_BOX, CHART_HIST, CHART_PROFILE, CHART_CUSTOM),
+    "fill_color": (CHART_BOX, CHART_HIST, CHART_PROFILE, CHART_CUSTOM),
     # 盒鬚圖的 X 是類別、熱圖兩軸是位置 —— 兩張都沒有「橫著幾個刻度」
     "xticks": (CHART_HIST, CHART_PROFILE, CHART_CUSTOM),
     "yticks": (CHART_BOX, CHART_HIST, CHART_PROFILE, CHART_CUSTOM),

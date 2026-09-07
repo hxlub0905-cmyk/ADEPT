@@ -26,8 +26,8 @@ from ..pipeline import chart_spec as spec_mod
 from .chart_frame import CATEGORY_COLUMNS, Frame
 from .uniformity_charts import (  # noqa: PLC2701 — 見檔頭：刻度只該有一份
     REGION_COLOURS, _axis_names, _empty, _esc, _fmt, _frame, _head,
-    _mark_colour, _nice_ticks, _span, _text_attrs, _xlabels, _ylabels,
-    heat_hex, seq_hex,
+    _is_dark, _mark_colour, _nice_ticks, _opacity, _span, _text_attrs,
+    _xlabels, _ylabels, fill_attrs, heat_hex, seq_hex,
 )
 
 __all__ = ["draw"]
@@ -196,7 +196,7 @@ class _Plot(object):
 
     def __init__(self, frame: Frame, sp: Dict[str, Any],
                  style: Dict[str, Any], width: int, height: int,
-                 band_x: bool = False) -> None:
+                 band_x: bool = False, band_y: bool = False) -> None:
         self.frame, self.sp, self.style = frame, sp, style
         self.width, self.height = width, height
         self.colour_of, self.legend = _colours(
@@ -212,7 +212,7 @@ class _Plot(object):
         # 但同一組鎖定範圍套到兩條意思不同的軸上會把圖擠成一條線 —— 兩批要
         # 並排比的時候，鎖住 Y 就夠了（同 `_span` 那條「鎖住的照鎖的」）。
         self.sx = _scale(frame, sp["x"], band=band_x)
-        self.sy = _scale(frame, sp["y"], style.get("vlock"))
+        self.sy = _scale(frame, sp["y"], style.get("vlock"), band=band_y)
 
         self.out = _head(width, height, str(style.get("title") or ""))
         _frame(self.out, self.pad_l, self.pad_t, self.pw, self.ph)
@@ -372,12 +372,156 @@ def _bars(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
     return plot.finish()
 
 
+# --------------------------------------------------------------------------- #
+# mark：box
+# --------------------------------------------------------------------------- #
+def _boxes(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
+           width: int, height: int) -> str:
+    """一個槽一個盒子 —— 中間那一半、中位數、鬚。
+
+    ⚠ **統計走 `boxplot.box_stats`，不在這裡再算一次。** 那一支已經定死了
+    「鬚的端點是落在 1.5×IQR 之內的**真實資料點**，不是算出來的柵欄」——
+    差別在圖上看得見（後者會畫出一條伸進沒有資料的地方的鬚）。各算一份的
+    那天，同一份報表裡兩張盒鬚圖的鬚會不一樣長。
+    """
+    from .boxplot import box_stats
+
+    plot = _Plot(frame, sp, style, width, height, band_x=True)
+    groups = _by_colour(frame, sp)
+
+    # 槽 -> 那個槽上的那幾個盒子（照顏色的群序）
+    buckets: Dict[float, List[Tuple[List[float], Dict[str, Any]]]] = {}
+    for group in groups:
+        by_slot: Dict[float, List[Dict[str, Any]]] = {}
+        for row in group:
+            centre = plot.x_at(row)
+            if centre is None or not _ok(row.get(sp["y"])):
+                continue        # **算不出來的那一格不畫**
+            by_slot.setdefault(round(centre, 3), []).append(row)
+        for centre, rows in by_slot.items():
+            buckets.setdefault(centre, []).append(
+                ([float(r[sp["y"]]) for r in rows], rows[0]))
+    if not buckets:
+        return plot.finish()
+
+    slots = max(1, len(plot.sx.slots))
+    span = (plot.pw / float(slots)) * BAR_SHARE
+    most = max(len(v) for v in buckets.values())
+    each = max(1.0, (span - BAR_GAP * (most - 1)) / float(most))
+    line_w = float(style.get("line_width", 1.2) or 1.2)
+    whiskers = bool(style.get("whiskers", True))
+    dots = bool(style.get("points", False))
+    radius = float(style.get("point_size", 2.2) or 2.2)
+
+    def at(v: float) -> Optional[float]:
+        return plot.sy.at(v, plot.pad_t + plot.ph, plot.pad_t)
+
+    for centre, entries in buckets.items():
+        run = len(entries) * each + BAR_GAP * (len(entries) - 1)
+        left0 = centre - run / 2.0
+        for i, (values, row) in enumerate(entries):
+            st = box_stats(values)
+            if not st:
+                continue
+            ink = plot.colour_of(row)
+            fill, alpha = fill_attrs(style, ink, 0.18)
+            left = left0 + i * (each + BAR_GAP)
+            mid = left + each / 2.0
+            q1, q3, med = at(st["q1"]), at(st["q3"]), at(st["med"])
+            if q1 is None or q3 is None or med is None:
+                continue
+            top, bottom = min(q1, q3), max(q1, q3)
+            if whiskers:
+                lo, hi = at(st["lo"]), at(st["hi"])
+                if lo is not None and hi is not None:
+                    plot.out.append(
+                        "<path d='M%.1f %.1fV%.1fM%.1f %.1fH%.1fM%.1f %.1fH%.1f'"
+                        " stroke='%s' stroke-width='%.1f' fill='none'/>"
+                        % (mid, lo, hi, left + each * 0.25, lo,
+                           left + each * 0.75, left + each * 0.25, hi,
+                           left + each * 0.75, ink, line_w))
+            plot.out.append(
+                "<rect x='%.1f' y='%.1f' width='%.1f' height='%.1f' fill='%s' "
+                "fill-opacity='%s' stroke='%s' stroke-width='%.1f'/>"
+                % (left, top, each, max(0.5, bottom - top), fill,
+                   _opacity(alpha), ink, line_w))
+            plot.out.append(
+                "<line x1='%.1f' y1='%.1f' x2='%.1f' y2='%.1f' stroke='%s' "
+                "stroke-width='%.1f'/>"
+                % (left, med, left + each, med, ink, line_w * 1.6))
+            if dots:
+                for v in values:
+                    y = at(v)
+                    if y is not None:
+                        plot.out.append(
+                            "<circle cx='%.1f' cy='%.1f' r='%.2f' fill='none' "
+                            "stroke='%s' stroke-width='0.8'/>"
+                            % (mid, y, radius, ink))
+    return plot.finish()
+
+
+# --------------------------------------------------------------------------- #
+# mark：cell
+# --------------------------------------------------------------------------- #
+def _cells(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
+           width: int, height: int) -> str:
+    """一格一個色塊 —— **熱圖，但兩條軸是你自己挑的**。
+
+    ⚠ 兩條軸都當**槽**（每一格一樣大、鋪滿圖區）。那是熱圖預設的樣子，
+    理由寫在 `heat_lattice`：照實鋪的話「間距不平均、或少了一格，相鄰兩格的
+    面積就明顯不一樣」，而面積不是這張圖在量的東西。
+
+    ⚠ 顏色走的是**跟熱圖同一條色階**（`ramp` 那一格同時管兩邊）—— 兩張圖
+    並排時同一個顏色要是同一個意思。
+    """
+    column = str(sp.get("color") or "")
+    plot = _Plot(frame, sp, style, width, height, band_x=True, band_y=True)
+    vals = frame.values(column)
+    lo, hi = _span(vals, style.get("hlock"))
+    rainbow = str(style.get("ramp", "")) == "rainbow"
+    show = bool(style.get("map_values"))
+
+    nx = max(1, len(plot.sx.slots))
+    ny = max(1, len(plot.sy.slots))
+    cw, ch = plot.pw / float(nx), plot.ph / float(ny)
+    size, _weight, _ink = _text_attrs(style, "tick", _TEXT)
+
+    for row in frame.rows:
+        cx, cy = plot.x_at(row), plot.y_at(row)
+        v = row.get(column)
+        if cx is None or cy is None or not _ok(v):
+            continue            # **算不出來的那一格不畫**（留白，不是畫成 0）
+        t = 0.5 if hi <= lo else (float(v) - lo) / (hi - lo)
+        ink = heat_hex(t) if rainbow else seq_hex(t)
+        plot.out.append(
+            "<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' fill='%s'/>"
+            % (cx - cw / 2.0, cy - ch / 2.0, cw, ch, ink))
+        if show and cw >= 34 and ch >= 14:
+            # **放得下才印**（印一半的數字比不印糟）—— 門檻、字重、以及
+            # 「淺底印深字、深底印白字」那條規則**全部跟熱圖同一份**
+            # （`_svg_map` ＋ `_is_dark`）。第一版在這裡自己寫了一條
+            # `t > 0.55`，那就是同一句話長出兩種意思的起點。
+            #
+            # ⚠ 那條規則在色階中段**碰得到 3.2:1**（單色階 t≈0.49）——
+            # 印在連續色階上的字本來就到不了 4.5:1。這裡不另外救它：色條是
+            # 那張圖的尺，而 `boxes.csv` 是那份表。兩者都在。
+            plot.out.append(
+                "<text x='%.2f' y='%.2f' font-size='%g' font-weight='700' "
+                "fill='%s' text-anchor='middle'>%s</text>"
+                % (cx, cy + size * 0.35, min(size, ch * 0.5),
+                   "#ffffff" if _is_dark(ink) else "#1f2430",
+                   _esc(_fmt(float(v)))))
+    return plot.finish()
+
+
 #: ``mark -> 畫它的那一支``。**封閉字彙的另一半** —— `chart_spec.MARKS` 說
 #: 有哪幾個字，這裡說每個字怎麼畫，而有一支測試問「兩邊有沒有對齊」。
 _MARKS = {
     spec_mod.MARK_POINT: _points,
     spec_mod.MARK_LINE: _lines,
     spec_mod.MARK_BAR: _bars,
+    spec_mod.MARK_BOX: _boxes,
+    spec_mod.MARK_CELL: _cells,
 }
 
 
