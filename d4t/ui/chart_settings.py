@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.export import uniformity_charts as uc
+from ..core.pipeline import chart_spec as cspec
 from ..core.pipeline import chart_style as cs
 from .uniformity_window import ChartView, chart_style_for
 from .theme import TOKENS
@@ -531,10 +532,15 @@ class ChartSettingsDialog(QDialog):
         ⚠ **收起來不等於清掉**：那幾格仍然在 `self.globals` 裡，所以值照樣
         round-trip 回去 —— 把 Heat map 取消勾選再勾回來，設定要還在。
         """
-        shown = set(self._kinds)
+        try:
+            mark = str(cspec.parse_spec(self._spec)["mark"])
+        except Exception:              # noqa: BLE001 — 顯示用，不能擋畫面
+            mark = cspec.MARK_POINT
         for key in list(self.globals):
-            uses = uc.GLOBAL_APPLIES.get(key)
-            if uses is not None and not (shown & set(uses)):
+            # ⚠ 走 `uc.applies` 而不是自己讀 `GLOBAL_APPLIES` —— `CHART_CUSTOM`
+            # 那一張還要看它**現在畫成哪一種記號**（散點沒有鬚）。各讀一份
+            # 的那天，收起來的與真的沒有作用的會是兩組不一樣的東西。
+            if not any(uc.applies(key, k, mark) for k in self._kinds):
                 self._set_row_visible(key, False)
 
     def _set_row_visible(self, key: str, on: bool) -> None:
@@ -655,6 +661,14 @@ class ChartSettingsDialog(QDialog):
         self.globals[key] = editor
         self._labels[key] = lab
 
+    def _reaches(self, key: str) -> List[str]:
+        """這一格改得到畫面上哪幾張圖（`uc.applies` 是唯一的判準）。"""
+        try:
+            mark = str(cspec.parse_spec(self._spec)["mark"])
+        except Exception:              # noqa: BLE001 — 顯示用，不能擋畫面
+            mark = cspec.MARK_POINT
+        return [k for k in self._kinds if uc.applies(key, k, mark)]
+
     def _row_title(self, key: str, title: str) -> str:
         """標題 ＋ **這一格影響哪幾張圖**（影響全部就不加）。
 
@@ -668,10 +682,9 @@ class ChartSettingsDialog(QDialog):
 
         只有**一張圖**在畫面上的時候不加：那時候每一列都是那張圖的。
         """
-        uses = uc.GLOBAL_APPLIES.get(str(key))
-        if not uses or len(self._kinds) <= 1:
+        if len(self._kinds) <= 1:
             return str(title)
-        mine = [uc.CHART_LABELS.get(k, k) for k in self._kinds if k in uses]
+        mine = [uc.CHART_LABELS.get(k, k) for k in self._reaches(key)]
         if len(mine) >= len(self._kinds):
             return str(title)          # 這一格四張都吃得到
         # **標題已經說了就不要再說一次**：`Heat map cells` 底下再掛一行

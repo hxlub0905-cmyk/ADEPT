@@ -372,3 +372,59 @@ def test_the_cell_labels_follow_the_heat_map_s_own_rule():
     assert "font-weight='700'" in shown
     # 深的那一端印白字（熱圖用的是同一個 `#ffffff` / `#1f2430`）
     assert "fill='#ffffff'" in shown and "fill='#1f2430'" in shown
+
+
+# --------------------------------------------------------------------------- #
+# 8. 「這一格改得到這張圖嗎」那張表不准漂（F88 第五刀）
+# --------------------------------------------------------------------------- #
+#: 每一種記號拿來試的那一份 spec（欄名對得上 `_frame()`）。
+_SPEC_FOR = {
+    "point": {"mark": "point", "x": "glv_mean", "y": "glv_std",
+              "size": "glv_mean"},
+    "line": {"mark": "line", "x": "glv_mean", "y": "glv_std"},
+    "bar": {"mark": "bar", "x": "col", "y": "glv_mean"},
+    "box": {"mark": "box", "x": "region", "y": "glv_mean"},
+    "cell": {"mark": "cell", "x": "col", "y": "row", "color": "glv_mean"},
+}
+
+#: 那一格「改動」長什麼樣（預設 -> 另一個值）。
+_MOVE = {
+    "whiskers": {"whiskers": False},
+    "map_values": {"map_values": True},
+    "points": {"points": False},
+    "point_fill": {"point_fill": True},
+    "fill_strength": {"fill_strength": 2.5},
+    "fill_color": {"fill_color": "#123456"},
+}
+
+
+def test_the_mark_table_matches_what_the_drawing_code_actually_reads():
+    """**兩個方向都測。**
+
+    `uniformity_charts.CUSTOM_BY_MARK` 說「這一格哪幾種記號真的讀它」，而
+    設定編輯器照它決定要不要顯示那一列。少測一邊的話那張表就只是一段註解：
+
+    * 列了卻沒人讀 ⇒ 使用者改一格**什麼都不會發生**；
+    * 讀了卻沒列 ⇒ 那一格在編輯器裡是**收起來**的，而它在檔案裡有作用。
+
+    第二種是比較貴的那一個 —— 它是「畫面上改不到一個真的會變的東西」。
+    """
+    f = _frame(_note("epi", 110.0, cols=3, rows=2),
+               _note("mg", 128.0, x0=400, cols=3, rows=2))
+    for key, marks in uc.CUSTOM_BY_MARK.items():
+        for mark, spec in _SPEC_FOR.items():
+            base = draw(f, spec)
+            moved = draw(f, spec, dict(_MOVE[key]))
+            reads = moved != base
+            assert reads == (mark in marks), (
+                "%s / %s：表上說 %s，實際上 %s"
+                % (key, mark, "讀" if mark in marks else "不讀",
+                   "讀了" if reads else "沒讀"))
+
+
+def test_every_mark_is_covered_by_that_test():
+    """加一種記號而忘了在上面那張表裡試它，症狀是「那條測試照樣綠」。"""
+    from d4t.core.pipeline import chart_spec
+
+    assert set(_SPEC_FOR) == set(chart_spec.MARKS)
+    assert set(_MOVE) == set(uc.CUSTOM_BY_MARK)

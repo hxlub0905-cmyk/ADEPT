@@ -23,14 +23,17 @@ import math
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..pipeline import chart_spec as spec_mod
-from .chart_frame import CATEGORY_COLUMNS, Frame
+from .chart_frame import (
+    CATEGORY_COLUMNS, COL_COL, COL_REGION, COL_ROW, COL_X, COLUMNS_FIXED,
+    Frame,
+)
 from .uniformity_charts import (  # noqa: PLC2701 — 見檔頭：刻度只該有一份
     REGION_COLOURS, _axis_names, _empty, _esc, _fmt, _frame, _head,
     _is_dark, _mark_colour, _nice_ticks, _opacity, _span, _text_attrs,
     _xlabels, _ylabels, fill_attrs, heat_hex, seq_hex,
 )
 
-__all__ = ["draw"]
+__all__ = ["draw", "PRESETS", "preset_spec", "metric_columns"]
 
 _AXIS = "#98a2b3"
 _TEXT = "#444"
@@ -67,6 +70,80 @@ def draw(frame: Frame, spec: object, style: Optional[Dict[str, Any]] = None,
         return _empty(width, height,
                       "nothing here can draw a '%s'" % sp["mark"])
     return drawer(frame, sp, st, int(width), int(height))
+
+
+# --------------------------------------------------------------------------- #
+# 預設 —— **打開時不准是一片空白**（計畫書 §5）
+# --------------------------------------------------------------------------- #
+#: 「這一欄是使用者量出來的統計量」的佔位符。哪一欄要有**資料**才知道
+#: （欄名跟著量測卡走），所以預設存的是佔位符，`preset_spec` 才把它換掉。
+METRIC, METRIC2 = "@metric", "@metric2"
+
+#: ``(名字, 一句白話, spec 樣板)``。**順序就是畫面上由左到右的順序。**
+#:
+#: 為什麼要有這個東西：graph builder 最容易讓不寫 code 的人卡住的就是
+#: 「面前一張白紙」（推廣鐵則）。所以打開一定落在一個**看得懂名字**的組合
+#: 上，使用者從那裡開始改 —— JMP 自己也是這樣。
+#:
+#: ⚠ **這跟「拿第一欄當預設」是兩回事**（F88 第二刀刻意不做的那件）。那個是
+#: 隨便挑一欄，畫出來是一團疊在同一點的圓、而且看起來像設定好了；這個是一張
+#: **有名字、有意思**的圖，而名字就寫在那顆膠囊上。
+#:
+#: ⚠ **`Histogram` 不在這裡**：直方圖要先分箱再數個數，而長表上沒有「幾個」
+#: 那一欄 —— 那是資料轉換，不是一種記號（同 §14.1 的結論）。
+PRESETS: Tuple[Tuple[str, str, Dict[str, str]], ...] = (
+    ("Two numbers", "Do these two move together?",
+     {"mark": spec_mod.MARK_POINT, "x": METRIC, "y": METRIC2,
+      "color": COL_REGION}),
+    ("Across the image", "Is the field tilted from one side to the other?",
+     {"mark": spec_mod.MARK_POINT, "x": COL_X, "y": METRIC,
+      "color": COL_REGION}),
+    ("Spread per region", "How spread out is each region?",
+     {"mark": spec_mod.MARK_BOX, "x": COL_REGION, "y": METRIC}),
+    ("Row by row", "One line per row of boxes.",
+     {"mark": spec_mod.MARK_LINE, "x": COL_X, "y": METRIC,
+      "color": COL_ROW}),
+    ("Where it is uneven", "A cell per box, coloured by the value.",
+     {"mark": spec_mod.MARK_CELL, "x": COL_COL, "y": COL_ROW,
+      "color": METRIC}),
+)
+
+
+def metric_columns(frame: Optional[Frame]) -> List[str]:
+    """使用者**量出來**的那幾欄（不含位置與大小那幾格幾何欄）。
+
+    ⚠ 幾何欄（`x`/`y`/`w`/`h`/`box`）是數字，但它們不是「量出來的東西」——
+    一個預設把 `w` 放到 Y 軸上，讀起來像是在問「框有多寬」，而那不是任何人
+    的問題。
+    """
+    if frame is None:
+        return []
+    return [c for c in frame.numeric_columns() if c not in COLUMNS_FIXED]
+
+
+def preset_spec(name: str, frame: Optional[Frame]) -> str:
+    """一個預設的名字 ＋ 這一顆的長表 → 一份**填好欄名**的 spec 字串。
+
+    佔位符換不掉（那一顆沒有量出任何統計量）就回空字串 —— 一份指著不存在的
+    欄的 spec 會畫出一句「no column called '@metric'」，那比空的更難懂。
+    """
+    for got, _why, template in PRESETS:
+        if got != str(name):
+            continue
+        mine = metric_columns(frame)
+        if not mine:
+            return ""
+        out: Dict[str, str] = {}
+        for key, value in template.items():
+            if value == METRIC:
+                value = mine[0]
+            elif value == METRIC2:
+                # 只有一個統計量的時候「兩個數字」退回跟位置比 —— 同一欄畫
+                # 兩次得到的是一條 45° 直線，那張圖看起來像壞了。
+                value = mine[1] if len(mine) > 1 else COL_X
+            out[key] = value
+        return spec_mod.format_spec(out)
+    return ""
 
 
 # --------------------------------------------------------------------------- #
@@ -353,7 +430,6 @@ def _bars(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
     if zero is None or not (plot.pad_t <= zero <= base):
         zero = base
 
-    fill = min(1.0, 0.55 * float(style.get("fill_strength", 1.0) or 1.0))
     for centre, rows in buckets.items():
         # 一個槽裡不滿 `most` 根的話**置中**，不要靠左（靠左的話同一個槽的
         # 長條會跟隔壁槽的對不齊，看起來像位置有意思）。
@@ -363,12 +439,17 @@ def _bars(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
             y = plot.y_at(row)
             top, bottom = min(y, zero), max(y, zero)
             ink = plot.colour_of(row)
+            # ⚠ **走 `fill_attrs`**（柱子／盒子／實心記號共用的那一支）。
+            # 第一版在這裡自己乘了一次 `fill_strength`，於是 `fill_color`
+            # 對長條完全沒有作用 —— 而編輯器照樣把那一列顯示出來。
+            # `CUSTOM_BY_MARK` 那條雙向測試抓到的。
+            fill, alpha = fill_attrs(style, ink, 0.55)
             plot.out.append(
                 "<rect x='%.1f' y='%.1f' width='%.1f' height='%.1f' "
-                "fill='%s' fill-opacity='%.2f' stroke='%s' "
+                "fill='%s' fill-opacity='%s' stroke='%s' "
                 "stroke-width='1'/>"
                 % (left0 + i * (each + BAR_GAP), top, each,
-                   max(0.5, bottom - top), ink, fill, ink))
+                   max(0.5, bottom - top), fill, _opacity(alpha), ink))
     return plot.finish()
 
 
@@ -410,7 +491,10 @@ def _boxes(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
     each = max(1.0, (span - BAR_GAP * (most - 1)) / float(most))
     line_w = float(style.get("line_width", 1.2) or 1.2)
     whiskers = bool(style.get("whiskers", True))
-    dots = bool(style.get("points", False))
+    # ⚠ **預設跟其他記號同一個**（`chart_style.DEFAULTS["points"]` 是 True）。
+    # 第一版在這裡寫死 `False`，於是同一個開關對折線有作用、對盒子沒有 ——
+    # 而編輯器照樣把那一列顯示出來。`CUSTOM_BY_MARK` 那條雙向測試抓到的。
+    dots = bool(style.get("points", True))
     radius = float(style.get("point_size", 2.2) or 2.2)
 
     def at(v: float) -> Optional[float]:
