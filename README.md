@@ -213,7 +213,7 @@ d4t 的演算法多數自六個既有專案 vendoring 而來 —— **六個都�
 | **KLIP** | KLARF 1.2／1.8 無損引擎、TIFF page 對應、健檢 lint |
 | **GLAS** | fine align、SEM loader、DAG 拓撲排序、ROI label map 契約 |
 | **MMH** | recipe 架構原型、批次引擎模式、次像素邊緣定位、品質指標、KLARF 寫回 |
-| **PEAR** | GLV 統計 metric bank、Tukey 離群、η²／Cohen's d、CJK-safe 影像載入、SNR 正負號正典 |
+| **PEAR** | GLV 統計 metric bank、Tukey 離群、**均勻度與位置趨勢**（F85）、CJK-safe 影像載入、SNR 正負號正典 |
 | **cell-period-estimator** | 週期估測、Golden Cell 堆疊、ghosting 分數、UI 主題 token |
 | **Perspective-Combination (Fusi³)** | 正規化、直方圖匹配、5-backend 對位、`MultiROISet` |
 
