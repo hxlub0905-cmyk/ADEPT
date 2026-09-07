@@ -75,7 +75,7 @@ e87f4657eafa91ae2c6c2f2f8d86a9f6ba72e7bf d4t/core/steps/align.py
 a776e192067df83cb88099ed6b82bb70c6f5a66d d4t/core/steps/load.py
 7b7e819770b0fe4589d12cdf23dc1bdad583c5fa d4t/core/steps/load_sidecar.py
 d8b1021ce4eb76b436ba9dea26d62951febd06ac d4t/core/steps/normalize.py
-3b64b13e27aeb00e8085eb149b8388b45b599d1b d4t/core/steps/output.py
+0173a01fa36ee90fa9558971a99e9952245ffd4d d4t/core/steps/output.py
 66ceffccbdda6a2582041b25342f1b2373bfb243 d4t/core/steps/pair_source.py
 ca28ce64ea62cad9dd025c2ec3968aba80967340 d4t/core/steps/quality.py
 70187a5147e8170f0b1bde393cfd6d9577e78690 d4t/core/steps/roi_cross.py
@@ -121,7 +121,7 @@ c894b98548a3a06f98ed531901518a429768879f d4t/ui/verdict_band.py
 a1ad68f330e46c2fe585db66f88fbfbc39b4c9e3 d4t/ui/viewmodel.py
 db2453e83e06e1bde6fdcbb000f1a38cc16b3dcd d4t/ui/welcome.py
 34b6365ad97cc503caf8390297720e538dc26f6e d4t/ui/why_panel.py
-32e1ce44764498680350015bbf1ea48f8ce66342 d4t/ui/widgets.py
+a0102e1fc59691e5bb91f592dde4af928dbd1a39 d4t/ui/widgets.py
 768dbb379b84127e9cbb7ec62df8d51c34dd0100 d4t/ui/wiring_slot.py
 1a85c6e48b270775b997593c94aa048bc4d66feb d4t/ui/workers.py
 78eec1a43352101d12511456c76e15514ac3959e docs/ARCHITECTURE.md
@@ -136,7 +136,7 @@ a2976eb642d3d157db7b2cf008c8853faa21f93d docs/LICENSING.md
 7d6e3d3a6e7ca55d6c61bd7d218efe51f9d4fa38 docs/USING-CD.md
 4474b1853758a2c83b397a0608be2a98b539dcbf docs/USING-CHARACTERIZATION.md
 2d1b318a2e677cdefe00be01e02ca0c4f57765ae docs/USING-SIMGEN.md
-e75d1972722c8afa25058a20bc9a04557d5ee698 docs/USING-UNIFORMITY.md
+212c41ee9714147507bbd71ff9752793a0742f76 docs/USING-UNIFORMITY.md
 31b8d2fb5550439e7b2007bb58ddc7b4c955dc19 docs/plans/F11-phase2-features.md
 49fea2d50709f217e302a38748fee9ddc06b67ce docs/plans/F78-canvas-focus-and-lod.md
 cd9b6800b5941de35efed2464b7c0a0db05e4a49 docs/plans/F79-grid-tells-the-truth.md
@@ -295,7 +295,7 @@ fb6202707688933d4c9d5523122223c097b41dd9 tests/test_ui_canvas_focus.py
 3af81196fa85db7008288cd3852607fe03718d65 tests/test_ui_canvas_one_line_per_input.py
 dd44172aed175c05a9dfca9295969a2470b404a7 tests/test_ui_canvas_ports.py
 650c29eb505d72a276eb6ee3848c0425f1d81cac tests/test_ui_canvas_truth.py
-b0b7281e90f311310d62f6d6d1de4377d8d8b627 tests/test_ui_chart_settings.py
+c019ac967c0f7896e7680287f3c942ba32965948 tests/test_ui_chart_settings.py
 aa3582995d2196b03cc865f531628e7d22055f5c tests/test_ui_controls_readable.py
 e5c44d0f9a0f8e48d9c19e933763061d9e29144f tests/test_ui_crossing_inspector.py
 6ce8b34f4aefbb77fc62a802cefc8e0c78cc7de5 tests/test_ui_decide_panel_redesign.py
