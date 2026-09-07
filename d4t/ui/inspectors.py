@@ -3391,7 +3391,7 @@ class UniformityPreviewInspector(OutputPreviewInspector):
             return
         room = max(0.0, rect.height() - self.BUTTON_H)
         rows = self.rows()
-        table_h = min(room * self.TABLE_SHARE, 18.0 + 16.0 * len(rows))
+        table_h = min(room * self.TABLE_SHARE, 19.0 + 17.0 * len(rows))
         super().paint_body(p, QRectF(rect.left(), rect.top(), rect.width(),
                                      max(0.0, room - table_h - 6.0)))
         area = QRectF(rect.left(), rect.top() + room - table_h,
@@ -3415,15 +3415,19 @@ class UniformityPreviewInspector(OutputPreviewInspector):
 
         if area.height() < 20.0:
             return
+        # 一列 16 px：底線（``glv_mean`` 的 ``_``）住在基線下面，14 px 的框會
+        # 把它切掉 —— 而切掉之後那個名字讀起來是 ``glv mean``，也就是一個
+        # 不存在的特徵。
+        fm = p.fontMetrics()
         p.setPen(QColor(TOKENS["text_secondary"]))
-        p.drawText(QRectF(area.left(), area.top(), area.width(), 14.0),
+        p.drawText(QRectF(area.left(), area.top(), area.width(), 16.0),
                    int(Qt.AlignLeft | Qt.AlignVCenter),
                    "This defect%s" % (" \u00b7 %s" % metric if metric else ""))
-        y = area.top() + 16.0
+        y = area.top() + 17.0
         for i, row in enumerate(rows):
-            if y + 15.0 > area.bottom():
+            if y + 16.0 > area.bottom():
                 p.setPen(QColor(TOKENS["text_hint"]))
-                p.drawText(QRectF(area.left(), y, area.width(), 14.0),
+                p.drawText(QRectF(area.left(), y, area.width(), 16.0),
                            int(Qt.AlignLeft | Qt.AlignVCenter),
                            "\u2026 %d more" % (len(rows) - i))
                 break
@@ -3437,10 +3441,14 @@ class UniformityPreviewInspector(OutputPreviewInspector):
                                                   cells[key]), unit))
             p.setPen(QColor(TOKENS["text_primary"] if i == 0
                             else TOKENS["text_secondary"]))
-            p.drawText(QRectF(area.left(), y, area.width(), 14.0),
+            # **放不下就 elide，不要讓它自己被邊界切掉**：切掉的那一刀落在
+            # 數字中間時，畫面上會出現一個看起來完整而且是錯的值
+            # （``1.29`` 切成 ``1.2``）。`…` 說得出「還有」。
+            p.drawText(QRectF(area.left(), y, area.width(), 16.0),
                        int(Qt.AlignLeft | Qt.AlignVCenter),
-                       "    ".join(bits))
-            y += 16.0
+                       fm.elidedText("    ".join(bits), Qt.ElideRight,
+                                     int(area.width())))
+            y += 17.0
 
 
 
