@@ -35,11 +35,12 @@ c1049c4ae6c2505db6e37b7edeaf364e1244b026 d4t/core/algo/quality.py
 8f6dfdf253a710588b334e1c009e2521c3bf7e46 d4t/core/algo/uniformity.py
 5f93cfe3c9daa7b50b5efa3dd329c847e5c26c91 d4t/core/calibration.py
 78924f0edd38b3d96346542c63372c7fee679a91 d4t/core/export/__init__.py
-9c4a2d06fe07b95c787c50452ccffb45724e019f d4t/core/export/boxplot.py
+20a4446a4c2401f5128dd42346cbc9915b4d2531 d4t/core/export/boxplot.py
 402c6bf76fc079a9bb1fc28186a046a9891fc3bf d4t/core/export/html.py
 df85cecb3e142f94a5ccb6d8775cd3540d99fa97 d4t/core/export/klarf_out.py
 fdc1943f600c67dbe0adc223dcb84690cedf9334 d4t/core/export/overlay.py
 ab5031e7056134aa94c5551aba9b80a774b6397a d4t/core/export/report.py
+b90c91efa47bc132b6a408e101bb4d0a93f6e289 d4t/core/export/uniformity_charts.py
 d68c0a05f05bcfc3fcd7fe2a51929c7c6d6e3d76 d4t/core/ingest/__init__.py
 fce8f2d36c5bdf0d41cee5d2ddba4ae365f46dc4 d4t/core/ingest/dataset.py
 8e73de19c7ae0e640d64a03465ef96248f7ae28c d4t/core/ingest/glas_export.py
@@ -69,7 +70,7 @@ e87f4657eafa91ae2c6c2f2f8d86a9f6ba72e7bf d4t/core/steps/align.py
 3a9a111bda87b51ea6666d9bcff48171552a8749 d4t/core/steps/cd.py
 04d20bfd7351b9868e9af57275b197a4eaebabaf d4t/core/steps/denoise.py
 4ef27a8084308daa649561b13d8fada4e6d2f986 d4t/core/steps/flatten.py
-76d57eaf5dd08f3474307b62264d378b4ac72ca7 d4t/core/steps/glv_stats.py
+4ab561e635ca63f2528d9893205b56f01debd7c7 d4t/core/steps/glv_stats.py
 a776e192067df83cb88099ed6b82bb70c6f5a66d d4t/core/steps/load.py
 7b7e819770b0fe4589d12cdf23dc1bdad583c5fa d4t/core/steps/load_sidecar.py
 d8b1021ce4eb76b436ba9dea26d62951febd06ac d4t/core/steps/normalize.py
@@ -191,6 +192,7 @@ c8ece3a6d5f3861df6bfb4b4baf6960d3c3aa4fb tests/test_decide_missing_feature.py
 76e33c29788bc9608c6b33cae469de4a2dd971c4 tests/test_export_overlay.py
 1534570199d2ef7ae5e6c58ff7760d724a2b0e85 tests/test_export_parity.py
 1bee17aa05e53e4ac03228380717b228310da094 tests/test_export_report.py
+4c44699fe7407e6b3a27e1f47d46b490e27c6016 tests/test_export_uniformity.py
 2415c6f4229d2d8ff5044b35cdde8560d3bcd8c2 tests/test_expression.py
 ac96b108b3e36256f91bbbfe49025e801a1cbaa3 tests/test_f11_channel_map.py
 2dee038674ef3bc611239100b0f37690d3dd4f8c tests/test_f11_enhance_diag.py

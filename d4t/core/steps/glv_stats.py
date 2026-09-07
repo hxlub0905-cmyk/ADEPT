@@ -1503,8 +1503,24 @@ class GlvStatsStep(MultiSourceStep):
         # 值已經在 `per_box` 裡了 —— 這一段**不再量一次像素**，只是把同一串
         # 數字換一種收尾（那是它住在這張卡上而不是另一張卡上的理由）。
         wanted = _report_of(p)
+        spread_note: Optional[Dict[str, Any]] = None
         if wanted:
-            cx, cy = algo_unif.rect_centers([rects[i] for i in kept_index])
+            kept_rects = [rects[i] for i in kept_index]
+            cx, cy = algo_unif.rect_centers(kept_rects)
+            # 四種圖吃的那一份 —— **就是下面算 cv/slope 用的同一串數字**。
+            # 各自再算一次的話，圖上那一點與 CSV 上那一格會在某一天分岔，
+            # 而那一天畫面上看起來完全正常（Results R1 的形狀）。
+            if len(per_box) >= 2:
+                spread_note = {
+                    "stats": {name: [float(b[name]) for b in per_box
+                                     if name in b]
+                              for name in mids
+                              if any(name in b for b in per_box)},
+                    "cx": [float(v) for v in cx],
+                    "cy": [float(v) for v in cy],
+                    "rects": [[int(v) for v in r] for r in kept_rects],
+                    "boxes": [int(i) for i in kept_index],
+                }
             for name in mids:
                 values = [b[name] for b in per_box if name in b]
                 if len(values) < 2:
@@ -1613,7 +1629,7 @@ class GlvStatsStep(MultiSourceStep):
             ctx, typical_px, p,
             {n: out[n + TYPICAL_SUFFIX] for n in mids}, n_raw=n_raw,
             box=mid_box, boxes=len(per_box), worst=worst_note,
-            judge=judge_note)
+            judge=judge_note, spread=spread_note)
         return out
 
     # ---- 量得準不準（F18 第 4 步）------------------------------------------
@@ -1794,7 +1810,8 @@ class GlvStatsStep(MultiSourceStep):
                            boxes: int = 0,
                            ref: Optional[Dict[str, Any]] = None,
                            worst: Optional[Dict[str, Any]] = None,
-                           judge: Optional[Dict[str, Any]] = None) -> None:
+                           judge: Optional[Dict[str, Any]] = None,
+                           spread: Optional[Dict[str, Any]] = None) -> None:
         """把這一塊的灰階分布留給儀表（F18 第 2 步）。
 
         **畫面上的那張圖就是引擎算的這一份** —— UI 不自己再跑一次統計，不然
@@ -1836,9 +1853,24 @@ class GlvStatsStep(MultiSourceStep):
             # 是**這一份** —— 跟 `worst_*` 特徵同一次計算，不是第二份
             # （會漂的那種）。沒有逐框比較（pooled、單框）時是 None。
             "worst": dict(worst) if worst else None,
+            # 均勻度四種圖吃的那一份（F85）：`{stats: {量: [每一格的值]},
+            # cx, cy, rects, boxes}`，座標是**整張影像的像素**。
+            # 沒開 `report`、或走 pooled 時是 None —— 那時候「這幾格之間」
+            # 不存在，而一張畫得出來但沒有意義的圖比沒有圖糟。
+            #
+            # ⚠ **不進 DB、不跨行程**：`result_to_json_dict` 明寫「不含
+            # context」，所以這一份只活在這一顆的記憶體裡（儀表看預覽、
+            # Output 卡走 `BatchContext.rerun` 各拿一次）。上界由 Region 卡的
+            # `max_boxes` 夾住（≤ 65536），最壞是幾 MB 而且一顆用完就丟。
+            "spread": dict(spread) if spread else None,
             # 逐框判準值帶（PR-2）：`{stat, values, boxes, median, worst_box,
             # sampled}` —— worst 選拔真的比過的那串數字，>512 格取樣。
             # 同上，沒有逐框比較時是 None。
+            #
+            # ⚠ 下面那一份（F85 的 `spread`）**跟這一份不一樣，兩份都要**：
+            # judge band 是「worst 選拔比過的那串」（一個統計量、>512 取樣、
+            # 只有索引沒有座標），四種圖要的是「每一個勾選的統計量 × 每一格的
+            # 值 ＋ 那一格在哪」。合成一份的話，圖不是少了座標就是少了統計量。
             "judge": dict(judge) if judge else None,
         })
 
