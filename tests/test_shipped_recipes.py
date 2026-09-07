@@ -287,3 +287,53 @@ def test_the_report_it_writes_has_a_picture_for_every_defect(tmp_path):
         "有一列點下去沒有圖 —— 報表跟圖是同一件事的兩半"
 
 
+
+
+# --------------------------------------------------------------------------- #
+# F86：一張大圖的均勻度 —— 圖跟數字要在同一個資料夾
+# --------------------------------------------------------------------------- #
+UNIF = RECIPES / "one-image-uniformity.json"
+
+
+def test_the_uniformity_recipe_gets_the_numbers_out_too():
+    """**只有圖拿不到數字。**
+
+    F85 出貨的第一版只有 `Write uniformity` —— 四張 SVG 加一頁 HTML，而
+    `cv_pct` / `slope_x` 那些數字**沒有任何檔案裝得下**（使用者當場問
+    「結果要在哪看」）。一份「看均勻度」的 recipe 拿不到均勻度的數字，
+    那是漏了一半。
+    """
+    recipe = Recipe.load(UNIF)
+    steps = {n.step for n in recipe.nodes.values()}
+    assert "output_uniformity" in steps, "沒有圖"
+    assert "output_report" in steps, "沒有數字"
+    charts = next(n for n in recipe.nodes.values()
+                  if n.step == "output_uniformity")
+    table = next(n for n in recipe.nodes.values() if n.step == "output_report")
+    assert charts.params["folder"] == table.params["folder"], \
+        "圖跟 CSV 要落在同一個資料夾 —— 分兩個地方等於使用者要找兩次"
+    assert "table" in str(table.params["contents"]), "沒有勾 CSV"
+
+
+def test_the_uniformity_recipe_measures_box_by_box():
+    """均勻度的每一個數字都來自 `each box`。停在 pooled 的話那一格連出現都
+    不會出現，而這份 recipe 會安靜地變成「量整張圖」。"""
+    recipe = Recipe.load(UNIF)
+    glv = next(n for n in recipe.nodes.values() if n.step == "glv_stats")
+    assert glv.params["across_boxes"] == "each box"
+    assert glv.params["report"], "一個均勻度指標都沒勾"
+    # 圖要畫的那個量，量測卡真的有量
+    charts = next(n for n in recipe.nodes.values()
+                  if n.step == "output_uniformity")
+    assert str(charts.params["metric"]) in str(glv.params["metrics"]), \
+        "Write uniformity 要畫的統計量不在 Gray level 的 Statistics 裡 —— 圖會是空的"
+
+
+def test_the_uniformity_recipe_wires_the_region_not_types_it():
+    """區域走**虛線**（鐵則 10）。少了那條線，GLV 安靜地改量整張圖。"""
+    recipe = Recipe.load(UNIF)
+    roi = next(nid for nid, n in recipe.nodes.items()
+               if n.step == "roi_reference")
+    wires = {(e.src, e.src_out, e.dst, e.dst_in) for e in recipe.edges}
+    glv = next(nid for nid, n in recipe.nodes.items() if n.step == "glv_stats")
+    assert (roi, recipe.nodes[roi].params["roi_out"], glv, "roi") in wires

@@ -13,19 +13,32 @@
 **最快的路是不要自己搭**：工具列 `Open recipe…` → **`one-image-uniformity`**，
 然後 `Open image…` 挑你那張圖。跑一次就有四張圖。
 
-自己搭的話四張卡：
+⚠ **開起來之後先做兩件事**：
+
+1. **`Write to` 換成完整路徑**（例 `D:\uniformity\my_field`）。出貨的檔案裡
+   填的是相對路徑，那會落在**你啟動 Studio 的那個資料夾**旁邊。
+2. **跑的時候要按 `Run all & write`**，不是 `Run trial` —— 見 §5。
+
+自己搭的話五張卡：
 
 ```
-[Load one image] ──→ [ROI] ┄┄虛線┄┄→ [Gray level] ──→ [Write uniformity]
-        └────────────────實線───────────→ ┘
+                              ┌──→ [Write uniformity]   四張圖
+[Load one image] ─→ [ROI] ┄┄→ [Gray level]
+        └──────實線───────────→ ┘   └──→ [Write report]      defects.csv
 ```
+
+（`ROI` 到 `Gray level` 那一條是**虛線**：區域走的是菱形埠。）
 
 1. **`Open image…`** 挑一張圖（不需要 KLARF）。
 2. **ROI** 卡把框鋪滿整張圖（`Find them by` = `stripes in the image`，
    `Pick` = `none`）。
-3. **Gray level**：`Boxes in the region` 選 **`each box`**，
+3. **Gray level**：卡片**最上面**那排 `What to measure` 按
+   **`Odd box out`** —— 那顆鈕會幫你把 `Boxes in the region` 設成 `each box`。
+   （三顆鈕在還沒拉區域虛線之前是灰的，所以順序是**先拉線、再按鈕**。）
    然後 `How even are the boxes` 勾你要的數字。
-4. **Write uniformity**：`Write to` 填一個資料夾。
+4. **`Write uniformity`**：`Write to` 填**完整路徑**的資料夾。
+5. **`Write report`**：`Write to` 填**同一個**資料夾，`What to put in the
+   folder` 勾 `table` —— 數字才有 CSV 可以進 Excel。
 
 **最重要的一句話**：所有均勻度的數字都來自 **`each box`**。
 停在 `pooled` 的話那一整群框會被當成一堆像素混在一起 ——
@@ -124,6 +137,10 @@
 | **斜率那一格根本不存在** | 只有一格框，或所有框的 X 都一樣（一整欄）。那是「問不出來」不是「很平」|
 | **Position profile 上一格框一個轉折，鋸齒狀** | 框的中心差幾個 px 沒被當成同一欄。這件事本來是自動的（見下）—— 出現的話代表你的框真的是散開的，不是一個網格 |
 | **Heat map 碎成一堆細條** | 同上 |
+| **跑完了但找不到資料夾** | 你按的是 `Run trial` —— 它**刻意不寫檔**。用右邊箭頭的 `Run all & write`（§5）|
+| **資料夾在，但不是我要的地方** | `Write to` 填的是相對路徑，落在啟動 Studio 的那個資料夾旁邊。填完整路徑 |
+| **有圖但沒有 CSV** | 少一張 `Write report`（§0 第 5 步）|
+| **載入大圖之後卡很久** | 7680×7680 疊 Golden Cell 約 17 秒，會有進度條與取消鈕。沒有進度條代表那張圖小到不用等 |
 | **兩張圖比起來怪怪的** | 尺度沒鎖（§3）|
 | **Histogram 兩座山** | 框放錯位置，混到兩種材質（§2）|
 | **`cv_pct` 大得離譜** | 先看 Heat map 有沒有一格特別紅 —— 一顆髒點就能把它拉走。`glv_boxes_over_k` 說得出「有幾格越線」，那才分得出「一顆髒點」與「整片都不對」|
@@ -135,7 +152,44 @@
 
 ---
 
-## 5. 這張卡**不下判斷**
+## 5. 跑完之後結果在哪
+
+### ⚠ `Run trial` **不會寫任何檔案**
+
+工具列那顆最大的鈕是 **`Run trial`** —— 跑前幾顆、只更新畫面，**刻意不寫檔**
+（每拖一下門檻就覆寫一次檔案是不可逆的）。
+
+要拿到檔案請按它**右邊的箭頭** → **`Run all & write`**（Results 視窗裡也有
+同名的那一顆）。試跑完狀態列會提醒你這件事。
+
+### 三個地方
+
+| 我要看什麼 | 去哪 | 什麼時候 |
+|---|---|---|
+| **四張圖**（確認設定對不對）| 點 `Write uniformity` 卡，右下角就畫出來了 | **馬上**，不用跑 |
+| **四張圖**（放進報告）| `Write to` 那個資料夾 | `Run all & write` 之後 |
+| **數字**（cv%、斜率）| 點 `Gray level` 卡，特徵表 | 跑一次預覽之後 |
+| **數字**（進 Excel）| 同一個資料夾的 `defects.csv` | 要有 `Write report` 那張卡 |
+
+### 資料夾裡會有什麼
+
+一顆 defect 寫五個檔，外加整批一份 CSV：
+
+```
+overlay_<名字>.html            ← 先開這個：四張圖在同一頁
+overlay_<名字>-box.svg         ← 一張圖一個檔（丟進 Word/PPT 用，向量不會糊）
+overlay_<名字>-histogram.svg
+overlay_<名字>-profile.svg
+overlay_<名字>-map.svg
+defects.csv                    ← 數字（`Write report` 產的）
+recipe.json                    ← 這次的設定，之後重現得出來
+```
+
+`<名字>` 是你那張圖的檔名。
+
+---
+
+## 6. 這張卡**不下判斷**
 
 出貨的 `one-image-uniformity` recipe 的判定樹只分兩類：
 **量不到**（bin 9）與**量到了**（bin 0）。裡面沒有任何一個門檻說一片場好或不好。
@@ -145,7 +199,7 @@
 
 ---
 
-## 6. 它跟 `Write report` 差在哪
+## 7. 它跟 `Write report` 的盒鬚圖差在哪
 
 兩張卡都會畫盒鬚圖，而且長得一模一樣。差別只有一個，但那個差別就是全部：
 

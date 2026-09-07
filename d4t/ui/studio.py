@@ -5930,6 +5930,26 @@ class StudioWindow(QMainWindow):
         self._apply_trial_results(list(results or []),
                                   time.time() - (self._trial_t0 or time.time()))
 
+    def _enabled_output_cards(self) -> int:
+        """畫布上**啟用中**的 Output 卡有幾張（F86）。
+
+        只數啟用的：停用的那張不會跑，把它算進去等於承諾一件不會發生的事。
+        """
+        from ..core.pipeline import get_step
+        from ..core.pipeline.step import CATEGORY_BATCH
+
+        n = 0
+        for nid in self.model.node_order:
+            node = self.model.nodes.get(nid)
+            if node is None or not getattr(node, "enabled", True):
+                continue
+            try:
+                if get_step(node.step).category == CATEGORY_BATCH:
+                    n += 1
+            except Exception:          # noqa: BLE001 — 一句提示不准擋畫面
+                continue
+        return n
+
     def _apply_trial_results(self, results: Sequence[Dict[str, Any]],
                              elapsed: float) -> None:
         results = list(results or [])
@@ -5992,6 +6012,23 @@ class StudioWindow(QMainWindow):
             # **而且要講出來**：安靜地不寫跟安靜地寫一樣糟。
             msg = "%s  ·  Stopped, so nothing was written." % msg
             write = False
+        elif not write:
+            # **試跑不寫，而那件事以前完全沒有說出來**（F86，2026-09-07，
+            # 使用者：「output 預覽有，但跑完沒 output（沒看到資料夾）」）。
+            #
+            # 「試跑不寫」是使用者自己定的（F16 Stage 5c）而且是對的 ——
+            # 每拖一下門檻就覆寫一次 KLARF 是不可逆的。錯的是**沒有回音**：
+            # 畫布上明明有一張 Output 卡、它的儀表列著會寫哪幾個檔，按下那顆
+            # 最大的鈕之後什麼都沒有發生，而狀態列只說「Run finished」。
+            # 那正是推廣鐵則擋的東西：看不懂發生了什麼事。
+            #
+            # 所以只在**真的有 Output 卡**的時候多講一句，並且指名那個動作。
+            n_out = self._enabled_output_cards()
+            if n_out:
+                msg = ("%s  ·  Trial run - nothing written. Use “Run all && "
+                       "write” (the arrow beside Run trial) to run every "
+                       "defect and let the %d Output card%s write."
+                       % (msg, n_out, "" if n_out == 1 else "s"))
         self._status(msg)
         if write and results:
             self._write_outputs(results)
