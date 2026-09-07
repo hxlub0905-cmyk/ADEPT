@@ -120,6 +120,7 @@ d4t 是 **public**。
 | [`d4t/core/algo/roi.py`](../d4t/core/algo/roi.py) | Fusi³（`MultiROISet`） |
 | [`d4t/core/algo/snr.py`](../d4t/core/algo/snr.py) | PEAR（SNR 正負號的規範出處） |
 | [`d4t/core/algo/subpixel.py`](../d4t/core/algo/subpixel.py) | MMH（CMG recipe） |
+| [`d4t/core/algo/uniformity.py`](../d4t/core/algo/uniformity.py) | PEAR（均勻度、位置趨勢、抖動容差） |
 | [`d4t/core/calibration.py`](../d4t/core/calibration.py) | MMH |
 | [`d4t/core/ingest/dataset.py`](../d4t/core/ingest/dataset.py) | KLIP ＋ GLAS（改寫幅度最大的一支） |
 | [`d4t/core/ingest/imageio.py`](../d4t/core/ingest/imageio.py) | PEAR（CJK-safe 讀寫） |
