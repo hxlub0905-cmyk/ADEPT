@@ -107,6 +107,9 @@ GLOBAL_APPLIES: Dict[str, Tuple[str, ...]] = {
     "map_values": (CHART_MAP,),
     # 一格框一個記號：profile 的散點，以及熱圖照實鋪時描出來的那個框
     "points": (CHART_PROFILE, CHART_MAP),
+    "point_fill": (CHART_PROFILE,),
+    "fill_strength": (CHART_BOX, CHART_HIST, CHART_PROFILE),
+    "fill_color": (CHART_BOX, CHART_HIST, CHART_PROFILE),
     # 盒鬚圖的 X 是類別、熱圖兩軸是位置 —— 兩張都沒有「橫著幾個刻度」
     "xticks": (CHART_HIST, CHART_PROFILE),
     "yticks": (CHART_BOX, CHART_HIST, CHART_PROFILE),
@@ -237,6 +240,20 @@ def _text_attrs(style: Dict[str, Any], which: str,
     return size, bold, ink
 
 
+def fill_attrs(style: Dict[str, Any], base: str,
+               opacity: float) -> Tuple[str, float]:
+    """填色與濃度 ``(色, opacity)`` —— **柱子／盒子／實心記號共用這一支**。
+
+    * 顏色空的就跟著那一群自己的顏色走（同 :func:`_mark_colour` 的語意）；
+    * 濃度是**倍率**不是絕對值：每一種圖自己那個淡度是設計過的（柱 0.45、
+      盒子 0.18 —— 盒鬚圖上的墨水本來就多），一格絕對值會把那個關係抹平，
+      而且沒有一個值同時等於今天的兩個。1.0 就逐位元組不變。
+    """
+    ink = str(style.get("fill_color", "") or "") or base
+    k = float(style.get("fill_strength", 1.0) or 0.0)
+    return ink, max(0.0, min(1.0, opacity * k))
+
+
 def _mark_colour(style: Dict[str, Any], which: str, fallback: str) -> str:
     """資料的顏色：``point`` / ``line``。空 = **跟著那一群自己的顏色走**。
 
@@ -306,6 +323,13 @@ def resolve_style(look: object, kind: str = CHART_BOX, axis: str = AXIS_X,
         # 有效、對一張沒有（而那張正是報表裡最常出現的）。
         st["ylabel"] = st.get("ylabel") or name
     return st
+
+
+def _opacity(value: float) -> str:
+    """opacity 印成字。**倍率 1.0 時要逐位元組等於以前那個字面值** ——
+    `0.45` 而不是 `0.450000`（`output_report` 的盒鬚圖沒給 style）。"""
+    text = ("%.3f" % float(value)).rstrip("0").rstrip(".")
+    return text or "0"
 
 
 def _is_dark(hex_colour: str) -> bool:
@@ -482,11 +506,12 @@ def _svg_histogram(series: Dict[str, Any], style: Dict[str, Any],
             if v <= 0:
                 continue
             bh = v / top * ph
+            ink, alpha = fill_attrs(style, g["colour"], 0.45)
             o.append("<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' "
-                     "fill='%s' fill-opacity='0.45' stroke='%s' "
+                     "fill='%s' fill-opacity='%s' stroke='%s' "
                      "stroke-width='0.6'/>"
                      % (pad_l + i * bw, pad_t + ph - bh, max(0.6, bw - 0.6),
-                        bh, g["colour"], g["colour"]))
+                        bh, ink, _opacity(alpha), g["colour"]))
     _xlabels(o, _nice_ticks(lo, hi, int(style.get("xticks") or 5)),
              lambda t: pad_l + (t - lo) / (hi - lo) * pw, pad_t + ph + 11,
              style)
@@ -594,10 +619,17 @@ def _svg_profile(series: Dict[str, Any], style: Dict[str, Any],
         if style.get("points", True):
             r = float(style.get("point_size") or 2.6)
             dot = _mark_colour(style, "point", g["colour"])
+            # **空心還是實心**（`point_fill`）—— 空心在點很多時看得到重疊，
+            # 實心在投影片上比較看得見。兩種都對，看要給誰看。
+            if bool(style.get("point_fill")):
+                ink, alpha = fill_attrs(style, dot, 1.0)
+                face = "fill='%s' fill-opacity='%s'" % (ink, _opacity(alpha))
+            else:
+                face = "fill='none'"
             for a, b in zip(pos, vals):
-                o.append("<circle cx='%.1f' cy='%.1f' r='%.1f' fill='none' "
+                o.append("<circle cx='%.1f' cy='%.1f' r='%.1f' %s "
                          "stroke='%s' stroke-width='1'/>"
-                         % (sx(a), sy(b), r, dot))
+                         % (sx(a), sy(b), r, face, dot))
     _xlabels(o, _nice_ticks(plo, phi, int(style.get("xticks") or 5)),
              sx, pad_t + ph + 11, style)
     o.append("<text x='%.1f' y='%.1f' font-size='10' fill='%s'>slope %s</text>"

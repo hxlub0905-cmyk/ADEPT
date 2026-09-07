@@ -24,7 +24,7 @@ PEAR 那個對話框的價值有一半在排列方式 —— **「刻度上的�
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor
@@ -175,6 +175,13 @@ class ColourButton(QWidget):
             self.set_value(got.name())
 
 
+def _chips(key: str, parent: Optional[QWidget] = None) -> "BoolChips":
+    """`BOOL_CHIPS` 的一列 → 一個 `BoolChips`。"""
+    off, on, off_help, on_help = BOOL_CHIPS[str(key)]
+    return BoolChips(off, on, bool(cs.DEFAULTS[str(key)]),
+                     helps={"off": off_help, "on": on_help}, parent=parent)
+
+
 def _caption(text: str, parent: QWidget) -> QLabel:
     lab = QLabel(str(text), parent)
     lab.setObjectName("paramHint")
@@ -203,6 +210,108 @@ def _number(key: str, parent: QWidget) -> QWidget:
 def _num_value(box: QWidget) -> Any:
     v = box.value()
     return int(v) if isinstance(box, QSpinBox) else round(float(v), 4)
+
+
+class BoolChips(QWidget):
+    """一個開關 → **一排兩顆膠囊（圖 + 字）**（F87 第十刀）。
+
+    使用者 2026-09-07：「如果可以也能以膠囊方式呈現(like GLV card)」。
+
+    這是 F68 那條規矩搬進這個對話框：**一格選項＝一排膠囊，不是一個勾選框**。
+    理由跟卡片那邊一字不差 —— 勾選框把「另一個選項是什麼」藏起來了：
+    `Whiskers` 不打勾會變成什麼樣子？打勾的人心裡要自己補一張圖。攤成兩顆之
+    後，兩種答案本身就是畫面，而**圖是掃視時的錨點、字才是意思**。
+
+    值仍然是一個 bool（recipe 那一格一個位元都沒有變）—— 這一支只是把它包成
+    `ChoiceChips` 認得的兩個字。
+    """
+
+    toggled = Signal(bool)
+
+    def __init__(self, off: Tuple[str, str], on: Tuple[str, str],
+                 value: bool = False, helps: Optional[Dict[str, str]] = None,
+                 parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        from .widgets import ChoiceChips
+
+        self._off_word, self._on_word = str(off[0]), str(on[0])
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        said = dict(helps or {})
+        self.chips = ChoiceChips(
+            [self._off_word, self._on_word], [str(off[1]), str(on[1])],
+            self._on_word if value else self._off_word,
+            helps={self._off_word: said.get("off", ""),
+                   self._on_word: said.get("on", "")}, parent=self)
+        self.chips.changed.connect(self._on_changed)
+        lay.addWidget(self.chips)
+        lay.addStretch(1)
+        # ⚠ **兩顆要排在同一列上。** `_ChipFlow.sizeHint` 講的是「最寬的**那一
+        # 顆**」（對一排十幾顆的統計量膠囊是對的：它本來就要換行），而這裡只有
+        # 兩顆、而且它們是同一個問題的兩個答案 —— 分成兩行讀起來像兩件事。
+        # 所以把兩顆的寬度加起來當下限。
+        wide = sum(c.width() for c in
+                   (self.chips.chip(self._off_word),
+                    self.chips.chip(self._on_word)) if c is not None)
+        if wide:
+            self.chips.setMinimumWidth(wide + 8)
+
+    # -- 長得像 QCheckBox（對話框其餘部分因此不必分兩種寫法）----------------
+    def isChecked(self) -> bool:      # noqa: N802 - Qt 的命名
+        return self.chips.text() == self._on_word
+
+    def setChecked(self, on: bool) -> None:   # noqa: N802 - Qt 的命名
+        # ⚠ **要自己發訊號。** `ChoiceChips.set_text` 是程式設值那一條路，
+        # 它刻意不發 `changed`（不然載入一份 recipe 會被當成使用者改了）。
+        # 而 `QCheckBox.setChecked` **會**發 `toggled` —— 這一支要長得像
+        # QCheckBox，那條差別就得在這裡補平，不然「程式設值不重畫」會變成
+        # 「這一格沒有反應」。踩過：即時預覽對每一顆膠囊都沒反應。
+        if bool(on) == self.isChecked():
+            return
+        self.chips.set_text(self._on_word if on else self._off_word)
+        self.toggled.emit(bool(on))
+
+    def _on_changed(self, _text: str) -> None:
+        self.toggled.emit(self.isChecked())
+
+
+#: 每一個開關那兩顆膠囊：``鍵: ((關的字, 圖), (開的字, 圖), 關的說明, 開的說明)``。
+#:
+#: ⚠ **兩顆都要說得出自己是什麼** —— 這一族的價值就在「不打勾會變成什麼樣子」
+#: 本來看不見。所以 off 那一顆不是「不要」，是**它自己那個樣子的名字**。
+BOOL_CHIPS: Dict[str, Any] = {
+    "point_fill": (("Hollow", "mark_hollow"), ("Filled", "mark_solid"),
+                   "Rings - overlapping points stay countable.",
+                   "Solid dots - easier to see on a projector."),
+    "points": (("No marks", "dots_off"), ("A mark per box", "dots_on"),
+               "Just the trend line. Use it when there are hundreds of boxes "
+               "and the marks smear together.",
+               "Draw a mark for every box."),
+    "whiskers": (("Box only", "whisk_off"), ("With whiskers", "whisk_on"),
+                 "The box alone - the middle half and the median.",
+                 "Add the whiskers out to the furthest box within 1.5x the "
+                 "spread."),
+    "percent": (("Count", "bars_count"), ("Share", "bars_pct"),
+                "Bar height is how many boxes fell in that bin.",
+                "Bar height is the share of that region's boxes - which is "
+                "what makes two regions of different size comparable."),
+    "equal_cells": (("True to scale", "cells_true"),
+                    ("Same size", "cells_equal"),
+                    "Each cell reaches the midline to its neighbours, so its "
+                    "area follows the spacing.",
+                    "A plain grid, one slot per row and column - what a die "
+                    "map looks like, and what makes two cells comparable."),
+    "map_values": (("Colour only", "cells_plain"),
+                   ("Show the value", "cells_values"),
+                   "Just the colours.",
+                   "Print the number inside each cell that is wide enough to "
+                   "hold it."),
+    "lock": (("Auto", "range_auto"), ("Locked", "range_locked"),
+             "Every chart picks its own range - right for one run.",
+             "Pin the scale to the range below, so two runs can be read side "
+             "by side."),
+}
 
 
 def _sample_series() -> Dict[str, Any]:
@@ -288,12 +397,12 @@ class ChartSettingsDialog(QDialog):
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
 
-        what = ("this chart" if len(self._kinds) == 1
-                else "these %d charts" % len(self._kinds))
+        what = ("How this chart looks" if len(self._kinds) == 1
+                else "How these %d charts look" % len(self._kinds))
         head = QLabel(
-            "How %s looks. Everything here travels with the recipe, so the "
-            "next run - and anyone you hand the recipe to - gets the same "
-            "charts." % what, self)
+            "%s. Everything here travels with the recipe, so the next run - "
+            "and anyone you hand the recipe to - gets the same charts."
+            % what, self)
         head.setWordWrap(True)
         head.setObjectName("paramHint")
         root.addWidget(head)
@@ -375,7 +484,7 @@ class ChartSettingsDialog(QDialog):
                 e for f in self.per.values() for e in f.values()]:
             if isinstance(w, ColourButton):
                 w.changed.connect(self.refresh_preview)
-            elif isinstance(w, QCheckBox):
+            elif isinstance(w, (QCheckBox, BoolChips)):
                 w.toggled.connect(self.refresh_preview)
             elif isinstance(w, QLineEdit):
                 w.textChanged.connect(self.refresh_preview)
@@ -482,16 +591,17 @@ class ChartSettingsDialog(QDialog):
                   box, _number("xticks", box))
         self._row(grid, 3, "yticks", "Ticks up the side",
                   box, _number("yticks", box))
-        self._row(grid, 4, "points", "A dot for every box",
-                  box, QCheckBox("", box))
-        self._row(grid, 5, "whiskers", "Whiskers on the box plot",
-                  box, QCheckBox("", box))
-        self._row(grid, 6, "percent", "Histogram in %",
-                  box, QCheckBox("", box))
-        self._row(grid, 7, "equal_cells", "Heat map: every cell the same size",
-                  box, QCheckBox("", box))
-        self._row(grid, 8, "map_values", "Heat map: print the value in each cell",
-                  box, QCheckBox("", box))
+        # **一排膠囊，不是一個勾選框**（見 `BoolChips`）。
+        self._row(grid, 4, "point_fill", "Markers", box, _chips("point_fill"))
+        self._row(grid, 5, "points", "Marks on the profile",
+                  box, _chips("points"))
+        self._row(grid, 6, "whiskers", "Box plot", box, _chips("whiskers"))
+        self._row(grid, 7, "percent", "Histogram bar height",
+                  box, _chips("percent"))
+        self._row(grid, 8, "equal_cells", "Heat map cells",
+                  box, _chips("equal_cells"))
+        self._row(grid, 9, "map_values", "Heat map labels",
+                  box, _chips("map_values"))
         box.layout().addLayout(grid)
         return box
 
@@ -507,8 +617,8 @@ class ChartSettingsDialog(QDialog):
         grid = QGridLayout()
         grid.setHorizontalSpacing(10)
         grid.setVerticalSpacing(6)
-        lock = QCheckBox("", box)
-        self._row(grid, 0, "lock", "Lock the scale", box, lock)
+        lock = _chips("lock")
+        self._row(grid, 0, "lock", "Value scale", box, lock)
         self._row(grid, 1, "lo", "Bottom", box, _number("lo", box))
         self._row(grid, 2, "hi", "Top", box, _number("hi", box))
         for key in ("lo", "hi"):
@@ -589,7 +699,7 @@ class ChartSettingsDialog(QDialog):
             got = d.get(key, cs.DEFAULTS[key])
             if isinstance(w, ColourButton):
                 w.set_value(str(got or ""))
-            elif isinstance(w, QCheckBox):
+            elif isinstance(w, (QCheckBox, BoolChips)):
                 w.setChecked(bool(got))
             elif isinstance(w, QLineEdit):
                 w.setText(str(got or ""))
@@ -617,7 +727,7 @@ class ChartSettingsDialog(QDialog):
         for key, w in self.globals.items():
             if isinstance(w, ColourButton):
                 out[key] = w.value()
-            elif isinstance(w, QCheckBox):
+            elif isinstance(w, (QCheckBox, BoolChips)):
                 out[key] = bool(w.isChecked())
             elif isinstance(w, QLineEdit):
                 out[key] = w.text().strip()
