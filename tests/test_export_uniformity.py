@@ -111,20 +111,20 @@ def test_the_scatter_needs_a_frame_and_a_spec(grid):
 
     frame = chart_frame.build_frame([grid])
     metric = uc.chart_series([grid])["metric"]
-    st = {"title": uc.CHART_LABELS[uc.CHART_SCATTER]}
+    st = {"title": uc.CHART_LABELS[uc.CHART_CUSTOM]}
     spec = '{"mark":"point","x":"x","y":"%s"}' % metric
 
-    svg = uc.build_chart_svg({}, uc.CHART_SCATTER, st, frame=frame, spec=spec)
+    svg = uc.build_chart_svg({}, uc.CHART_CUSTOM, st, frame=frame, spec=spec)
     _xml(svg)
-    assert uc.CHART_LABELS[uc.CHART_SCATTER] in svg
+    assert uc.CHART_LABELS[uc.CHART_CUSTOM] in svg
     assert svg.count("<circle") == len(frame)
 
     # 少了 spec **要說出原因**，不是畫一張空白（同 `_empty` 那條規矩）。
-    said = uc.build_chart_svg({}, uc.CHART_SCATTER, st, frame=frame)
+    said = uc.build_chart_svg({}, uc.CHART_CUSTOM, st, frame=frame)
     _xml(said)
     assert "pick x and y" in said
     # 少了長表也一樣。
-    none = uc.build_chart_svg({}, uc.CHART_SCATTER, st, spec=spec)
+    none = uc.build_chart_svg({}, uc.CHART_CUSTOM, st, spec=spec)
     _xml(none)
     assert "no boxes to plot" in none
 

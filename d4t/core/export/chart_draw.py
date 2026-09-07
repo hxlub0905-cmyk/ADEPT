@@ -60,11 +60,13 @@ def draw(frame: Frame, spec: object, style: Optional[Dict[str, Any]] = None,
     if all(v is None for v in ys):
         return _empty(width, height, "no column called '%s'" % sp["y"])
 
-    if str(sp["mark"]) == spec_mod.MARK_POINT:
-        return _points(frame, sp, st, int(width), int(height))
-    # 封閉字彙（`chart_spec.MARKS`）—— 走到這裡表示有人加了一種 mark 卻沒有
-    # 在這裡畫它，而那要說出來，不是畫一張空白。
-    return _empty(width, height, "nothing here can draw a '%s'" % sp["mark"])
+    drawer = _MARKS.get(str(sp["mark"]))
+    if drawer is None:
+        # 封閉字彙（`chart_spec.MARKS`）—— 走到這裡表示有人加了一種 mark 卻沒
+        # 有在這裡畫它，而那要說出來，不是畫一張空白。有一條測試對著這件事。
+        return _empty(width, height,
+                      "nothing here can draw a '%s'" % sp["mark"])
+    return drawer(frame, sp, st, int(width), int(height))
 
 
 # --------------------------------------------------------------------------- #
@@ -106,6 +108,13 @@ class _Band(object):
             s = "" if v is None else str(v)
             if s not in seen:
                 seen.append(s)
+        # ⚠ **整欄都是數字的話照數字排。** 長條圖把一條數值軸當槽用時，
+        # 「第一次出現的順序」是長表的列序 —— 於是 125 那根會落在 115 左邊，
+        # 而那張圖看起來完全正常。名字那一種沒有這個問題（也沒有正確的排法，
+        # 所以照接線的順序）。
+        self.numeric = bool(seen) and all(_ok(v) for v in seen)
+        if self.numeric:
+            seen.sort(key=float)
         self.slots = seen or [""]
 
     def at(self, value: Any, a: float, b: float) -> Optional[float]:
@@ -115,16 +124,31 @@ class _Band(object):
         step = (b - a) / float(len(self.slots))
         return a + step * (self.slots.index(s) + 0.5)
 
+    #: 超過這麼多槽就開始跳著標。**槽照樣是全部**（記號一個都不少），
+    #: 少的只是標籤 —— 18 個標籤擠在 580 px 上會疊成一條看不懂的黑線，
+    #: 而那正是 render 出來才看到的（F88 ③）。
+    LABEL_ALL_UPTO = 12
+
     def ticks(self, want: int) -> List[str]:
-        return list(self.slots)
+        n = len(self.slots)
+        if n <= max(self.LABEL_ALL_UPTO, int(want)):
+            return list(self.slots)
+        step = int(math.ceil(n / float(max(2, int(want)))))
+        return [self.slots[i] for i in range(0, n, step)]
 
     def label(self, t: Any) -> str:
-        return str(t)
+        # 整欄都是數字的話照數字印 —— `str(114.81174999999998)` 不是一個
+        # 使用者看得懂的刻度（`_fmt` 是四張老圖用的同一支）。
+        return _fmt(float(t)) if self.numeric else str(t)
 
 
-def _scale(frame: Frame, column: str, lo_hi=None):
-    """一欄 → 一支 scale。**類別欄走 band，其餘走 linear。**"""
-    if str(column) in CATEGORY_COLUMNS:
+def _scale(frame: Frame, column: str, lo_hi=None, band: bool = False):
+    """一欄 → 一支 scale。**類別欄走 band，其餘走 linear。**
+
+    ``band=True`` 是長條圖用的：長條有寬度，而寬度在連續軸上沒有意義
+    （兩個很近的值會疊在一起，看起來像一根特別粗的）。
+    """
+    if band or str(column) in CATEGORY_COLUMNS:
         return _Band(frame.column(column))
     return _Linear(frame.column(column), lo_hi)
 
@@ -141,48 +165,220 @@ def _ok(value: Any) -> bool:
 # --------------------------------------------------------------------------- #
 def _points(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
             width: int, height: int) -> str:
-    colour_of, legend = _colours(frame, str(sp.get("color") or ""), style)
+    """一格框一個記號。"""
+    plot = _Plot(frame, sp, style, width, height)
     radius_of = _radii(frame, str(sp.get("size") or ""), style)
-
-    pad_l, pad_r = 58, 18
-    pad_t = 30 if style.get("title") else 14
-    pad_b = 46 + (14 if legend else 0)
-    pw = max(60, width - pad_l - pad_r)
-    ph = max(60, height - pad_t - pad_b)
-
-    # **鎖定的是「值那一軸」，而在這張圖上那是 Y。** X 也是一個統計量，
-    # 但同一組鎖定範圍套到兩條意思不同的軸上會把圖擠成一條線 —— 兩批要並排
-    # 比的時候，鎖住 Y 就夠了（同 `_span` 那條「鎖住的照鎖的」）。
-    sx = _scale(frame, sp["x"])
-    sy = _scale(frame, sp["y"], style.get("vlock"))
-
-    o = _head(width, height, str(style.get("title") or ""))
-    _frame(o, pad_l, pad_t, pw, ph)
-
-    # ⚠ **刻度先畫**：`_ylabels` 順手畫橫格線，而格線是背景 —— 畫在點之後
-    # 會從點上壓過去（`_svg_profile` 也是這個順序）。
-    _ticks(o, sx, sy, pad_l, pad_t, pw, ph, style)
-
     filled = bool(style.get("point_fill"))
     line_w = float(style.get("line_width", 1.6) or 1.6) / 1.6
-    for i in range(len(frame)):
-        row = frame.rows[i]
-        x = sx.at(row.get(sp["x"]), pad_l, pad_l + pw)
-        y = sy.at(row.get(sp["y"]), pad_t + ph, pad_t)   # Y 由下往上
+
+    for row in frame.rows:
+        x, y = plot.x_at(row), plot.y_at(row)
         if x is None or y is None:
             continue                    # **算不出來的那一格不畫**（不是畫在 0）
-        ink = colour_of(row)
+        ink = plot.colour_of(row)
         face = ("fill='%s'" % ink) if filled else "fill='none'"
-        o.append("<circle cx='%.1f' cy='%.1f' r='%.2f' %s stroke='%s' "
-                 "stroke-width='%.1f'/>"
-                 % (x, y, radius_of(row), face, ink, max(0.6, line_w)))
+        plot.out.append("<circle cx='%.1f' cy='%.1f' r='%.2f' %s stroke='%s' "
+                        "stroke-width='%.1f'/>"
+                        % (x, y, radius_of(row), face, ink, max(0.6, line_w)))
+    return plot.finish()
 
-    _axis_names(o, style, width, height, pad_l, pad_t, pw, ph,
-                str(sp["x"]), str(sp["y"]))
-    if legend:
-        _legend(o, legend, pad_l, height - 8, style)
-    o.append("</svg>")
-    return "".join(o)
+
+# --------------------------------------------------------------------------- #
+# 三種 mark 共用的那一半 —— **版面只有一份**
+# --------------------------------------------------------------------------- #
+class _Plot(object):
+    """圖區、兩支 scale、顏色、外框與刻度 —— 每一種 mark 都要的那一組。
+
+    ⚠ 各寫一份的下場這個 repo 很熟：三張圖的留白差幾個 px，並排在同一頁上
+    看起來像三種東西；而「刻度畫在記號之前」那條規矩只要漏掉一次，格線就會
+    從資料上壓過去。所以它只有這一份。
+    """
+
+    def __init__(self, frame: Frame, sp: Dict[str, Any],
+                 style: Dict[str, Any], width: int, height: int,
+                 band_x: bool = False) -> None:
+        self.frame, self.sp, self.style = frame, sp, style
+        self.width, self.height = width, height
+        self.colour_of, self.legend = _colours(
+            frame, str(sp.get("color") or ""), style)
+
+        self.pad_l, pad_r = 58, 18
+        self.pad_t = 30 if style.get("title") else 14
+        pad_b = 46 + (14 if self.legend else 0)
+        self.pw = max(60, width - self.pad_l - pad_r)
+        self.ph = max(60, height - self.pad_t - pad_b)
+
+        # **鎖定的是「值那一軸」，而在這張圖上那是 Y。** X 也是一個統計量，
+        # 但同一組鎖定範圍套到兩條意思不同的軸上會把圖擠成一條線 —— 兩批要
+        # 並排比的時候，鎖住 Y 就夠了（同 `_span` 那條「鎖住的照鎖的」）。
+        self.sx = _scale(frame, sp["x"], band=band_x)
+        self.sy = _scale(frame, sp["y"], style.get("vlock"))
+
+        self.out = _head(width, height, str(style.get("title") or ""))
+        _frame(self.out, self.pad_l, self.pad_t, self.pw, self.ph)
+        # ⚠ **刻度先畫**：`_ylabels` 順手畫橫格線，而格線是背景 —— 畫在記號
+        # 之後會從記號上壓過去（`_svg_profile` 也是這個順序）。
+        _ticks(self.out, self.sx, self.sy, self.pad_l, self.pad_t,
+               self.pw, self.ph, style)
+
+    def x_at(self, row: Dict[str, Any]) -> Optional[float]:
+        return self.sx.at(row.get(self.sp["x"]), self.pad_l,
+                          self.pad_l + self.pw)
+
+    def y_at(self, row: Dict[str, Any]) -> Optional[float]:
+        # Y 由下往上
+        return self.sy.at(row.get(self.sp["y"]), self.pad_t + self.ph,
+                          self.pad_t)
+
+    def finish(self) -> str:
+        _axis_names(self.out, self.style, self.width, self.height,
+                    self.pad_l, self.pad_t, self.pw, self.ph,
+                    str(self.sp["x"]), str(self.sp["y"]))
+        if self.legend:
+            _legend(self.out, self.legend, self.pad_l, self.height - 8,
+                    self.style)
+        self.out.append("</svg>")
+        return "".join(self.out)
+
+
+def _by_colour(frame: Frame, sp: Dict[str, Any]) -> List[List[Dict[str, Any]]]:
+    """照顏色那一欄把列分群（沒有顏色角色就是一群）。
+
+    ⚠ **群的順序是值第一次出現的順序** —— 跟 `_Band` 的槽、跟圖例一樣。
+    三個地方講同一件事的時候，順序也該是同一個。
+    """
+    column = str(sp.get("color") or "")
+    if not column:
+        return [list(frame.rows)]
+    order: List[str] = []
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for row in frame.rows:
+        key = "" if row.get(column) is None else str(row.get(column))
+        if key not in groups:
+            order.append(key)
+            groups[key] = []
+        groups[key].append(row)
+    return [groups[k] for k in order]
+
+
+# --------------------------------------------------------------------------- #
+# mark：line
+# --------------------------------------------------------------------------- #
+def _lines(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
+           width: int, height: int) -> str:
+    """一群一條折線 —— 「一列一條線」就是 `Colour = row`（計畫書 §9-2）。"""
+    plot = _Plot(frame, sp, style, width, height)
+    line_w = max(0.6, float(style.get("line_width", 2.0) or 2.0))
+    dots = bool(style.get("points", True))
+    radius = float(style.get("point_size", 2.6) or 2.6)
+    filled = bool(style.get("point_fill"))
+
+    for group in _by_colour(frame, sp):
+        pts = []
+        for row in group:
+            x, y = plot.x_at(row), plot.y_at(row)
+            if x is None or y is None:
+                continue        # **算不出來的那一格不畫**（不是畫在 0）
+            pts.append((x, y, row))
+        if not pts:
+            continue
+        # ⚠ **照 X 排過才連** —— 長表的列序是「哪個區域的第幾格框」，照那個
+        # 順序連起來的話，線會在圖上來回折，而那是一團看起來有意義的雜訊。
+        pts.sort(key=lambda t: t[0])
+        ink = plot.colour_of(pts[0][2])
+        if len(pts) > 1:
+            plot.out.append(
+                "<polyline points='%s' fill='none' stroke='%s' "
+                "stroke-width='%.1f' stroke-linejoin='round'/>"
+                % (" ".join("%.1f,%.1f" % (x, y) for x, y, _r in pts),
+                   ink, line_w))
+        if dots:
+            face = ("fill='%s'" % ink) if filled else "fill='#fff'"
+            for x, y, _r in pts:
+                plot.out.append(
+                    "<circle cx='%.1f' cy='%.1f' r='%.2f' %s stroke='%s' "
+                    "stroke-width='%.1f'/>"
+                    % (x, y, radius, face, ink, max(0.6, line_w * 0.75)))
+    return plot.finish()
+
+
+# --------------------------------------------------------------------------- #
+# mark：bar
+# --------------------------------------------------------------------------- #
+#: 兩根長條之間留的底色縫（dataviz 的規矩：相鄰的填色之間要有 2px 的縫，
+#: 不然兩根不同顏色的長條會讀成一塊）。
+BAR_GAP = 2.0
+#: 一個槽裡長條佔多寬（其餘是槽與槽之間的呼吸）。
+BAR_SHARE = 0.72
+
+
+def _bars(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
+          width: int, height: int) -> str:
+    """一格框一根長條。同一個槽裡的**並排**，不疊。
+
+    ⚠ **不疊，也不合併。** 疊起來的長條只有最底下那一段是從同一條基線量的，
+    其餘幾段要讀的人自己減 —— 而這張圖問的正是「誰比較高」。合併（取平均）
+    更糟：它會憑空生出一個使用者沒有要求的統計量，而圖上沒有任何線索說那一
+    根是三格框的平均。
+
+    所以同一個槽裡有幾格框就並排幾根。**每一根一樣寬**（寬度用整張圖最擠的
+    那個槽算），不然寬度會讀成一種意思。第一版只照顏色分群並排，於是同一群
+    裡落在同一個槽的三格框**疊在一起畫**，看起來剛好像一張堆疊長條圖 ——
+    render 出來才看到的（F88 ③）。
+    """
+    # X 一律當**槽**：長條有寬度，而寬度在連續軸上沒有意義（兩個很近的值會
+    # 疊在一起，看起來像一根特別粗的）。
+    plot = _Plot(frame, sp, style, width, height, band_x=True)
+    groups = _by_colour(frame, sp)
+
+    # 槽 -> 落在它上面的那幾根（照顏色的群序，所以同一群永遠在同一邊）
+    buckets: Dict[float, List[Dict[str, Any]]] = {}
+    base = plot.pad_t + plot.ph
+    for group in groups:
+        for row in group:
+            centre = plot.x_at(row)
+            if centre is None or plot.y_at(row) is None:
+                continue        # **算不出來的那一格不畫**（不是畫成 0 高）
+            buckets.setdefault(round(centre, 3), []).append(row)
+    if not buckets:
+        return plot.finish()
+
+    slots = max(1, len(plot.sx.slots))
+    span = (plot.pw / float(slots)) * BAR_SHARE
+    most = max(len(v) for v in buckets.values())
+    each = max(1.0, (span - BAR_GAP * (most - 1)) / float(most))
+
+    # 值是負的時候長條要從 0 長下去，所以基線是「0 落在哪」而不是圖區底部。
+    zero = plot.sy.at(0.0, base, plot.pad_t)
+    if zero is None or not (plot.pad_t <= zero <= base):
+        zero = base
+
+    fill = min(1.0, 0.55 * float(style.get("fill_strength", 1.0) or 1.0))
+    for centre, rows in buckets.items():
+        # 一個槽裡不滿 `most` 根的話**置中**，不要靠左（靠左的話同一個槽的
+        # 長條會跟隔壁槽的對不齊，看起來像位置有意思）。
+        run = len(rows) * each + BAR_GAP * (len(rows) - 1)
+        left0 = centre - run / 2.0
+        for i, row in enumerate(rows):
+            y = plot.y_at(row)
+            top, bottom = min(y, zero), max(y, zero)
+            ink = plot.colour_of(row)
+            plot.out.append(
+                "<rect x='%.1f' y='%.1f' width='%.1f' height='%.1f' "
+                "fill='%s' fill-opacity='%.2f' stroke='%s' "
+                "stroke-width='1'/>"
+                % (left0 + i * (each + BAR_GAP), top, each,
+                   max(0.5, bottom - top), ink, fill, ink))
+    return plot.finish()
+
+
+#: ``mark -> 畫它的那一支``。**封閉字彙的另一半** —— `chart_spec.MARKS` 說
+#: 有哪幾個字，這裡說每個字怎麼畫，而有一支測試問「兩邊有沒有對齊」。
+_MARKS = {
+    spec_mod.MARK_POINT: _points,
+    spec_mod.MARK_LINE: _lines,
+    spec_mod.MARK_BAR: _bars,
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -217,7 +413,11 @@ def _colours(frame: Frame, column: str, style: Dict[str, Any]):
             legend.append(("other (%d)" % (len(seen) - len(pal)), other))
 
         def by_name(row):
-            return mapping.get(str(row.get(column) or ""), other)
+            # ⚠ **不准寫 `row.get(column) or ""`。** `row` / `col` 的第一格
+            # 是 **0**，而 `0 or ""` 是 `""` —— 於是第 0 列拿不到自己的顏色，
+            # 畫出來是灰的，而圖例上它有顏色。render 出來才看到的（F88 ③）。
+            got = row.get(column)
+            return mapping.get("" if got is None else str(got), other)
 
         return by_name, legend
 

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QGridLayout, QLabel, QVBoxLayout,
     QWidget,
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import (
 from ..core.export import uniformity_charts as uc
 from ..core.pipeline import chart_spec as cspec
 from .uniformity_window import ChartView, chart_style_for
+from .widgets import ChoiceChips
 
 __all__ = ["GraphBuilderDialog", "NONE_WORD", "PICK_WORD", "SpecEditor"]
 
@@ -50,9 +52,20 @@ PICK_WORD = "(pick one)"
 #: （一排點），落在**大小**上不是 —— 「region B 比 region A 大」沒有意義。
 NUMERIC_ONLY = (cspec.ROLE_SIZE,)
 
+#: 每一種記號的圖示（`ui.glyphs`）。**一格選項＝一排膠囊（圖 + 字）**，
+#: 不是下拉 —— 這是 F68 那條規矩，而它在這裡尤其站得住腳：三種記號講的正是
+#: 「這張圖長什麼形狀」，那本來就畫得出來。
+MARK_ICONS = {cspec.MARK_POINT: "mark_dots",
+              cspec.MARK_LINE: "mark_line",
+              cspec.MARK_BAR: "mark_bars"}
+
 
 class SpecEditor(QWidget):
-    """四個角色，一列一個下拉。``spec()`` 回**格式化過的字串**。"""
+    """一排記號 ＋ 四個角色，一列一個下拉。``spec()`` 回**格式化過的字串**。"""
+
+    #: 記號換了 —— 呼叫端要重畫預覽（下拉自己的 `currentTextChanged` 蓋不到
+    #: 這一顆，而換記號會改變整張圖的長相）。
+    changed = Signal()
 
     def __init__(self, spec: str = "", columns: Optional[Sequence[str]] = None,
                  parent: Optional[QWidget] = None,
@@ -74,14 +87,28 @@ class SpecEditor(QWidget):
         grid.setVerticalSpacing(6)
         grid.setColumnStretch(1, 1)
         self.boxes: Dict[str, QComboBox] = {}
+        self._labels: Dict[str, QLabel] = {}
         row = 0
+
+        # ⚠ **只有一種記號的時候不問。** 一格答了也沒用的設定比沒有那一格更糟
+        # （第二刀就是這樣：那時 `MARKS` 只有 `point`）。
+        self.marks: Optional[ChoiceChips] = None
+        if len(cspec.MARKS) > 1:
+            lab = QLabel("Drawn as", self)
+            self.marks = ChoiceChips(
+                list(cspec.MARKS),
+                [MARK_ICONS.get(m, "mark_dots") for m in cspec.MARKS],
+                self._mark, helps=dict(cspec.MARK_HELP),
+                labels=dict(cspec.MARK_LABELS), parent=self)
+            self.marks.changed.connect(self._on_mark)
+            grid.addWidget(lab, row, 0)
+            grid.addWidget(self.marks, row, 1)
+            row += 1
+
         for role in cspec.ROLES:
-            if not cspec.uses(got, role):
-                # 這一種記號用不到的角色**收起來**（同 `GLOBAL_APPLIES` 那條
-                # 規矩）：一格答了也沒用的設定比沒有那一格更糟。
-                continue
             lab = QLabel(_role_word(role), self)
             lab.setToolTip(cspec.ROLE_HELP[role])
+            self._labels[role] = lab
             box = QComboBox(self)
             box.setToolTip(cspec.ROLE_HELP[role])
             for text in self._choices(role):
@@ -94,6 +121,28 @@ class SpecEditor(QWidget):
             row += 1
         if not self.boxes:                      # pragma: no cover — 封閉字彙
             grid.addWidget(QLabel("nothing to set up here", self), 0, 0, 1, 2)
+        self._grid = grid
+        self._sync_roles()
+
+    def _on_mark(self, mark: str) -> None:
+        self._mark = str(mark)
+        self._sync_roles()
+        self.changed.emit()
+
+    def _sync_roles(self) -> None:
+        """換了記號 → **用不到的角色收起來**（`chart_spec.USES`）。
+
+        ⚠ 收起來**不等於清掉**：把記號換成折線再換回來，原本挑的「大小」
+        還在（同 `ChartSettingsDialog` 那條「沒顯示的覆寫要留著」）。
+        欄位留在 widget 上，只是不顯示 —— 而 :meth:`spec` 會問 `uses`，
+        所以存出去的那一份不會帶著一個這種記號用不到的角色。
+        """
+        for role, box in self.boxes.items():
+            on = cspec.uses({"mark": self._mark}, role)
+            box.setVisible(on)
+            lab = self._labels.get(role)
+            if lab is not None:
+                lab.setVisible(on)
 
     def _choices(self, role: str) -> List[str]:
         """這一個角色挑得到哪幾欄。
@@ -108,6 +157,9 @@ class SpecEditor(QWidget):
     def spec(self) -> str:
         out: Dict[str, Any] = {"mark": self._mark}
         for role, box in self.boxes.items():
+            # 用不到的角色由 `format_spec` 丟掉（規則只有一份，住在那裡）——
+            # 這裡照樣把每一格填進去，那是「收起來不等於清掉」的另一半：
+            # 換回散點時原本挑的「大小」還在畫面上。
             text = str(box.currentText())
             out[role] = "" if text in (NONE_WORD, PICK_WORD) else text
         return cspec.format_spec(out)
@@ -155,8 +207,10 @@ class GraphBuilderDialog(QDialog):
         root.addWidget(self.editor)
         for box in self.editor.boxes.values():
             box.currentTextChanged.connect(self.refresh_preview)
+        # 換記號也要重畫 —— 那顆膠囊改的是整張圖的長相，不只是一格。
+        self.editor.changed.connect(self.refresh_preview)
 
-        self.view = ChartView(uc.CHART_SCATTER, self)
+        self.view = ChartView(uc.CHART_CUSTOM, self)
         self.view.setMinimumHeight(self.PREVIEW_H)
         root.addWidget(self.view, 1)
 
@@ -171,7 +225,7 @@ class GraphBuilderDialog(QDialog):
         """**畫不出來就讓它說出原因** —— `chart_draw` 已經會畫那句話
         （「pick x and y to draw this chart」），所以這裡什麼都不擋。"""
         self.view.set_data(
-            {}, chart_style_for(self._look, uc.CHART_SCATTER, uc.AXIS_X,
+            {}, chart_style_for(self._look, uc.CHART_CUSTOM, uc.AXIS_X,
                                 self._metric),
             frame=self._frame, spec=self.editor.spec())
 

@@ -159,3 +159,118 @@ def test_a_locked_value_scale_is_obeyed_on_the_side_axis():
     locked = draw(_frame(), XY, {"vlock": (0.0, 100.0)})
     assert locked != loose
     assert ">100<" in locked
+
+
+# --------------------------------------------------------------------------- #
+# 6. 三種記號（F88 第三刀）
+# --------------------------------------------------------------------------- #
+def test_every_mark_in_the_vocabulary_has_someone_who_draws_it():
+    """`chart_spec.MARKS` 說有哪幾個字，`chart_draw._MARKS` 說每個字怎麼畫。
+
+    少一支的症狀是「那張圖畫不出來，而畫面上不說為什麼」—— 所以兩邊要對齊。
+    """
+    from d4t.core.export import chart_draw
+    from d4t.core.pipeline import chart_spec
+
+    assert set(chart_draw._MARKS) == set(chart_spec.MARKS)
+
+
+def test_a_line_is_drawn_in_order_of_the_bottom_axis():
+    """長表的列序是「哪個區域的第幾格框」。照那個順序連起來的話，線會在圖上
+    來回折 —— 而那是一團看起來有意義的雜訊。"""
+    import re
+
+    f = _frame()
+    # 故意把列序打亂：畫出來的線**不該**跟著亂。
+    f.rows.reverse()
+    svg = draw(f, {"mark": "line", "x": "glv_mean", "y": "glv_std"})
+    _xml(svg)
+    pts = re.search(r"<polyline points='([^']+)'", svg).group(1)
+    xs = [float(p.split(",")[0]) for p in pts.split(" ")]
+    assert xs == sorted(xs)
+
+
+def test_one_line_per_colour_group():
+    """「一列一條線」就是 `Colour = row`（計畫書 §9-2）。"""
+    f = _frame(_note("epi", 110.0), _note("mg", 128.0, x0=400))
+    svg = draw(f, {"mark": "line", "x": "glv_mean", "y": "glv_std",
+                   "color": "region"})
+    _xml(svg)
+    assert svg.count("<polyline") == 2
+
+
+def test_a_group_whose_first_value_is_zero_still_gets_its_own_colour():
+    """⚠ **`0` 是一個值，不是「沒有值」。**
+
+    `row` / `col` 的第一格就是 0，而第一版寫的是 ``row.get(column) or ""``
+    —— 於是第 0 列拿不到自己的顏色（畫出來是灰的），而圖例上它**有**顏色。
+    render 出來才看到的。
+    """
+    f = _frame(_note("epi", 110.0, cols=2, rows=2))
+    svg = draw(f, dict(XY, color="row"))
+    _xml(svg)
+    # 第 0 列與第 1 列各拿一個區域色，沒有人是那個「認不得」的灰
+    assert uc.REGION_COLOURS[0] in svg and uc.REGION_COLOURS[1] in svg
+    from d4t.core.export.chart_draw import _MUTED
+    assert "stroke='%s'" % _MUTED not in svg
+
+
+def test_bars_in_one_slot_sit_side_by_side_never_on_top_of_each_other():
+    """疊起來的長條只有最底下那一段是從同一條基線量的，而這張圖問的是
+    「誰比較高」。第一版只照顏色分群並排，於是同一群裡落在同一個槽的三格框
+    **疊在一起畫**，看起來剛好像一張堆疊長條圖 —— render 出來才看到的。
+    """
+    import re
+
+    f = _frame(_note("epi", 110.0, cols=2, rows=3))     # 一個 col 三格框
+    svg = draw(f, {"mark": "bar", "x": "col", "y": "glv_mean"})
+    _xml(svg)
+    # ⚠ 只挑長條：圖區的外框也是一個 `<rect>`（第一版忘了，於是「所有長條
+    # 一樣寬」那一條被外框的 564 px 弄紅）。長條是唯一帶 `fill-opacity` 的。
+    bars = re.findall(r"<rect x='([0-9.]+)' y='[0-9.]+' width='([0-9.]+)' "
+                      r"height='[0-9.]+' fill='[^']+' fill-opacity=", svg)
+    assert len(bars) == len(f)
+    # 沒有兩根重疊（左緣排序之後，前一根的右緣不超過下一根的左緣）
+    spans = sorted((float(x), float(x) + float(w)) for x, w in bars)
+    for (_l0, r0), (l1, _r1) in zip(spans, spans[1:]):
+        assert r0 <= l1 + 0.01, spans
+
+
+def test_bars_are_all_the_same_width():
+    """寬度會被讀成一種意思，而這張圖上它什麼都不是。"""
+    import re
+
+    f = _frame(_note("epi", 110.0, cols=3, rows=2))
+    svg = draw(f, {"mark": "bar", "x": "col", "y": "glv_mean"})
+    widths = {w for w in re.findall(
+        r"<rect x='[0-9.]+' y='[0-9.]+' width='([0-9.]+)' height='[0-9.]+' "
+        r"fill='[^']+' fill-opacity=", svg)}
+    assert len(widths) == 1, widths
+
+
+def test_a_numeric_axis_used_as_slots_is_still_in_number_order():
+    """長條圖把一條數值軸當槽用時，「第一次出現的順序」是長表的列序 ——
+    於是 125 那根會落在 115 左邊，而那張圖看起來完全正常。"""
+    from d4t.core.export.chart_draw import _Band
+
+    band = _Band(["125", "115", "120"])
+    assert band.slots == ["115", "120", "125"]
+    assert band.numeric
+
+
+def test_too_many_slots_thin_the_labels_but_never_the_marks():
+    """18 個標籤擠在 580 px 上會疊成一條看不懂的黑線（render 出來才看到）。"""
+    from d4t.core.export.chart_draw import _Band
+
+    band = _Band([str(i) for i in range(40)])
+    assert len(band.slots) == 40                 # 記號一個都不少
+    assert len(band.ticks(5)) < 40               # 標籤跳著標
+
+
+def test_size_is_not_offered_to_a_line_or_a_bar():
+    """一條線沒有大小，而一根長條的寬度是版面決定的、不是資料。"""
+    from d4t.core.pipeline import chart_spec
+
+    assert chart_spec.uses({"mark": "point"}, "size")
+    assert not chart_spec.uses({"mark": "line"}, "size")
+    assert not chart_spec.uses({"mark": "bar"}, "size")

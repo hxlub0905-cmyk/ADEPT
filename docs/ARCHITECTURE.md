@@ -294,9 +294,9 @@ d4t/
 │   │   ├── chart_frame.py    #   **一列一格框**的長表（F88 第一刀）——「一份資料、
 │   │   │                     #   很多種看法」的那個「一份資料」。`row`/`col` 走
 │   │   │                     #   `cell_edges` 的同一套分群，**整張表一起分**
-│   │   ├── chart_draw.py     #   長表 ＋ 一份角色配置 → 一張圖（F88 第二刀）。
-│   │   │                     #   現在只認得 `point`（散佈圖），四張老圖之後會
-│   │   │                     #   改走這裡變成預設（第四刀）
+│   │   ├── chart_draw.py     #   長表 ＋ 一份角色配置 → 一張圖（F88 第二、三刀）。
+│   │   │                     #   `point` / `line` / `bar` 三種記號；四張老圖之後
+│   │   │                     #   會改走這裡變成預設（第四刀）
 │   │   └── overlay.py        #   缺陷疊圖：把「機器看到什麼」畫成人看得懂的圖
 │   ├── store/results.py      # SQLite 批次歷史 ＋ rescore
 │   └── calibration.py        # nm/px 校正 profile
@@ -324,8 +324,9 @@ d4t/
     ├── chart_settings.py     #   上面那顆 `Chart settings…`：一列一個東西、屬性橫著擺
     │                         #     （列怎麼分住在 `chart_style.ROWS`，不在這裡）
     ├── graph_builder.py      #   `chart_spec` 那一格的編輯器：**哪一欄放到哪一個
-    │                         #     角色上**（F88 第二刀）。⚠ 選單是從資料長出來的
-    │                         #     （`Frame.columns`），不是一張寫死的清單
+    │                         #     角色上、畫成哪一種記號**（F88 第二、三刀）。
+    │                         #     ⚠ 選單是從資料長出來的（`Frame.columns`），
+    │                         #     不是一張寫死的清單
     ├── gc_generator.py gc_paint.py  #   **反過來**：貼一張 GC 進來，鋪成整批擬真
     │                         #     資料（F60）＋ 在那一張上畫出「缺陷可能在哪」
     │                         #     （F61 —— 畫一個週期＝畫每一個重複）

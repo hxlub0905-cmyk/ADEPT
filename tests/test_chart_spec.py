@@ -13,6 +13,8 @@ from d4t.core.pipeline import chart_spec as cs
     '{"mark":"point","x":"glv_mean","y":"glv_std"}',
     '{"color":"region","mark":"point","x":"x","y":"glv_median"}',
     '{"color":"row","mark":"point","size":"w","x":"col","y":"glv_mean"}',
+    '{"color":"row","mark":"line","x":"x","y":"glv_mean"}',
+    '{"mark":"bar","x":"region","y":"glv_mean"}',
 ])
 def test_round_trip_is_identity(text):
     """``to_json_dict → from_json_dict`` 是 `run_batch` 送 recipe 進 worker
@@ -98,3 +100,27 @@ def test_describe_is_a_sentence_not_a_json_dump():
     assert "{" not in said
     assert "b" in said and "a" in said and "region" in said
     assert "pick" in cs.describe("")
+
+
+# --------------------------------------------------------------------------- #
+# 4. 三種記號（F88 第三刀）
+# --------------------------------------------------------------------------- #
+def test_a_role_this_mark_cannot_use_is_dropped_not_kept():
+    """一份折線圖的 spec 帶著一個 `size` 的話，換回散點時它會**突然生效**，
+    而使用者不記得設過。"""
+    got = cs.format_spec({"mark": "line", "x": "a", "y": "b", "size": "c"})
+    assert "size" not in got
+
+
+def test_every_mark_is_named_and_explained():
+    """膠囊上要有字、tooltip 要有一句話（鐵則 3 的精神）。"""
+    for mark in cs.MARKS:
+        assert cs.MARK_LABELS.get(mark), mark
+        said = cs.MARK_HELP.get(mark, "")
+        assert said and said.endswith("."), mark
+
+
+def test_describe_says_which_kind_of_chart_it_is():
+    """三種之後「這是哪一種圖」不再是廢話 —— 卡片上那一格要說出來。"""
+    said = cs.describe('{"mark":"bar","x":"region","y":"glv_mean"}')
+    assert cs.MARK_LABELS["bar"] in said

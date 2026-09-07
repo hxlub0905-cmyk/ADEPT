@@ -118,8 +118,8 @@ def test_the_preview_is_the_svg_that_would_be_written(qapp, frame):
     dlg = GraphBuilderDialog(text, frame)
     mine = dlg.view.svg()
     theirs = uc.build_chart_svg(
-        {}, uc.CHART_SCATTER,
-        uc.resolve_style("", uc.CHART_SCATTER, uc.AXIS_X, ""),
+        {}, uc.CHART_CUSTOM,
+        uc.resolve_style("", uc.CHART_CUSTOM, uc.AXIS_X, ""),
         width=max(dlg.view.MIN_W, dlg.view.width()),
         height=max(dlg.view.MIN_H, dlg.view.height()),
         frame=frame, spec=text)
@@ -152,7 +152,7 @@ def test_the_card_row_is_a_summary_not_a_json_box(qapp, frame):
     預設分支的話，它是一個要手寫 JSON 的文字框。"""
     form = ParamForm()
     form.set_step(get_step("output_uniformity").describe(),
-                  {"charts": uc.CHART_SCATTER, "folder": "/tmp/x",
+                  {"charts": uc.CHART_CUSTOM, "folder": "/tmp/x",
                    "spec": '{"mark":"point","x":"glv_mean","y":"glv_std"}'})
     row = form._rows["spec"]
     assert isinstance(row.editor, ChartSpecField)
@@ -164,11 +164,62 @@ def test_the_card_row_is_a_summary_not_a_json_box(qapp, frame):
     assert row.editor._frame is frame
 
 
-def test_the_row_is_hidden_when_the_scatter_is_not_ticked(qapp):
+def test_the_row_is_hidden_when_that_chart_is_not_ticked(qapp):
     """沒勾那張圖就別問這件事（同 `Profile along`，F87）。"""
     from d4t.core.pipeline.step import param_visible
 
     spec = [p for p in get_step("output_uniformity").params
             if p.name == "spec"][0]
     assert not param_visible(spec.show_when, {"charts": "box,histogram"})
-    assert param_visible(spec.show_when, {"charts": "box,scatter"})
+    assert param_visible(spec.show_when,
+                         {"charts": "box,%s" % uc.CHART_CUSTOM})
+
+
+# --------------------------------------------------------------------------- #
+# 5. 記號那一排（F88 第三刀）
+# --------------------------------------------------------------------------- #
+def test_the_mark_is_a_row_of_chips_not_a_dropdown(qapp, frame):
+    """**一格選項＝一排膠囊（圖 + 字）**（F68 的規矩）。三種記號講的正是
+    「這張圖長什麼形狀」，那本來就畫得出來。"""
+    from d4t.ui.glyphs import CHIP_ICONS
+    from d4t.ui.graph_builder import MARK_ICONS
+    from d4t.ui.widgets import ChoiceChips
+
+    ed = SpecEditor("", frame.columns)
+    assert isinstance(ed.marks, ChoiceChips)
+    for mark in cspec.MARKS:
+        assert ed.marks.chip(mark) is not None, mark
+        assert MARK_ICONS[mark] in CHIP_ICONS, mark
+
+
+def test_picking_a_mark_redraws_and_hides_what_it_cannot_use(qapp, frame):
+    """一格答了也沒用的設定比沒有那一格更糟 —— 一條線沒有大小。"""
+    dlg = GraphBuilderDialog(
+        '{"color":"region","mark":"point","size":"glv_mean",'
+        '"x":"glv_mean","y":"glv_std"}', frame)
+    assert dlg.editor.boxes["size"].isVisibleTo(dlg.editor)
+    before = dlg.view.svg()
+
+    dlg.editor.marks.chip(cspec.MARK_LINE).click()
+    qapp.processEvents()
+    assert not dlg.editor.boxes["size"].isVisibleTo(dlg.editor)
+    assert dlg.view.svg() != before
+    assert "<polyline" in dlg.view.svg()
+    assert '"size"' not in dlg.editor.spec()
+
+
+def test_a_hidden_role_is_not_wiped(qapp, frame):
+    """收起來**不等於清掉** —— 把記號換成折線再換回來，原本挑的「大小」還在
+    （同 `ChartSettingsDialog` 那條「沒顯示的覆寫要留著」）。"""
+    text = ('{"color":"region","mark":"point","size":"glv_mean",'
+            '"x":"glv_mean","y":"glv_std"}')
+    ed = SpecEditor(text, frame.columns, numeric=frame.numeric_columns())
+    ed.marks.chip(cspec.MARK_BAR).click()
+    ed.marks.chip(cspec.MARK_POINT).click()
+    assert ed.spec() == text
+
+
+def test_bars_draw_from_the_same_dialog(qapp, frame):
+    dlg = GraphBuilderDialog(
+        '{"mark":"bar","x":"region","y":"glv_mean"}', frame)
+    assert "fill-opacity" in dlg.view.svg()

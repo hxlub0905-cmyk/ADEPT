@@ -65,17 +65,25 @@ __all__ = [
 #: 四種圖的值（recipe / 參數用的 id，不要改）。
 CHART_BOX, CHART_HIST = "box", "histogram"
 CHART_PROFILE, CHART_MAP = "profile", "map"
-#: F88 第二刀：**第一張由 spec 決定長相的圖**（`chart_spec` ＋ `chart_draw`）。
-#: 其餘四張在第四刀會變成同一個引擎的預設組合。
-CHART_SCATTER = "scatter"
+#: **使用者自己配的那一張** —— 第一張由 spec 決定長相的圖（`chart_spec` ＋
+#: `chart_draw`，F88 第二刀開的、第三刀改名）。其餘四張在第四刀會變成同一個
+#: 引擎的預設組合。
+#:
+#: ⚠ 它一開始叫 `scatter`，而第三刀加了 `line` / `bar` 兩種記號之後那個名字
+#: 就開始說謊 —— 同一格畫得出折線圖，檔名卻寫著 `-scatter.svg`。改名的錢在
+#: 那個當下**還沒有人付過**（零份 recipe、零份 fixture 用它，它只活在一條還
+#: 沒合併的分支上），所以就在那個當下改掉。CLAUDE.md 那段 `bundle` 講的正是
+#: 反面：名字含糊而改名要付一道遷移，於是拖著，最後混淆的是人。
+CHART_CUSTOM = "chart"
 CHARTS: Tuple[str, ...] = (CHART_BOX, CHART_HIST, CHART_PROFILE, CHART_MAP,
-                           CHART_SCATTER)
+                           CHART_CUSTOM)
 
 #: **預設勾哪幾張** —— 刻意**不是** :data:`CHARTS` 全部。
 #:
-#: 散佈圖的兩條軸是使用者自己挑的（`pipeline.chart_spec`），所以預設勾著它
-#: 等於「一張全新的卡片預設就會寫一個畫不出來的檔案」，而畫布上還會掛著一條
-#: 說設定沒做完的黃字。那四張不必問任何問題就畫得出來，這一張要問兩個。
+#: `CHART_CUSTOM` 的兩條軸是使用者自己挑的（`pipeline.chart_spec`），所以
+#: 預設勾著它等於「一張全新的卡片預設就會寫一個畫不出來的檔案」，而畫布上還
+#: 會掛著一條說設定沒做完的黃字。那四張不必問任何問題就畫得出來，這一張要問
+#: 兩個。
 DEFAULT_CHARTS: Tuple[str, ...] = (CHART_BOX, CHART_HIST, CHART_PROFILE,
                                    CHART_MAP)
 
@@ -85,7 +93,7 @@ CHART_LABELS: Dict[str, str] = {
     CHART_HIST: "Histogram",
     CHART_PROFILE: "Position profile",
     CHART_MAP: "Heat map",
-    CHART_SCATTER: "Scatter",
+    CHART_CUSTOM: "Your own chart",
 }
 
 #: 每張圖**用得到**哪幾格「自己的字」（`chart_style.PER_CHART_KEYS` 的子集）。
@@ -106,7 +114,8 @@ PER_CHART_APPLIES: Dict[str, Tuple[str, ...]] = {
     # `區域 - 統計量` 才是）。所以它只剩標題。
     CHART_MAP: ("title",),
     # 散佈圖的兩條軸是**使用者自己挑的欄**，所以名字與刻度數都用得到。
-    CHART_SCATTER: ("title", "xlabel", "ylabel", "xticks", "yticks"),
+    # 這一張的兩條軸是**使用者自己挑的欄**，所以名字與刻度數都用得到。
+    CHART_CUSTOM: ("title", "xlabel", "ylabel", "xticks", "yticks"),
 }
 
 #: 哪幾格**全域**設定只對某幾張圖有意思（沒列的就是四張都用得到）。
@@ -125,14 +134,14 @@ GLOBAL_APPLIES: Dict[str, Tuple[str, ...]] = {
     "map_values": (CHART_MAP,),
     # 一格框一個記號：profile 的散點，以及熱圖照實鋪時描出來的那個框
     "points": (CHART_PROFILE, CHART_MAP),
-    "point_fill": (CHART_PROFILE, CHART_SCATTER),
+    "point_fill": (CHART_PROFILE, CHART_CUSTOM),
     "fill_strength": (CHART_BOX, CHART_HIST, CHART_PROFILE),
     "fill_color": (CHART_BOX, CHART_HIST, CHART_PROFILE),
     # 盒鬚圖的 X 是類別、熱圖兩軸是位置 —— 兩張都沒有「橫著幾個刻度」
-    "xticks": (CHART_HIST, CHART_PROFILE, CHART_SCATTER),
-    "yticks": (CHART_BOX, CHART_HIST, CHART_PROFILE, CHART_SCATTER),
+    "xticks": (CHART_HIST, CHART_PROFILE, CHART_CUSTOM),
+    "yticks": (CHART_BOX, CHART_HIST, CHART_PROFILE, CHART_CUSTOM),
     # 色階只有「顏色代表大小」的那兩張用得到
-    "ramp": (CHART_MAP, CHART_SCATTER),
+    "ramp": (CHART_MAP, CHART_CUSTOM),
 }
 
 #: `profile` 沿哪一個軸。
@@ -981,7 +990,7 @@ def build_chart_svg(series: Dict[str, Any], kind: str = CHART_BOX,
         return _svg_profile(series, st, width, height)
     if k == CHART_MAP:
         return _svg_map(series, st, width, height)
-    if k == CHART_SCATTER:
+    if k == CHART_CUSTOM:
         # ⚠ **這一張吃的是長表，不是 series**（F88 第二刀）—— 兩條軸是使用者
         # 自己挑的欄，而 series 只裝得下「一個統計量 ＋ 位置」。
         #
