@@ -678,6 +678,18 @@ class OutputReportStep(_OutputStep):
             help=("Heading to put at the top of the pages this card writes. "
                   "Leave it empty to use the recipe's name."),
         ),
+        # F87 第九刀：**這張卡的盒鬚圖跟 `Write uniformity` 的是同一支程式碼，
+        # 但以前只有後者吃得到設定** —— 於是同一份投影片裡兩張盒鬚圖的字級、
+        # 線寬、鎖定範圍都不一樣，而畫面上沒有任何線索說為什麼。
+        ParamSpec(
+            name="look", type="chart_style", default="",
+            label="Chart look", section="Box plot",
+            help=("How the box plot looks: text size and colour, marker and "
+                  "line width, whiskers, tick counts - and whether the value "
+                  "scale is locked. Press “Chart settings…” beside this row. "
+                  "It is the same editor the uniformity charts use, so a deck "
+                  "with both kinds of chart can be made to match."),
+        ),
         # 從 `output_boxplot` 併進來的 `features`，**改名了**（F38）。
         #
         # 它跟底下那格 `include_features` 擺在同一張卡上，兩個名字都以
@@ -784,8 +796,17 @@ class OutputReportStep(_OutputStep):
     # ----------------------------------------------------------------- #
     # box plot（併進來的 `output_boxplot`，F38）
     # ----------------------------------------------------------------- #
+    #: 一次畫好幾張盒鬚圖（一個數字一張）—— 見 `Step.chart_words`。
+    chart_words = False
+
+    @classmethod
+    def chart_kinds(cls, params: Dict[str, Any]) -> List[str]:   # noqa: D102
+        return [export_unif.CHART_BOX]
+
     def _charts(self, bctx: Any, names: List[str],
-                groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+                groups: List[Dict[str, Any]],
+                style: Optional[Dict[str, Any]] = None
+                ) -> List[Dict[str, Any]]:
         """``names`` × ``groups`` → 每個特徵一張圖。
 
         **一顆都沒量到那個數字的特徵整張圖不畫**，而且要在 warn 裡說出來 ——
@@ -808,9 +829,22 @@ class OutputReportStep(_OutputStep):
             if not any(s["values"] for s in series):
                 empty.append(name)
                 continue
-            charts.append({"title": name, "series": series,
-                           "subtitle": "one box per class - the line is the "
-                                       "median, the box is the middle half"})
+            # **在這裡就畫成 SVG**，因為要把 `look` 套進去；
+            # `build_boxplot_page` 本來就認得畫好的 `svg`（F85 那四張圖走的
+            # 也是這條路），所以那一支一個字都沒有動。
+            #
+            # ⚠ **標題強制是特徵名**：這一頁一個數字一張圖，一組共用的標題
+            # 會同時套到五張上。那也是這張卡 `chart_words = False` 的理由。
+            st = dict(style or {})
+            st["title"] = name
+            charts.append({
+                "title": name, "series": series,
+                "subtitle": "one box per class - the line is the "
+                            "median, the box is the middle half",
+                "svg": export_boxplot.build_boxplot_svg(
+                    series, title=name,
+                    subtitle="one box per class - the line is the median, "
+                             "the box is the middle half", style=st)})
         if empty:
             bctx.warn(
                 "Box plot: no defect has a number called %s, so %s not "
@@ -847,7 +881,10 @@ class OutputReportStep(_OutputStep):
                        "ids": [str(r.get("defect_id", ""))
                                for r in bctx.rows if r.get("ok")],
                        "colour": export_boxplot.FALLBACK_COLOUR}]
-        charts = self._charts(bctx, names, groups)
+        charts = self._charts(
+            bctx, names, groups,
+            style=export_unif.resolve_style(p.get("look", ""),
+                                            export_unif.CHART_BOX))
         # ⚠ 這一頁的 fallback 是 ``"d4t"``，報表那一頁是 ``"d4t results"``
         # —— 合併之前兩張卡就是這樣，而它只在「recipe 沒有名字」時看得出差別。
         # 統一成一個的話，那幾份 recipe 的輸出會安靜地換一個抬頭。
@@ -1636,21 +1673,18 @@ class OutputUniformityStep(_OutputStep):
         * 「值那一軸」的名字要落在**哪一軸** —— 它在直方圖是 X、在 profile
           是 Y，而那是四張圖各自的事。
         """
-        st = chart_style.style_for(p.get("look", ""), kind)
-        st["axis"] = str(p["axis"])
-        if not st.get("title"):
-            st["title"] = export_unif.CHART_LABELS.get(kind, kind)
-        name = str(st.get("value_name") or "").strip() or metric
-        if kind == export_unif.CHART_HIST:
-            st["xlabel"] = st.get("xlabel") or name
-        elif kind == export_unif.CHART_PROFILE:
-            st["ylabel"] = st.get("ylabel") or name
-        return st
+        return export_unif.resolve_style(p.get("look", ""), kind,
+                                         str(p["axis"]), metric)
 
     def _value_name(self, p: Dict[str, Any], metric: str = "") -> str:
         """值那一軸叫什麼（副標題與摘要表共用 —— 各寫一份的那份會漂）。"""
         got = chart_style.style_for(p.get("look", ""))
         return str(got.get("value_name") or "").strip() or str(metric)
+
+    @classmethod
+    def chart_kinds(cls, params: Dict[str, Any]) -> List[str]:   # noqa: D102
+        got = parse_key_list(str(params.get("charts", "") or ""))
+        return [k for k in export_unif.CHARTS if k in got]
 
     @classmethod
     def overlay_heat(cls, ctx: Any, params: Dict[str, Any],

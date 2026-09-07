@@ -49,15 +49,13 @@ def chart_style_for(look: str, kind: str, axis: str = uc.AXIS_X,
     編輯器裡的預覽直接叫 `chart_style.style_for`，於是改 `Name of the value
     axis` 那一格**畫面完全沒有反應** —— 而那一格在寫出去的檔案裡是有作用的。
     「預覽跟輸出不一樣」正是這整個功能最貴的那種 bug。
-    """
-    from ..core.pipeline import get_step
 
+    ⚠ 這一支現在只是 `export.uniformity_charts.resolve_style` 的一層薄殼
+    （加上「畫不出來不准擋畫面」那條）—— 規則本身住在 core，寫檔那一側走的
+    是同一支。
+    """
     try:
-        card = get_step("output_uniformity")
-        p = card.validate_params({"folder": "x", "look": str(look or ""),
-                                  "axis": str(axis or uc.AXIS_X),
-                                  "metric": str(metric or "")})
-        return card()._style_for(str(kind), p, str(metric or ""))
+        return uc.resolve_style(look, kind, axis, metric)
     except Exception:                     # noqa: BLE001 — 顯示用，不能擋畫面
         return {}
 

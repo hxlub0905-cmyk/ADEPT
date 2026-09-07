@@ -1112,6 +1112,27 @@ class Step(ABC):
         return [], [], -1, []
 
     @classmethod
+    def chart_kinds(cls, params: Dict[str, Any]) -> List[str]:
+        """這張卡的 ``chart_style`` 那一格**管到哪幾種圖**。
+
+        設定編輯器右半是「一張圖一個分頁」，而分頁該有幾個是**那張卡的事**：
+        `Write uniformity` 是使用者勾了哪幾張，`Write report` 只畫盒鬚圖。
+        UI 問這一支，所以加一張用 `chart_style` 的新卡不必動 UI（同 F7-17）。
+
+        回空的就由 UI 決定（全部給）—— 一個空的分頁區讀起來是「壞了」。
+        """
+        return []
+
+    #: 這張卡的 ``chart_style`` 那一格**有沒有「每張圖自己的字」**（標題、
+    #: 軸名、刻度數）。
+    #:
+    #: `Write report` 是 ``False``：它一次畫**好幾張**盒鬚圖（一個數字一張），
+    #: 所以一組「這張圖的標題」會同時套到五張上 —— 那一格填了等於什麼都沒
+    #: 說。一格答了也沒用的設定比沒有那一格更糟（推廣鐵則），所以那張卡的
+    #: 編輯器右半只留預覽。
+    chart_words: ClassVar[bool] = True
+
+    @classmethod
     def overlay_heat(cls, ctx: Any, params: Dict[str, Any],
                      stream: Optional[str] = None) -> Any:
         """這張卡要在預覽影像上鋪哪些**填色的磚**（正規化座標）。

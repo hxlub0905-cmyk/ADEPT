@@ -247,8 +247,12 @@ class ChartSettingsDialog(QDialog):
     def __init__(self, look: str = "", kinds: Optional[Sequence[str]] = None,
                  parent: Optional[QWidget] = None,
                  series: Optional[Dict[str, Any]] = None,
-                 axis: str = uc.AXIS_X):
+                 axis: str = uc.AXIS_X, words: bool = True):
         super().__init__(parent)
+        #: 右半要不要「每張圖自己的字」（`Step.chart_words`）。一次畫好幾張
+        #: 同一種圖的卡片（`Write report`）沒有那件事 —— 一組標題套到五張上
+        #: 等於什麼都沒說。
+        self._words = bool(words)
         #: profile 沿哪一個軸（只影響那一張）—— 卡片上那一格說了算。
         self._axis = str(axis or uc.AXIS_X)
         #: 預覽吃的那一顆。沒給就用內建的樣本 —— 一個**空**的預覽區讀起來是
@@ -277,15 +281,19 @@ class ChartSettingsDialog(QDialog):
         self.globals: Dict[str, QWidget] = {}
         self.per: Dict[str, Dict[str, QWidget]] = {}
         self.views: Dict[str, ChartView] = {}
+        #: 每一格旁邊那個標題（藏一列要連它一起藏）。
+        self._labels: Dict[str, QLabel] = {}
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
 
+        what = ("this chart" if len(self._kinds) == 1
+                else "these %d charts" % len(self._kinds))
         head = QLabel(
-            "How the four charts look. Everything here travels with the "
-            "recipe, so the next run - and anyone you hand the recipe to - "
-            "gets the same charts.", self)
+            "How %s looks. Everything here travels with the recipe, so the "
+            "next run - and anyone you hand the recipe to - gets the same "
+            "charts." % what, self)
         head.setWordWrap(True)
         head.setObjectName("paramHint")
         root.addWidget(head)
@@ -328,9 +336,31 @@ class ChartSettingsDialog(QDialog):
         root.addWidget(buttons)
 
         self.set_value(style)
+        self._hide_rows_that_do_not_apply()
         self._connect_live()
         self.refresh_preview()
         apply_button_cursors(self)
+
+    def _hide_rows_that_do_not_apply(self) -> None:
+        """只畫盒鬚圖的卡片不必看到「直方圖切幾根柱」（`GLOBAL_APPLIES`）。
+
+        ⚠ **收起來不等於清掉**：那幾格仍然在 `self.globals` 裡，所以值照樣
+        round-trip 回去 —— 把 Heat map 取消勾選再勾回來，設定要還在。
+        """
+        shown = set(self._kinds)
+        for key in list(self.globals):
+            uses = uc.GLOBAL_APPLIES.get(key)
+            if uses is not None and not (shown & set(uses)):
+                self._set_row_visible(key, False)
+
+    def _set_row_visible(self, key: str, on: bool) -> None:
+        w = self.globals.get(key)
+        if w is None:
+            return
+        w.setVisible(bool(on))
+        lab = self._labels.get(key)
+        if lab is not None:
+            lab.setVisible(bool(on))
 
     # -- 即時預覽 -----------------------------------------------------------
     def _connect_live(self) -> None:
@@ -437,6 +467,7 @@ class ChartSettingsDialog(QDialog):
         grid.addWidget(editor, r, 1)
         grid.setColumnStretch(2, 1)
         self.globals[key] = editor
+        self._labels[key] = lab
 
     def _numbers_group(self, parent: QWidget) -> QFrame:
         box = self._section("What is drawn", parent)
@@ -492,7 +523,8 @@ class ChartSettingsDialog(QDialog):
             self.globals[key].setEnabled(bool(on))
 
     def _per_chart_group(self, parent: QWidget) -> QWidget:
-        box = self._section("Each chart's own words", parent)
+        box = self._section("Each chart's own words" if self._words
+                            else "Preview", parent)
         if self._is_sample:
             said = QLabel("Previews below use sample data - your run's "
                           "numbers are not loaded here.", box)
@@ -508,8 +540,9 @@ class ChartSettingsDialog(QDialog):
             grid.setHorizontalSpacing(10)
             grid.setVerticalSpacing(6)
             fields: Dict[str, QWidget] = {}
-            keys = [k for k in cs.PER_CHART_KEYS
-                    if k in uc.PER_CHART_APPLIES.get(kind, cs.PER_CHART_KEYS)]
+            keys = ([k for k in cs.PER_CHART_KEYS
+                     if k in uc.PER_CHART_APPLIES.get(kind, cs.PER_CHART_KEYS)]
+                    if self._words else [])
             for r, key in enumerate(keys):
                 lab = QLabel(_PER_LABELS.get(key, key), page)
                 lab.setMinimumWidth(120)

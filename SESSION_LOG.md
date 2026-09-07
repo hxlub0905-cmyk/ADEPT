@@ -204,7 +204,33 @@ describe，JSON 扁平鍵、**只存跟預設不一樣的**），卡片從 12 �
 「印出值」看起來沒反應；以及樣本 12 欄太密）。樣本因此縮成 3×3 兩群 ——
 那也讓真正的預覽變得看得懂。
 
-### ⑨ 一張**檔名**的例外清單，放過了它自己要擋的那件事
+### ⑨ 「report 的 box plot 跟 Uniformity 能整合嗎」
+
+使用者問的。**合成一張卡不行**（一個點是什麼不一樣：`Write report` 一個點是
+一顆 defect、`Write uniformity` 一個點是一格框，而 F50 刪掉 `output_band.py`
+就是因為「框的意思是『這幾個是一組』，真相卻是『跑的時間不一樣』」）。
+
+**但「讓兩張圖長得一樣」是現成的缺口**，而且是我自己留下的：兩張卡畫的本來
+就是同一支 `build_boxplot_svg`，我在 F87 第二刀給了 `Write uniformity` 一格
+`look`，卻沒有給另一張。於是同一份投影片裡兩張盒鬚圖的字級、線寬、鎖定範圍
+都不一樣，而畫面上沒有任何線索說為什麼。
+
+* `Write report` 加一格 `look`（同型別、同編輯器、各存各的）。
+* **style 的解析搬去 `export.uniformity_charts.resolve_style`** —— 它以前住在
+  `OutputUniformityStep._style_for` 上，於是所有人（寫檔的卡片、圖的視窗、
+  設定編輯器的預覽、現在還多一張報表卡）都得去 `get_step("output_uniformity")`
+  繞一圈。那筆帳已經付過一次：預覽少走了它，`Name of the value axis` 那一格
+  在畫面上完全沒有反應。搬完之後繞路就沒有了，而且順手補上盒鬚圖的
+  `value_name → ylabel`（以前四張裡只有三張吃到）。
+* **編輯器由卡片決定長什麼樣**：`Step.chart_kinds(params)`（要開哪幾個分頁）
+  與 `Step.chart_words`（有沒有「每張圖自己的字」）。`Write report` 是
+  `[box]` ＋ `False` —— 它一次畫好幾張盒鬚圖，一組標題會套到五張上。
+* 同一條規矩再往前一步：`export.GLOBAL_APPLIES` 把**不適用的全域設定也收起來**
+  （只畫盒鬚圖的卡片不必看到「直方圖切幾根柱」「熱圖的每一格一樣大」）。
+  ⚠ **收起來不等於清掉** —— 值照樣 round-trip，把 Heat map 取消勾選再勾回來，
+  設定要還在。
+
+### ⑩ 一張**檔名**的例外清單，放過了它自己要擋的那件事
 
 CI 紅在 `test_the_short_one_is_only_used_on_the_image`：熱圖色條用了
 `format_feature_value_short`，而那支的邊界是「只有畫在影像上的標記用它」——
@@ -226,7 +252,7 @@ assert users == ["inspectors.py"]
 （同一個形狀在 CLAUDE.md 裡已經有一條：`ALLOWED_ERRORS` 那張表要配一支反向
 測試，不然它就是一張只會變長的紙。這次是另一種爛法 —— 顆粒度太粗。）
 
-### ⑩ 一個把測試掛死的坑
+### ⑪ 一個把測試掛死的坑
 
 新的 UI 測試檔在 fixture 裡才 `import studio`，而 `conftest` 那支關掉「關閉時
 確認存檔」的 autouse fixture 是 `sys.modules.get("d4t.ui.studio")` ——

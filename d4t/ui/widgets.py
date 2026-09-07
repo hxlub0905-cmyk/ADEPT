@@ -4580,17 +4580,37 @@ class ParamForm(QWidget):
                 row.editor.set_series(series)
 
     def _chart_kinds(self) -> List[str]:
-        """`chart_style` 的編輯器要開哪幾個分頁 —— **這張卡勾了哪幾張圖**。
+        """`chart_style` 的編輯器要開哪幾個分頁 —— **那張卡說的**。
 
-        沒有那一格（或還沒填）就給全部：一個空的分頁區讀起來是「壞了」。
+        `Step.chart_kinds`（`Write uniformity` 是勾了哪幾張、`Write report`
+        只有盒鬚圖）。卡片沒說就給全部：一個空的分頁區讀起來是「壞了」。
         沒勾的那幾張的覆寫不會因此消失（`ChartSettingsDialog` 原封不動帶回）。
         """
         from ..core.export.uniformity_charts import CHARTS
+        from ..core.pipeline import get_step
 
-        got = [c.strip() for c in
-               str(self._values.get("charts", "") or "").split(",")]
-        want = [k for k in CHARTS if k in got]
-        return want or list(CHARTS)
+        want: List[str] = []
+        key = self.step_key()
+        if key:
+            try:
+                want = [str(k) for k in
+                        get_step(key).chart_kinds(dict(self._values))]
+            except Exception:          # noqa: BLE001 — 顯示用，不能擋畫面
+                want = []
+        return [k for k in CHARTS if k in want] or list(CHARTS)
+
+    def _chart_words(self) -> bool:
+        """編輯器右半要不要「每張圖自己的字」—— 也是**那張卡說的**
+        （`Step.chart_words`）。"""
+        from ..core.pipeline import get_step
+
+        key = self.step_key()
+        if not key:
+            return True
+        try:
+            return bool(getattr(get_step(key), "chart_words", True))
+        except Exception:              # noqa: BLE001 — 顯示用，不能擋畫面
+            return True
 
     def step_key(self) -> Optional[str]:
         return None if not self._describe else str(self._describe.get("key"))
@@ -4991,7 +5011,8 @@ class ParamForm(QWidget):
 
         if ptype == "chart_style":
             # 一格參數 ＋ 專屬編輯器（同 `curve`）—— 見 `ChartStyleField`。
-            w = ChartStyleField(self._chart_kinds())
+            w = ChartStyleField(self._chart_kinds(),
+                                words=self._chart_words())
             w.set_text("" if value is None else str(value))
             w.style_changed.connect(lambda t, n=name: self._emit(n, str(t)))
             return w
@@ -5497,10 +5518,11 @@ class ChartStyleField(QWidget):
     style_changed = Signal(str)
 
     def __init__(self, kinds: Optional[Sequence[str]] = None,
-                 parent: Optional[QWidget] = None):
+                 parent: Optional[QWidget] = None, words: bool = True):
         super().__init__(parent)
         self._text = ""
         self._kinds = [str(k) for k in (kinds or [])]
+        self._words = bool(words)
         self._series: Dict[str, Any] = {}
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -5552,7 +5574,7 @@ class ChartStyleField(QWidget):
         from .chart_settings import ChartSettingsDialog
 
         dlg = ChartSettingsDialog(self._text, self._kinds or None, self,
-                                  series=self._series)
+                                  series=self._series, words=self._words)
         self._dialog = dlg
         try:
             if dlg.exec():
