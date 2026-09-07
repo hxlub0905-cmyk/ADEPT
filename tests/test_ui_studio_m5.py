@@ -414,3 +414,41 @@ def test_close_stops_thumb_worker(qapp, synlot):
     assert win.thumb_worker.is_running() is False
     assert win.thumb_worker.thread_obj is None
     assert win.thumb_worker.pending_count() == 0
+
+
+# --------------------------------------------------------------------------- #
+# F86：試跑不寫，**而且要說出來**
+# --------------------------------------------------------------------------- #
+def test_a_trial_says_it_wrote_nothing_when_output_cards_are_wired(window,
+                                                                   qapp,
+                                                                   tmp_path):
+    """使用者回報：「output 預覽有，但跑完沒 output（沒看到資料夾）」。
+
+    「試跑不寫」是使用者自己定的（F16 Stage 5c）而且是對的 —— 每拖一下門檻
+    就覆寫一次檔案是不可逆的。**錯的是沒有回音**：畫布上有一張 Output 卡、
+    它的儀表列著會寫哪幾個檔，按下最大的那顆鈕之後什麼都沒發生，而狀態列
+    只說「Run finished」。那正是推廣鐵則擋的東西。
+    """
+    nid = window.model.add_step("output_report")
+    assert nid
+    window.model.set_param(nid, "folder", str(tmp_path / "out"))
+    qapp.processEvents()            # 讓加卡片引發的預覽先講完它那句話
+    assert window.run_trial(N, workers=1, sync=True) is True
+    # ⚠ **不要在這裡 processEvents**：預覽 worker 會把狀態列蓋掉，而這一條
+    # 問的正好是「跑完那一刻使用者看到什麼」。
+    text = window.status_text()
+    assert "nothing written" in text, text
+    assert "Run all" in text, "要指名那個動作，不是只說『沒寫』"
+    assert not (tmp_path / "out").exists(), "試跑寫了檔 —— 那它就不是試跑"
+    window.model.remove(nid)
+
+
+def test_a_trial_stays_quiet_when_there_is_no_output_card(window, qapp):
+    """**沒有 Output 卡就不要提它。** 一句永遠都在的提示會變成沒有人讀的字。"""
+    outs = [nid for nid in list(window.model.node_order)
+            if window.model.nodes[nid].step.startswith("output_")]
+    for nid in outs:
+        window.model.remove(nid)
+    qapp.processEvents()
+    assert window.run_trial(N, workers=1, sync=True) is True
+    assert "nothing written" not in window.status_text()

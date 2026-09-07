@@ -201,3 +201,85 @@ def test_the_floor_correction_is_what_makes_it_comparable():
            / np.mean([c.var() for c in cells]))
     assert 0.35 < raw < 0.65, \
         "沒扣地板的話兩格的雜訊圖大約是 0.5（raw=%.3f）" % raw
+
+
+# --------------------------------------------------------------------------- #
+# F86：疊得快，但**一個位元都不准變**
+# --------------------------------------------------------------------------- #
+def _periodic(h: int, w: int) -> np.ndarray:
+    """一張有真週期的圖（`grid_image` 那個 fixture 的函式版）。"""
+    img = np.zeros((h, w), np.uint8)
+    img[::PY, :] = 255
+    img[:, ::PX] = 255
+    return img
+
+
+def _stack_the_old_way(gray, px, py, origin=(0, 0)):
+    """F86 之前的寫法：每一格切一份出來、堆起來、對 axis 0 取平均。
+
+    留在測試裡當**參照實作** —— 「快了」是廉價的，「還是同一個答案」才是
+    這一刀成立的條件。
+    """
+    from d4t.core.algo.golden import _to_gray, tile_coords
+    g = _to_gray(gray)
+    coords = tile_coords(g.shape, px, py, origin)
+    if not coords:
+        return np.zeros((max(py, 1), max(px, 1)), np.uint8)
+    cells = np.stack([g[y:y + py, x:x + px].astype(np.float64)
+                      for (x, y) in coords])
+    return np.clip(cells.mean(axis=0), 0, 255).astype(np.uint8)
+
+
+@pytest.mark.parametrize("side", [300, 577, 1024])
+@pytest.mark.parametrize("pitch", [(48, 48), (31, 17), (7, 7)])
+def test_the_fast_stack_is_byte_for_byte_the_old_one(side, pitch):
+    """reshape 版跟逐格版**逐位元組相同**（F86）。
+
+    這一條是那一刀的全部：它省下的是一塊 469 MB 的暫時陣列，不是任何一個
+    數字。差一個灰階，`choose_origin` 就可能挑到別的相位 —— 而使用者在
+    Golden Cell 上標的每一個區域都掛在那個相位上。
+    """
+    from d4t.core.algo.golden import stack_cells
+    px, py = pitch
+    img = np.random.default_rng(side + px).integers(0, 256, (side, side),
+                                                    dtype=np.uint8)
+    for origin in ((0, 0), (3, 5), (px - 1, py - 1)):
+        got = stack_cells(img, px, py, origin=origin)
+        want = _stack_the_old_way(img, px, py, origin)
+        assert np.array_equal(got, want), (side, pitch, origin)
+
+
+def test_the_median_path_is_untouched():
+    """中位數**看得到每一格**，那正是它對稀疏缺陷免疫的原因 —— 不准 reshape。"""
+    from d4t.core.algo.golden import stack_cells
+    img = np.random.default_rng(4).integers(0, 256, (240, 240), dtype=np.uint8)
+    img[0:48, 0:48] = 255                    # 一格全白：平均會被拉走，中位數不會
+    med = stack_cells(img, 48, 48, method="median")
+    mean = stack_cells(img, 48, 48, method="mean")
+    assert not np.array_equal(med, mean)
+
+
+def test_the_phase_search_reports_progress_and_can_be_cancelled():
+    """F86：`choose_origin` 要說得出它跑到哪，而且停得下來。
+
+    為什麼是 core 的事：它跑在 UI 執行緒上（`ui/template_dialog`），而
+    **core 不得 import Qt**（鐵則 1）—— 所以這裡給的是 callback，
+    畫面長什麼樣由 UI 決定。
+    """
+    img = _periodic(288, 288)
+    seen = []
+    choose_origin(img.shape, PX, PY, image=img,
+                  progress=lambda d, t: seen.append((d, t)))
+    assert seen, "一次都沒回報"
+    assert seen[-1][0] == seen[-1][1], "最後一筆要是 done == total"
+    assert all(t == seen[0][1] for _d, t in seen), "total 不准中途改"
+
+    # 取消：回一個**真的評過分的**相位，不是 (0, 0)
+    stopped = []
+
+    def cancel(done, total):
+        stopped.append(done)
+        return done < 5
+    got = choose_origin(img.shape, PX, PY, image=img, progress=cancel)
+    assert len(stopped) <= 6, "取消之後還在算"
+    assert 0 <= got[0] < PX and 0 <= got[1] < PY
