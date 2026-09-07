@@ -215,6 +215,18 @@ INPUT_SOURCES: Tuple[InputSource, ...] = (
         short="Folder…",
         what="A folder of single images: every image file becomes one defect.",
         icon="folder_open", has_klarf=False),
+    # F85（2026-09-07）：**一張大圖**那條路。使用者要的是 PEAR 的用法
+    # （一張圖、鋪一組 ROI、看均勻度），而在這之前唯一的入口是上面那一顆
+    # —— 也就是得先把那張圖放進一個資料夾，而那一步沒有換到任何東西。
+    #
+    # ⚠ ``kinds`` 仍然是 ``folder``：資料形狀跟上面那條逐項相同
+    # （`ingest.load_image_file` 的 docstring 有理由）。所以資料集標籤上
+    # 會寫 ``folder`` —— 使用者看過並接受（kind 講的是資料形狀，不是入口）。
+    InputSource(
+        key="image", kinds=("folder",), title="Open image\u2026",
+        short="Image\u2026",
+        what="One image file on its own - it becomes a single defect.",
+        icon="image", has_klarf=False),
 )
 
 

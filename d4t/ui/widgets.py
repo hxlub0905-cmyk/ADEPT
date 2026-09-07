@@ -516,6 +516,17 @@ def draw_glyph_icon(p: QPainter, name: str, size: float, color: str,
                               side * 0.76, side * 0.76))
         p.setPen(pen)
         p.setBrush(Qt.NoBrush)
+    elif n == "image":
+        # 一張圖：外框 + 裡面一道山稜和一顆太陽（F85 Input-6）。
+        # 四顆 Open 鈕的輪廓要各不相同（F7-24 的同一條）—— ``folder`` 與
+        # ``folder_open`` 上緣有頁籤、``stack`` 是三個錯開的方框，
+        # 這一個是**唯一內部有東西的**：外框空的話它跟 stack 的最上層一樣。
+        p.drawRect(QRectF(m, h * 0.22, w - 2 * m, h * 0.56))
+        p.drawPolyline(QPolygonF([
+            QPointF(m + w * 0.06, h * 0.66),
+            QPointF(w * 0.42, h * 0.40),
+            QPointF(w - m - w * 0.06, h * 0.66)]))
+        p.drawEllipse(QPointF(w * 0.68, h * 0.36), w * 0.06, w * 0.06)
     elif n == "folder":
         p.drawLine(QPointF(m, h * 0.30), QPointF(w * 0.44, h * 0.30))
         p.drawLine(QPointF(w * 0.44, h * 0.30), QPointF(w * 0.54, h * 0.42))
