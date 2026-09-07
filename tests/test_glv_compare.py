@@ -861,7 +861,12 @@ def test_each_box_declares_exactly_what_it_writes():
         "glv_worst_h", "glv_worst_score", "glv_worst_value",
         # F76：「其他格的基準」—— 一直算得出來，以前只留在 meta 給疊圖用。
         "glv_worst_baseline",
-        "glv_worst_score_median", "glv_worst_score_spread"}
+        "glv_worst_score_median", "glv_worst_score_spread",
+        # F85：均勻度那一組跟著 `report` 的預設走（cv_pct / slope_x /
+        # slope_y）。它們掛在**絕對統計量**上，一個量三個名字 —— `cmp_*`
+        # 上刻意沒有（見 `glv_stats.UNIF_CHOICES` 的警告）。
+        "glv_median_cv_pct", "glv_median_slope_x", "glv_median_slope_y",
+        "glv_mad_cv_pct", "glv_mad_slope_x", "glv_mad_slope_y"}
 
     ctx = _grid_ctx()
     get_step("glv_stats")().run(ctx, p)
