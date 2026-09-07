@@ -6,7 +6,7 @@
 
 | 期間 | 在哪 |
 |---|---|
-| **2026-09-01 起** | 這個檔案（下面）—— F67 GLV 的「跟誰比」由線決定、F68 GLV 是抓 defect 的主力卡、F69–F72 設定欄／Feature 表／ADC 那一頁／報表打得開、F73 把 F68 的驗收真的跑完、F74 Region 段只剩一張卡、F83 使用者回報的三個 UI bug、F84 ruff 那道關／`align_off` 的症狀／bundle 不再壓縮／救回兩份沒併進來的東西 |
+| **2026-09-01 起** | 這個檔案（下面）—— F67 GLV 的「跟誰比」由線決定、F68 GLV 是抓 defect 的主力卡、F69–F72 設定欄／Feature 表／ADC 那一頁／報表打得開、F73 把 F68 的驗收真的跑完、F74 Region 段只剩一張卡、F83 使用者回報的三個 UI bug、F84 ruff 那道關／`align_off` 的症狀／bundle 不再壓縮／救回兩份沒併進來的東西、F85 PEAR 的均勻度（一格參數、四張圖、三個「我原本說錯了」） |
 | 2026-08-19 ～ 08-28 | [`docs/history/2026-08b.md`](docs/history/2026-08b.md) —— F42 區域線走 edges、F43–F45 結果表分層／區域接線／FeatureSpec、F46/F47 檔案架構與授權、F48 六個決定、F50 畫布上只剩卡片和線、F51/F52 特徵名與數字只有一種寫法、F53–F57 五件小事、F58–F66 合成資料長成真的那種 layout |
 | 2026-08-07 ～ 08-18 | [`docs/history/2026-08.md`](docs/history/2026-08.md) —— F8 純規則 ROI、畫布 n8n 化、Phase 1 收斂、F10、Phase 2 的 Input／Enhance／Region 三段 |
 | 2026-07 | [`docs/history/2026-07.md`](docs/history/2026-07.md) —— M0–M7、F7-9…F7-24 前半、兩台機器與搬運通道的成形 |
@@ -19,6 +19,115 @@
 （`docs/history/` 不進搬運包）。包的大小**不是限制**（2026-08-17 使用者確認直接
 複製 raw，見 `AGENTS.md` §2）—— 封存是為了 diff 乾淨與公司機用不到的東西不佔
 體積，不是為了那道 1 MB 的線。
+
+---
+
+## F85：PEAR 的均勻度搬進來 —— 一格參數、四張圖，以及三個「我原本說錯了」（2026-09-07）
+
+使用者：「我想將 PEAR 專案的功能移植進 d4t studio 讓他成為一張卡片」。
+四輪問答把範圍收成：**不用手放 ROI**（接現有的 ROI 卡）、**主要看區域均勻度**、
+**要 PEAR 那四種圖**、**外觀設定先做最小的一批**。
+
+### 做出來的東西
+
+| # | 東西 | 代價 |
+|---|---|---|
+| 1 | `algo/uniformity.py`（vendored from PEAR，~200 行）| 新模組 |
+| 2 | `glv_stats` 多**一格** `report`（range / range_pct / cv_pct / slope_x / slope_y，預設後三個）| 一格參數，而且 `show_when` 綁 `each box` —— 用 pooled 的人看到的格數**一格都沒變** |
+| 3 | `export/uniformity_charts.py` —— 四種圖的 SVG | 新模組 |
+| 4 | `output_uniformity`「Write uniformity」| Output 段第四張卡 |
+| 5 | `Open image…` —— 第四個 Input 入口 | `INPUT_SOURCES` 一列 |
+| 6 | `recipes/one-image-uniformity.json` | 出貨第二份 recipe |
+| 7 | CLI 認得資料夾與單張圖 | 一支 `_open_input` |
+
+### 一、**沒有新開量測卡** —— 而我原本說「結構上做不到」
+
+第一版計畫書（commit `4763e96`）的結論是開一張新的 `uniformity` 卡，理由寫的是
+「`MultiSourceStep.run` 的迴圈一次只給子類一個區域，所以跨群比較**結構上做不到**」。
+
+使用者問了一句「**是有必要新開卡嗎**」，而那個理由站不住，兩個錯：
+
+1. **子類可以覆寫 `run()`**，而且乾淨的寫法是「先 `super().run()`，再多跑一段」。
+   那是「基底預設不做」，不是「做不到」—— 我把前者寫成了後者。
+2. 更嚴重的是**援引錯了規矩**。我用 F19 的「改變『量得出什麼』的選擇是岔路，
+   不是 method」，但那條的判準是**「這個參數問的是使用者的樣品，還是問軟體」**
+   —— 而 `cv_pct` 問的跟 `glv_stats` 已經在吐的 `_typical` / `_outlier` 是
+   **同一個樣品、同一組框、同一批像素**。它不是岔路。
+
+同一輪使用者對兩群比較（η²／Cohen's d）說「不要」——那本來就是我提議的，
+而它一走，連覆寫 `run` 的需求都沒有了。
+
+**判準留給下一次**：折進去 vs 新開卡，決定性的一條是「使用者要接幾次線」。
+兩張卡＝同一個 ROI 拉兩條線、設兩次 `metrics`，而那兩份**可以設得不一樣、
+畫面上看不出來** —— `glv_stats` 自己的 docstring 早就罵過同一件事
+（舊 `roi_compare`）。
+
+### 二、**兩份繪圖程式碼收成一份** —— 因為「QtSvg 不是相依」是錯的
+
+計畫書寫著：畫面上一份 QPainter、檔案裡一份 SVG，那是鐵則 1 的直接後果；
+而 core 產 SVG、Studio 顯示那條路走不得，理由是「`QtSvg` 不是相依」。
+
+**`QtSvg` 就裝在 `PySide6-Essentials` 裡**（`pip show` 列得出 `QtSvg.abi3.so`），
+`requirements.txt` 的 `PySide6>=6.5` 早就帶著它。我把「Qt 的一個獨立模組」
+當成了「一個獨立的套件」。
+
+所以現在是一份：core 產 SVG，`UniformityPreviewInspector` 用 `QSvgRenderer`
+把**同一個字串**畫到面板上。原本風險表的第一行（「兩份會漂」）因此不存在了。
+賠掉的是 hover —— `GlvInspector` 的直方圖本來也沒有。
+
+⚠ 一份帶來一個**新的**坑，當場踩到：每一支 `_svg_*` 把圖區夾在
+`max(80, height − 上下留白)`，於是格子不夠高時內容比 viewBox 高，
+**SVG 把超出的切掉**。實測 126 px 高的格子把斜率那一行（整張圖唯一的數字）
+切掉一半，**而圖看起來完全正常**。解法是 `MIN_WIDTH`/`MIN_HEIGHT`：
+**夾住尺寸，不夾內容**。
+
+### 三、圖住在 `Write uniformity` 的儀表，`GlvInspector` 一行沒動
+
+計畫書寫的是「四種圖是 `GlvInspector` 多一排切換」。動手才發現儀表面板只有
+**一個**分頁鈕，沒有「同一張卡好幾種看法」的機制；硬加會多一排**只在儀表裡
+有意義**的按鈕 —— 那個選擇既不進 recipe、也跟任何一格參數對不起來。
+
+而「畫哪幾張」**本來就是一格參數**（`Write uniformity` 的 `charts`）。
+所以圖住在那張卡的儀表上：上半是「會寫哪幾個檔」（Write KLARF 那條硬規則），
+下半就是那幾張圖本人。
+
+### 四、測試抓到的六個，每一個都是「跑得完、看起來正常」
+
+| 抓到什麼 | 誰抓的 |
+|---|---|
+| **函式名跟模組名撞了** —— `from .uniformity import uniformity` 把模組換成函式，26 條同時紅（跟 F84 的 `leaf_hex` 同一種形狀）| 既有測試 |
+| **我以為守著 4 倍門檻的那條測試沒有在守** —— 把 4.0 改成 1.0 整份全綠，因為等距那組被 `i < 1` 擋掉了，走不到倍率那一行 | **突變驗證** |
+| `configuration_issues` 讀了沒補預設的 params，對一個正常節點說「你什麼都沒勾」| `test_output_convergence`（registry 全掃）|
+| 手搭的 Recipe **不會自己水合區域線**，GLV 安靜地退回「量整張圖」| 自己寫的測試（斷言對不上）|
+| 插新 Inspector 時**把 `CharPreviewInspector` 的 `_lines` 整段偷走** | `test_ui_panels_pr2` |
+| 小面板把圖切掉 | 肉眼看 PNG |
+
+六個突變（斜率的 100、抖動的 4 倍門檻與 `i >= 1`、容差取階梯中間、格子邊界
+取中線、丟 NaN）現在全部抓得到。
+
+### 五、順手修掉一個文件漂移
+
+`CLAUDE.md` §6 與 `README.md` 的來源表都寫著 PEAR 提供「η²／Cohen's d」，
+而整個 repo **grep 不到** —— 它進來過（`docs/plans/F11` 留著墓碑：
+`algo/stats.py`，85 行），因為零個呼叫者被當死碼清掉，兩份文件沒跟上。
+第一版計畫書打算搬回來讓表變成真的；使用者說不要，**所以修的是文件那一邊**。
+
+⚠ 反過來的一件事也記著：計畫書原本要把 `uniformity.py` 寫進
+`ui/scope.py` 的「不准刪的孤兒模組」表。**做完之後那句話不成立**（它有兩個
+真的呼叫者），寫上去會是一句**指著錯東西的說明** —— 那比沒有更糟（F84 的
+「搬家的時候理由要跟著搬」的反面）。真正只有兩張圖在用的是
+`cell_boxes` / `profile_by_position` / `cluster_positions` / `cell_edges` /
+`jitter_tolerance` 那五支，而那句話寫在 `tests/test_uniformity.py`。
+
+### 沒做（講清楚才不會被當成漏掉）
+
+手放 ROI（使用者第 1 點明說不用）、ROI JSON 匯入匯出、η²／Cohen's d
+（「不要」）、Tukey 離群格數（`glv_boxes_over_k` 已經在答同一句話，而
+`_outlier` 與 `_outliers` 只差一個字母、會在同一份 CSV 上並排）、
+外觀設定第二批（字級／粗體／顏色／點半徑／線寬 —— PEAR 那個對話框的價值
+有一半在**排版**，而排版要等到知道實際有幾列才排得出來）。
+
+**黃金值三份逐項相同**（既有的 fixture recipe 都走 pooled，連算都不會算）。
 
 ---
 

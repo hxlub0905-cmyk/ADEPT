@@ -107,6 +107,18 @@ _TREND = "#3a3f4b"
 
 _MISSING = "-"
 
+#: 一張圖**畫得完**所需要的最小尺寸。
+#:
+#: ⚠ 這不是美觀下限，是**正確性**下限。每一支 `_svg_*` 都把圖區夾在
+#: ``max(80, height - 上留白 - 下留白)`` —— 也就是高度不夠時圖區**不會跟著
+#: 縮**，於是內容比 viewBox 還高，而 SVG 的 viewBox 會**把超出的部分切掉**。
+#: 實測（2026-09-07）：儀表把 profile 畫在 126 px 高的格子裡，斜率那一行
+#: （整張圖唯一的數字）被切掉一半，而圖看起來完全正常。
+#:
+#: 所以 :func:`build_chart_svg` 把尺寸夾在這裡，讓呼叫端**縮整張圖**（等比
+#: 例畫小）而不是切內容。字會變小，但沒有一樣東西不見。
+MIN_WIDTH, MIN_HEIGHT = 220, 170
+
 
 # --------------------------------------------------------------------------- #
 # 資料層 —— **畫面與檔案吃的是同一份**
@@ -558,6 +570,10 @@ def build_chart_svg(series: Dict[str, Any], kind: str = CHART_BOX,
     """
     st = dict(style or {})
     k = str(kind or CHART_BOX)
+    # **夾住尺寸，不夾內容**（見 `MIN_WIDTH` 的警告）。呼叫端把回來的圖
+    # 等比例縮進它那一格 —— 縮小的圖讀得完，切掉的圖讀不完而且看不出來。
+    width = max(int(width), MIN_WIDTH)
+    height = max(int(height), MIN_HEIGHT)
     if k == CHART_HIST:
         return _svg_histogram(series, st, width, height)
     if k == CHART_PROFILE:

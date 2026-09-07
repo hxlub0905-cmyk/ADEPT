@@ -170,7 +170,7 @@ feature 的說明。
 |---|---|---|---|---|
 | `box` | Box plot | 區域 | 一格框 | 這幾群各自的分布 |
 | `histogram` | Histogram | 灰階值 | 一格框 | 值怎麼散開 |
-| `profile` | Across the field | 框中心的 X 或 Y | 一格框 | 有沒有斜掉 |
+| `profile` | Position profile | 框中心的 X 或 Y | 一格框 | 有沒有斜掉 |
 | `map` | Heat map | 框的 (x, y) | 一格框（顏色＝值）| 不均勻在**哪裡** |
 
 四種都是「**一格框一個點**」—— 一致，不會混。
@@ -184,35 +184,50 @@ defect**（整批的圖）。這一輪的是：**一個盒子＝一個區域，�
 兩者不共用，也不打算共用。寫在這裡是因為它們在畫面上長得一模一樣，而「一個點
 是什麼」是唯一的差別 —— 那正是最容易在半年後被誰「順手合併」的形狀。
 
-### 4.3 畫面上進 `GlvInspector`，**不開新面板**
+### 4.3 ~~畫面上進 `GlvInspector`~~ —— 圖住在 **Write uniformity 的儀表**
 
-`INSPECTORS["glv_stats"] = GlvInspector` 已經在畫「這一顆的分布」。四種圖是
-它多一排切換，不是第二塊面板 —— 使用者選 GLV 卡就全部看得到。
+> ⚠ 這一節換過。原本寫的是「四種圖是 `GlvInspector` 多一排切換」。
 
-（`CLAUDE.md` §4「一塊新面板＝一個新模組」的下一句：**先問那一塊該不該是一塊**。
-這裡的答案是不該 —— 它跟 `GlvInspector` 畫的是同一顆、同一組框、同一批數字。）
+動手時發現 `GlvInspector` 給不了那一排切換：儀表面板只有**一個**分頁鈕
+（`Inspector.tab_title`），沒有「同一張卡好幾種看法」的機制。硬加的話，
+畫面上會多一排**只在儀表裡有意義**的按鈕 —— 那個選擇既不進 recipe、也跟
+任何一格參數對不起來。
 
-⚠ `GlvInspector` 現在多大要先量；超過某個線就把四種圖抽成
-`ui/uniformity_charts.py`，由 `GlvInspector` 呼叫 —— **模組拆開，面板不拆**。
+而**「畫哪幾張」本來就是一格參數** —— `Write uniformity` 的 `charts`。
+所以圖住在那張卡的儀表上：選到它，上半是「會寫哪幾個檔」（Write KLARF 那條
+硬規則），下半就是那幾張圖本人。**選到卡就看到它會產出什麼**，是這一排
+Output 儀表本來的意思。
 
-### 4.4 檔案裡是手寫 SVG（零新套件）
+`GlvInspector` 因此**一行都沒有動**。
 
-`d4t/core/export/uniformity_charts.py`，先例是 `export/boxplot.py` 與
-`klarf_core._svg_wafer`。
+### 4.4 ~~兩份繪圖程式碼~~ —— **只需要一份**
 
-**兩份繪圖程式碼是鐵則 1 的直接後果**：`core` 不准 import Qt，而檔案輸出必須
-在 core（批次跑在沒有畫面的地方）。現在的盒鬚圖就是這樣活著的。
+> ⚠ **這一節整個推翻了。** 留著原本的推論與它錯在哪，因為那個錯誤差一點
+> 就變成這一輪最貴的技術債（風險表第一行本來就是它）。
 
-考慮過的第三條路 —— core 產 SVG、Studio 用 `QSvgWidget` 顯示 —— 這一輪**不走**：
+**原本寫的**：畫面上一份 QPainter、檔案裡一份 SVG，理由是鐵則 1
+（`core` 不准 import Qt），而 core 產 SVG、Studio 顯示那條路走不得，因為
+**「`QtSvg` 不是相依」**。
 
-1. `QtSvg` 現在**不是相依**（`requirements.txt` 只有 numpy / opencv / tifffile /
-   PySide6 / openpyxl）。多一個在受限機器上會裝不起來的東西，換到「少寫一份
-   繪圖程式碼」。
-2. 儀表要 hover（滑到哪一格框，那一格亮起來）—— 靜態 SVG 給不了。
+**那句話是錯的。** `QtSvg` 與 `QtSvgWidgets` 就裝在 **`PySide6-Essentials`**
+裡（`pip show PySide6-Essentials` 列得出 `QtSvg.abi3.so`），而
+`requirements.txt` 的 `PySide6>=6.5` 早就把它帶進來了。它不是要另外裝的
+東西 —— 我把「Qt 的一個獨立模組」當成了「一個獨立的套件」。
 
-**代價誠實寫下來**：兩份會漂。防線是兩份吃**同一支** core 算出來的資料
-（`uniformity_series()`），所以會漂的是畫法不是數字 —— 而數字才是報表上被
-引用的東西。
+**所以現在是一份**：`core/export/uniformity_charts.py` 產 SVG，
+`UniformityPreviewInspector` 用 `QSvgRenderer` 把**同一個字串**畫到面板上。
+畫面上看到的跟寫出去的逐位元組相同。
+
+賠掉的是 hover（滑到哪一格框、那一格亮起來）。那筆帳划算：`GlvInspector`
+的直方圖本來也沒有 hover，而「畫面上的圖跟報表裡的圖不一樣，而兩張都畫得
+出來」是這個 repo 最貴的那種 bug。
+
+⚠ 一份帶來一個**新的**坑，而它當場就踩到了：每一支 `_svg_*` 把圖區夾在
+``max(80, height − 上下留白)``，所以格子不夠高時內容比 viewBox 高，而
+**SVG 會把超出的切掉**。實測儀表把 profile 畫在 126 px 高的格子裡，
+斜率那一行（整張圖唯一的數字）被切掉一半，**而圖看起來完全正常**。
+解法是 `MIN_WIDTH` / `MIN_HEIGHT`：**夾住尺寸，不夾內容** —— 呼叫端把整張圖
+等比例縮小（`_fit`），字變小但沒有一樣東西不見。
 
 ### 4.5 要跟著搬的兩支「不顯眼但關鍵」的函式
 
@@ -314,9 +329,15 @@ Output 卡是 `CATEGORY_BATCH`（跑完全部才跑一次），而這些圖是�
 **不搬**：`cohens_d` / `attribute_separability`（使用者：「不要」）、
 `group_outliers`（§3.3）。
 
-⚠ **`uniformity.py` 一開始只有一個呼叫者**，正是最容易被當死碼順手清掉的那種
-—— 要進 `ui/scope.py` 那張「不准刪的孤兒模組」表，跟 `period.py` / `golden.py`
-/ `snr.py` / `histmatch.py` 同一列。
+⚠ 計畫書原本寫「`uniformity.py` 一開始只有一個呼叫者，要進 `ui/scope.py`
+那張『不准刪的孤兒模組』表」。**做完之後那句話不成立**：它有兩個真的呼叫者
+（`steps/glv_stats.py` 與 `export/uniformity_charts.py`），不是孤兒，寫上去
+會是一句**指著錯東西的說明**（F84 那條「搬家的時候理由要跟著搬」的反面）。
+
+真正的風險降了一階，而它值得寫在這裡：`cell_boxes` / `profile_by_position` /
+`cluster_positions` / `cell_edges` / `jitter_tolerance` 這五支**只有 heat map
+與 position profile 兩張圖在用**。哪天那兩張圖被拿掉，它們就一起變成孤兒。
+`tests/test_uniformity.py` 是那張便利貼。
 
 ---
 
@@ -364,7 +385,6 @@ Output 卡是 `CATEGORY_BATCH`（跑完全部才跑一次），而這些圖是�
 ```
 d4t/core/algo/uniformity.py            ← 從 PEAR 搬的 ~180 行
 d4t/core/export/uniformity_charts.py   ← 四種圖的 SVG
-d4t/ui/uniformity_charts.py            ← 四種圖的 QPainter（§4.3 的量測結果決定要不要抽出來）
 tests/test_uniformity.py
 ```
 
@@ -374,8 +394,8 @@ tests/test_uniformity.py
 |---|---|
 | `d4t/core/steps/glv_stats.py` | 一格 `report` ＋ `measure()` 裡的收尾 |
 | `d4t/core/steps/output.py` | `output_uniformity` |
-| `d4t/ui/inspectors.py` | `GlvInspector` 多一排切換；`INSPECTORS` 加輸出卡的預覽 |
-| `d4t/ui/scope.py` | `INPUT_SOURCES` 加一列；孤兒模組表加 `uniformity.py` |
+| `d4t/ui/inspectors.py` | `UniformityPreviewInspector`（清單 ＋ 那幾張圖）；`GlvInspector` **一行沒動**（§4.3）|
+| `d4t/ui/scope.py` | `INPUT_SOURCES` 加一列（孤兒表**不加** —— 見 §7） |
 | `d4t/core/ingest/dataset.py` | `load_image_file` |
 | `docs/LICENSING.md` | vendoring 來源表加 `algo/uniformity.py`（**測試會擋**）|
 | `CLAUDE.md` / `README.md` | §8 —— 拿掉「η²／Cohen's d」|
@@ -400,23 +420,20 @@ git add -A && python tools/release.py && git add -A
 
 ---
 
-## 11. 未定
+## 11. ~~未定~~ —— 三個都定了（使用者 2026-09-07）
 
-1. **出不出貨一份 recipe。** `recipes/` 現在只有一份（RSEM 逐框挑最異常的），
-   而每一份都有測試真的跑一次。要不要加一份「一張大圖 → ROI → GLV(each box +
-   report) → Write uniformity」？我傾向要 —— 那正好是使用者的用法。
-2. **四種圖的畫面用字**（§4.1 那一欄）。`Across the field` 是暫定的，
-   PEAR 叫 position profile。
-3. **`Open image…` 的資料集標籤**仍會說 `folder · defect 1 / 1 · no KLARF`
-   （`kind` 不新增第五種，資料形狀一模一樣）。「入口叫 image、標籤說 folder」
-   是一個小誤差 —— 我傾向留著，覺得刺眼的話改的是標籤那一句話。
+1. **出貨一份 recipe：要。** `recipes/one-image-uniformity.json` ——
+   一張大圖 → 鋪一組 ROI → GLV(each box ＋ report) → 四張圖，也就是使用者的
+   用法本人。它的判定樹刻意只分「量不到」與「量到了」：**這份 recipe 不下
+   判斷**，門檻是使用者的，而且每一層不一樣。
+2. **Position 圖就叫 `Position profile`**（原本暫定 `Across the field`）。
+3. **`Open image…` 的標籤仍然說 `folder`**，`kind` 不新增第五種。
 
----
-
-## 12. 這一輪的三個風險
+## 12. 這一輪的風險（做完之後）
 
 | 風險 | 症狀長怎樣 | 防線 |
 |---|---|---|
-| 兩份繪圖程式碼漂掉 | 畫面上的圖跟報表裡的圖不一樣，而**兩張都畫得出來** | 兩份吃同一支 `uniformity_series()`；測試比數字不比畫素 |
+| ~~兩份繪圖程式碼漂掉~~ | —— | **這個風險沒有了**（§4.4）：畫面與檔案是同一份 SVG |
+| 小面板把圖切掉而看起來正常 | 斜率那一行不見了，而圖上其他東西都在 | `MIN_WIDTH`/`MIN_HEIGHT` ＋ `test_a_chart_is_never_clipped_to_fit` |
 | `slope` 的單位被誰改成「每 px」 | CSV 上整欄變成 0.00x，看起來像「都很平」—— **沒有任何錯誤訊息** | §9 的突變測試 |
-| `GlvInspector` 被撐爆 | 那個面板已經是 repo 裡最複雜的儀表之一 | §4.3：先量，超過線就把畫圖抽成模組（**模組拆開，面板不拆**）|
+| ~~`GlvInspector` 被撐爆~~ | —— | **沒有了**（§4.3）：圖住在 `Write uniformity` 的儀表，GLV 那一張一行都沒動 |
