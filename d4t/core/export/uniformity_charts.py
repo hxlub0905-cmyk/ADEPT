@@ -253,6 +253,45 @@ def _span(values: Sequence[float], lock: Optional[Sequence[Any]] = None
     return lo - pad, hi + pad
 
 
+def _is_dark(hex_colour: str) -> bool:
+    """這個底色上該用白字還是黑字（同 PEAR 的 `_is_dark`）。"""
+    t = str(hex_colour or "").strip()
+    if len(t) != 7 or t[0] != "#":
+        return False
+    r, g, b = (int(t[i:i + 2], 16) for i in (1, 3, 5))
+    return (0.299 * r + 0.587 * g + 0.114 * b) < 140.0
+
+
+def _slot_labels(o: List[str], centers: Sequence[float], origin: float,
+                 step: float, at: float, style: Dict[str, Any],
+                 horizontal: bool = True) -> None:
+    """格子版的刻度：**一欄一個槽，標的是那一欄代表的位置**。
+
+    槽位不是線性軸（欄距被拉成一樣寬了），所以刻度不能照線性去算 —— 挑幾個
+    放得下的槽，標它自己的座標。
+    """
+    n = len(centers)
+    if n == 0:
+        return
+    size, weight, ink = _text_attrs(style, "tick", _TEXT)
+    key = "xticks" if horizontal else "yticks"
+    want = max(2, min(int(style.get(key, 5) or 5), n))
+    size = min(size, 11.0)
+    for k in range(want):
+        i = int(round(k * (n - 1) / max(1, want - 1)))
+        pos = origin + step * (i + 0.5)
+        if horizontal:
+            o.append("<text x='%.1f' y='%.1f' font-size='%g' font-weight='%s' "
+                     "fill='%s' text-anchor='middle'>%s</text>"
+                     % (pos, at + size + 4, size, weight, ink,
+                        _esc(_fmt(centers[i]))))
+        else:
+            o.append("<text x='%.1f' y='%.1f' font-size='%g' font-weight='%s' "
+                     "fill='%s' text-anchor='end'>%s</text>"
+                     % (at - 6, pos + size * 0.35, size, weight, ink,
+                        _esc(_fmt(centers[i]))))
+
+
 def heat_hex(t: float) -> str:
     """0–1 → 色階上的一個顏色（線性內插，兩端夾住）。
 
@@ -518,6 +557,72 @@ def _svg_profile(series: Dict[str, Any], style: Dict[str, Any],
 # --------------------------------------------------------------------------- #
 # Heat map —— 不均勻在哪裡
 # --------------------------------------------------------------------------- #
+def _heat_values(series: Dict[str, Any], style: Optional[Dict[str, Any]] = None
+                 ) -> Tuple[List[float], List[Any], List[str],
+                            Tuple[float, float]]:
+    """攤平所有區域的 ``(值, 框, 顏色)`` 與共用的 ``(lo, hi)``。
+
+    **色階跨區域共用**（PEAR 的 vmin/vmax 也是全取）。對不上（框數與值數不等）
+    就整組回空 —— 錯位的顏色指向錯的地方，而畫面上不會說。
+    """
+    st = dict(style or {})
+    vals: List[float] = []
+    rects: List[Any] = []
+    for g in series.get("groups") or []:
+        gv = list(g.get("values") or ())
+        gr = [tuple(r) for r in (g.get("rects") or ())]
+        if not gv or len(gr) != len(gv):
+            return [], [], [], (0.0, 0.0)
+        vals.extend(float(v) for v in gv)
+        rects.extend(gr)
+    if not rects:
+        return [], [], [], (0.0, 0.0)
+    lo, hi = _span(vals, st.get("hlock"))
+    span = (hi - lo) or 0.0
+    cols = [heat_hex(0.5 if span <= 0 else (v - lo) / span) for v in vals]
+    return vals, rects, cols, (lo, hi)
+
+
+def heat_lattice(series: Dict[str, Any],
+                 style: Optional[Dict[str, Any]] = None
+                 ) -> Tuple[List[float], List[float],
+                            List[Tuple[int, int, str, float]],
+                            Tuple[float, float]]:
+    """**每一格一樣大**的版本：``(欄中心, 列中心, [(i, j, 色, 值)…], (lo, hi))``。
+
+    為什麼這是熱圖的預設（PEAR 的 `equal cells`，2026-09-07 使用者：
+    「他就是示意圖，但目前顯示上會怪怪的 那個 heatmap 框大小」）
+    ------------------------------------------------------------------
+    照實鋪（:func:`heat_tiles`）的每一格畫到與鄰居的中線為止 —— 間距不平均、
+    或少了一格，相鄰兩格的**面積就明顯不一樣**，而**面積不是這張圖在量的
+    東西**。排成格子之後每一格都一樣大，那才是一張 die map 該有的樣子，兩格
+    也才一眼比得起來；軸上仍然標著每一欄代表的位置。
+
+    ⚠ 這一支給的是**槽位**（第幾欄第幾列），不是像素 —— 畫圖那一側自己把
+    圖區切成 ``欄數 × 列數`` 塞滿。**所以它不保長寬比**，那是刻意的：
+    這張圖是示意圖，不是影像的縮圖。
+
+    疊在影像上的那一層**不走這一支**（見 :func:`heat_tiles`）—— 那裡位置要
+    對得起影像。
+    """
+    from ..algo import uniformity as unif
+
+    vals, rects, cols, span = _heat_values(series, style)
+    if not rects:
+        return [], [], [], (0.0, 0.0)
+    cx, cy = unif.rect_centers(rects)
+    xc, _xe = unif.cell_edges(cx)
+    yc, _ye = unif.cell_edges(cy)
+    if xc.size == 0 or yc.size == 0:
+        return [], [], [], span
+    out: List[Tuple[int, int, str, float]] = []
+    for k, v in enumerate(vals):
+        i = int(np.abs(xc - cx[k]).argmin())
+        j = int(np.abs(yc - cy[k]).argmin())
+        out.append((i, j, cols[k], float(v)))
+    return [float(v) for v in xc], [float(v) for v in yc], out, span
+
+
 def heat_tiles(series: Dict[str, Any],
                style: Optional[Dict[str, Any]] = None,
                bounds: Optional[Sequence[Any]] = None
@@ -525,10 +630,12 @@ def heat_tiles(series: Dict[str, Any],
                           List[str], Tuple[float, float]]:
     """熱圖的**磚**：``([(x0, y0, x1, y1), …], [色, …], (lo, hi))``，像素座標。
 
-    ⚠ **這是熱圖唯一的出處。** 寫出去的 SVG（:func:`_svg_map`）與疊在影像上
-    的那一層（`OutputUniformityStep.overlay_heat` → `ImageView.set_heat`）都
-    問這一支 —— 各算一份的話，畫面上那一格的顏色跟報表裡的會在某一天分岔，
-    而那一天兩張都畫得出來（這個 repo 最貴的那種 bug）。
+    ⚠ **照實鋪唯一的出處。** 疊在影像上的那一層
+    （`OutputUniformityStep.overlay_heat` → `ImageView.set_heat`）與
+    `equal_cells` 關掉時的那張 SVG 都問這一支；格子版走 :func:`heat_lattice`，
+    而**兩支的顏色來自同一個 `_heat_values`** —— 各算一份的話，畫面上那一格
+    的顏色跟報表裡的會在某一天分岔，而那一天兩張都畫得出來（這個 repo 最貴的
+    那種 bug）。
 
     **所有區域一起鋪一次、色階共用**（PEAR 的 `heat_cells(self._rois, …)` 與
     它那組 vmin/vmax）。``bounds = (w, h)`` 把鋪磚夾回影像裡。
@@ -536,33 +643,28 @@ def heat_tiles(series: Dict[str, Any],
     """
     from ..algo import uniformity as unif
 
-    st = dict(style or {})
-    vals: List[float] = []
-    rects: List[Tuple[float, ...]] = []
-    for g in series.get("groups") or []:
-        gv = list(g.get("values") or ())
-        gr = [tuple(r) for r in (g.get("rects") or ())]
-        if not gv or len(gr) != len(gv):
-            return [], [], (0.0, 0.0)
-        vals.extend(float(v) for v in gv)
-        rects.extend(gr)
+    _vals, rects, colours, span = _heat_values(series, style)
     if not rects:
         return [], [], (0.0, 0.0)
-    lo, hi = _span(vals, st.get("hlock"))
-    cells = unif.cell_boxes(rects, bounds)
-    span = (hi - lo) or 0.0
-    colours = [heat_hex(0.5 if span <= 0 else (v - lo) / span) for v in vals]
-    return cells, colours, (lo, hi)
+    return unif.cell_boxes(rects, bounds), colours, span
 
 
 def _svg_map(series: Dict[str, Any], style: Dict[str, Any],
              width: int, height: int) -> str:
     """框放在自己的 (x, y) 上，顏色＝值，旁邊一條色條。
 
-    每一格畫的是 `algo.uniformity.cell_boxes` 算出來的**那一塊**（到鄰居中線
-    為止），不是框本身：量到的只有框裡面，框與框之間是沒有量的，而把值鋪滿
-    那一塊等於用最近的一次真實量測去填它 —— 於是整片的梯度看起來是一片梯度，
-    不是一排小色塊。
+    **兩種鋪法，預設是格子版**（`equal_cells`，PEAR 的預設）：
+
+    * **格子版** —— 一欄一個槽、每一格一樣大，鋪滿整個圖區。**不保長寬比**，
+      因為它是示意圖不是影像的縮圖（使用者 2026-09-07：「不用跟影像一樣大或
+      比例一樣沒關係，他就是示意圖」）。理由見 :func:`heat_lattice`。
+    * **照實鋪** —— 每一格畫到與鄰居的中線為止（`cell_boxes`），等比例置中。
+      要看真實的空間關係時用它。量到的只有框裡面，框與框之間是沒有量的，而把
+      值鋪滿那一塊等於用最近的一次真實量測去填它 —— 於是整片的梯度看起來是一
+      片梯度，不是一排小色塊。
+
+    ⚠ **疊在影像上的那一層永遠是照實鋪**（`Step.overlay_heat` → `heat_tiles`）
+    —— 它畫在影像上，位置要對得起那張圖。
 
     ⚠ **所有區域一起鋪一次**（PEAR 的做法，2026-09-07 使用者定調「都按照
     PEAR 一樣」）。一開始這裡只畫第一群，理由寫的是「兩群的框疊在同一張
@@ -579,45 +681,80 @@ def _svg_map(series: Dict[str, Any], style: Dict[str, Any],
     groups = [g for g in series.get("groups") or [] if g.get("values")]
     if not groups:
         return _empty(width, height, "no boxes to plot")
-    rects = [tuple(r) for g in groups for r in (g.get("rects") or ())]
-    cells, colours, (lo, hi) = heat_tiles(series, style)
-    if not cells:
-        return _empty(width, height, "box positions do not line up")
-    xs = [c[0] for c in cells] + [c[2] for c in cells]
-    ys = [c[1] for c in cells] + [c[3] for c in cells]
-    x0, x1 = min(xs), max(xs)
-    y0, y1 = min(ys), max(ys)
-    if x1 <= x0 or y1 <= y0:
-        return _empty(width, height, "boxes have no extent")
 
     pad_l, pad_r = 46, 84            # 右邊留給色條
     pad_t = 30 if style.get("title") else 12
     pad_b = 44
     pw = max(60, width - pad_l - pad_r)
     ph = max(60, height - pad_t - pad_b)
-    # **等比例** —— 位置圖上長寬比不對的話，一片方形的排列會看起來是長方形，
-    # 而使用者是拿它去對真實影像的。
-    scale = min(pw / (x1 - x0), ph / (y1 - y0))
-    dw, dh = (x1 - x0) * scale, (y1 - y0) * scale
-    ox = pad_l + (pw - dw) / 2.0
-    oy = pad_t + (ph - dh) / 2.0
-
     t_size, t_weight, t_ink = _text_attrs(style, "tick", _TEXT)
     o = _head(width, height, str(style.get("title") or ""))
-    for (cx0, cy0, cx1, cy1), fill in zip(cells, colours):
-        o.append("<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' "
-                 "fill='%s' stroke='none'/>"
-                 % (ox + (cx0 - x0) * scale, oy + (cy0 - y0) * scale,
-                    max(0.5, (cx1 - cx0) * scale),
-                    max(0.5, (cy1 - cy0) * scale), fill))
-    if style.get("points", True):
-        # 量到的那個框仍然描出來 —— 「這一塊的顏色是從哪一格量來的」
-        for (rx, ry, rw, rh) in rects:
+
+    if bool(style.get("equal_cells", True)):
+        xc, yc, slots, (lo, hi) = heat_lattice(series, style)
+        if not slots:
+            return _empty(width, height, "box positions do not line up")
+        ox, oy, dw, dh = float(pad_l), float(pad_t), float(pw), float(ph)
+        cw, chh = dw / len(xc), dh / len(yc)
+        for i, j, fill, v in slots:
+            x, y = ox + cw * i, oy + chh * j
             o.append("<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' "
-                     "fill='none' stroke='#ffffff' stroke-opacity='0.55' "
-                     "stroke-width='0.8'/>"
-                     % (ox + (rx - x0) * scale, oy + (ry - y0) * scale,
-                        rw * scale, rh * scale))
+                     "fill='%s' stroke='#000000' stroke-opacity='0.18' "
+                     "stroke-width='0.8'/>" % (x, y, cw, chh, fill))
+            if bool(style.get("map_values")) and cw >= 34 and chh >= 14:
+                # 放得下才印（PEAR 同款）—— 印一半的數字比不印糟。
+                o.append("<text x='%.2f' y='%.2f' font-size='%g' "
+                         "font-weight='700' fill='%s' text-anchor='middle'>"
+                         "%s</text>"
+                         % (x + cw / 2, y + chh / 2 + t_size * 0.35,
+                            min(t_size, chh * 0.5),
+                            "#ffffff" if _is_dark(fill) else "#1f2430",
+                            _esc(_fmt(v))))
+        # 軸上仍然標著每一欄／列**代表的位置**（槽位不是線性軸）
+        _slot_labels(o, xc, ox, cw, pad_t + ph, style, horizontal=True)
+        _slot_labels(o, yc, oy, chh, pad_l, style, horizontal=False)
+    else:
+        rects = [tuple(r) for g in groups for r in (g.get("rects") or ())]
+        cells, colours, (lo, hi) = heat_tiles(series, style)
+        if not cells:
+            return _empty(width, height, "box positions do not line up")
+        xs = [c[0] for c in cells] + [c[2] for c in cells]
+        ys = [c[1] for c in cells] + [c[3] for c in cells]
+        x0, x1 = min(xs), max(xs)
+        y0, y1 = min(ys), max(ys)
+        if x1 <= x0 or y1 <= y0:
+            return _empty(width, height, "boxes have no extent")
+        # **等比例** —— 照實鋪的時候長寬比就是那張圖的一部分（使用者是拿它
+        # 去對真實影像的）。格子版刻意不保（見 `heat_lattice`）。
+        scale = min(pw / (x1 - x0), ph / (y1 - y0))
+        dw, dh = (x1 - x0) * scale, (y1 - y0) * scale
+        ox = pad_l + (pw - dw) / 2.0
+        oy = pad_t + (ph - dh) / 2.0
+        vals = [v for g in groups for v in (g.get("values") or ())]
+        for (cx0, cy0, cx1, cy1), fill, v in zip(cells, colours, vals):
+            x, y = ox + (cx0 - x0) * scale, oy + (cy0 - y0) * scale
+            cw = max(0.5, (cx1 - cx0) * scale)
+            chh = max(0.5, (cy1 - cy0) * scale)
+            o.append("<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' "
+                     "fill='%s' stroke='none'/>" % (x, y, cw, chh, fill))
+            # 印值的規矩兩種鋪法**一字不差**（PEAR 兩個分支也是同一套）——
+            # 一種印一種不印的話，那一格會變成「有時候有反應」。
+            if bool(style.get("map_values")) and cw >= 34 and chh >= 14:
+                o.append("<text x='%.2f' y='%.2f' font-size='%g' "
+                         "font-weight='700' fill='%s' text-anchor='middle'>"
+                         "%s</text>"
+                         % (x + cw / 2, y + chh / 2 + t_size * 0.35,
+                            min(t_size, chh * 0.5),
+                            "#ffffff" if _is_dark(fill) else "#1f2430",
+                            _esc(_fmt(float(v)))))
+        if style.get("points", True):
+            # 量到的那個框仍然描出來 —— 「這一塊的顏色是從哪一格量來的」
+            for (rx, ry, rw, rh) in rects:
+                o.append("<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' "
+                         "fill='none' stroke='#ffffff' stroke-opacity='0.55' "
+                         "stroke-width='0.8'/>"
+                         % (ox + (rx - x0) * scale, oy + (ry - y0) * scale,
+                            rw * scale, rh * scale))
     _frame(o, ox, oy, dw, dh)
 
     # ---- 色條 -------------------------------------------------------------

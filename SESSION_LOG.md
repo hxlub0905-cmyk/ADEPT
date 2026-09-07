@@ -170,7 +170,41 @@ describe，JSON 扁平鍵、**只存跟預設不一樣的**），卡片從 12 �
 同一個形狀在這個 repo 已經有兩條（`ALLOWED_ERRORS` 的反向測試、卡片庫順序），
 這是第三條。
 
-### ⑧ 一張**檔名**的例外清單，放過了它自己要擋的那件事
+### ⑧ heatmap 的「框大小怪怪的」＝ PEAR 的 `equal cells`
+
+使用者：「不用跟影像一樣大或比例一樣沒關係，他就是示意圖，但目前顯示上會怪怪
+的 那個 heatmap 框大小」→「heatmap 裡面的 equal cell（像 pear 那樣）」。
+
+**答案就寫在 PEAR 的 docstring 裡**（`_paint_map_grid`）：
+
+> *Cell edges taken literally sit midway between neighbours, so an uneven
+> pitch — or one missing ROI — gives neighbouring cells visibly different
+> areas, and **area is not something this chart is measuring**. On the lattice
+> every ROI gets an identical tile, which is what a **die map** looks like…*
+
+而 PEAR 那個 `equal cells` 的 checkbox **預設是開的**。我移植的是它關掉時的
+那一支，還額外加了等比例置中 —— 兩個決定疊起來就是使用者看到的：格子大小不
+一、而且兩側大片空白。
+
+改法：
+
+* `heat_lattice()` —— 回**槽位**（第幾欄第幾列）而不是像素，畫圖那一側把圖區
+  切成 `欄數 × 列數` 鋪滿。**刻意不保長寬比**（它是示意圖，不是影像的縮圖）。
+* `equal_cells` 進 `chart_style`，**預設 True**；關掉回到照實鋪。
+* `map_values` —— 每一格裡印出值，**放得下才印**（印一半的數字比不印糟）。
+  兩種鋪法用同一套規矩，不然那一格會「有時候有反應」。
+* ⚠ **疊在影像上的那一層永遠照實鋪** —— 它畫在影像上，位置要對得起那張圖。
+  拉成格子的話顏色會落在錯的地方，而畫面上看起來完全正常。有一條測試盯著
+  `overlay_heat` 裡不准出現 `heat_lattice`。
+
+兩支共用 `_heat_values`（值→顏色、跨區域共用的 lo/hi），所以顏色只有一個出處。
+
+順帶：`test_every_editor_moves_the_preview` 這次沒抓到新的死設定，但抓到兩個
+**測試自己**的假陰性（沒 show 的分頁停在最小寬 → 熱圖一格只剩 20 px，於是
+「印出值」看起來沒反應；以及樣本 12 欄太密）。樣本因此縮成 3×3 兩群 ——
+那也讓真正的預覽變得看得懂。
+
+### ⑨ 一張**檔名**的例外清單，放過了它自己要擋的那件事
 
 CI 紅在 `test_the_short_one_is_only_used_on_the_image`：熱圖色條用了
 `format_feature_value_short`，而那支的邊界是「只有畫在影像上的標記用它」——
@@ -192,7 +226,7 @@ assert users == ["inspectors.py"]
 （同一個形狀在 CLAUDE.md 裡已經有一條：`ALLOWED_ERRORS` 那張表要配一支反向
 測試，不然它就是一張只會變長的紙。這次是另一種爛法 —— 顆粒度太粗。）
 
-### ⑨ 一個把測試掛死的坑
+### ⑩ 一個把測試掛死的坑
 
 新的 UI 測試檔在 fixture 裡才 `import studio`，而 `conftest` 那支關掉「關閉時
 確認存檔」的 autouse fixture 是 `sys.modules.get("d4t.ui.studio")` ——

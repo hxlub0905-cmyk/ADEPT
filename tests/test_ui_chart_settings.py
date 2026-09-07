@@ -486,7 +486,19 @@ def test_every_editor_moves_the_preview(qapp):
 
     from d4t.ui.chart_settings import ColourButton
 
+    # ⚠ **要真的排版過**：沒 show 的話每一張預覽停在 260 px 最小寬，而熱圖在
+    # 那個寬度下一格只剩 20 px —— 「每一格印出值」有一條「放不下就不印」的
+    # 規矩，於是那一格會看起來沒反應，而那是尺寸問題不是接線問題。
     dlg = ChartSettingsDialog("", list(uc.CHARTS))
+    dlg.resize(1020, 760)
+    dlg.show()
+    qapp.processEvents()
+    # 只有**現在那一頁**會被排版，其餘分頁的預覽停在最小寬（Qt 的行為，不是
+    # bug —— 使用者切到那一頁時它就撐開了）。這裡問的是「設定有沒有走到畫圖
+    # 那一側」，不是版面，所以直接給每一張一個看得出東西的尺寸。
+    for _v in dlg.views.values():
+        _v.resize(460, 280)
+    qapp.processEvents()
     editors = list(dlg.globals.items()) + [
         ("%s.%s" % (k, n), w)
         for k, f in dlg.per.items() for n, w in f.items()]
