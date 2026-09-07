@@ -69,6 +69,15 @@ _TIPS: Dict[str, str] = {
     "whiskers": "Draw the whiskers on the box plot.",
     "percent": "Histogram shows share of boxes instead of a count. Use it "
                "when two regions have very different box counts.",
+    "equal_cells": "Draw the heat map as a plain grid - every cell the same "
+                   "size, one slot per row and column. That is what a die map "
+                   "looks like, and it is what makes two cells comparable at "
+                   "a glance. Turn it off to draw each cell true to scale "
+                   "(area then follows the spacing, which this chart is not "
+                   "measuring). The heat painted on the image is always true "
+                   "to scale - it has to line up with the picture.",
+    "map_values": "Print the number inside each heat map cell, where the cell "
+                  "is wide enough to hold it.",
     "lock": "Pin the value scale to the range below, so two runs can be put "
             "side by side. Off means every chart picks its own range - which "
             "is right for one run and misleading for two.",
@@ -205,17 +214,21 @@ def _sample_series() -> Dict[str, Any]:
     """
     from ..core.export import uniformity_charts as uc
 
+    # ⚠ **格子數要少**：預覽只有 380×210，12 欄的話一格只剩 20 px —— 那個
+    # 尺寸下什麼都看不出來，而「每一格裡印出值」那一格會**看起來沒反應**
+    # （它有一條「放不下就不印」的規矩，印一半的數字比不印糟）。
+    # 3×3 兩群 = 6 欄，一格約 40 px，剛好放得下一個數字。
     notes = []
     for k, (name, base, x0) in enumerate(
-            (("region A", 112.0, 40), ("region B", 124.0, 520))):
-        n = 18
-        vals = [base + 0.8 * (i % 6) + 1.6 * (i // 6) for i in range(n)]
+            (("region A", 112.0, 40), ("region B", 124.0, 340))):
+        n = 9
+        vals = [base + 1.4 * (i % 3) + 2.6 * (i // 3) for i in range(n)]
         vals[4] += 6.0 if k == 0 else -5.0          # 一顆離群，鬚才看得出來
         notes.append({"region": name, "prefix": name, "spread": {
             "stats": {"value": vals},
-            "cx": [float(x0 + 80 * (i % 6)) for i in range(n)],
-            "cy": [float(40 + 80 * (i // 6)) for i in range(n)],
-            "rects": [[x0 + 80 * (i % 6), 40 + 80 * (i // 6), 56, 56]
+            "cx": [float(x0 + 80 * (i % 3)) for i in range(n)],
+            "cy": [float(40 + 80 * (i // 3)) for i in range(n)],
+            "rects": [[x0 + 80 * (i % 3), 40 + 80 * (i // 3), 56, 56]
                       for i in range(n)],
             "boxes": list(range(n))}})
     return uc.chart_series(notes, "value")
@@ -443,6 +456,10 @@ class ChartSettingsDialog(QDialog):
         self._row(grid, 5, "whiskers", "Whiskers on the box plot",
                   box, QCheckBox("", box))
         self._row(grid, 6, "percent", "Histogram in %",
+                  box, QCheckBox("", box))
+        self._row(grid, 7, "equal_cells", "Heat map: every cell the same size",
+                  box, QCheckBox("", box))
+        self._row(grid, 8, "map_values", "Heat map: print the value in each cell",
                   box, QCheckBox("", box))
         box.layout().addLayout(grid)
         return box

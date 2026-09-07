@@ -267,3 +267,102 @@ def test_the_boxplot_page_still_draws_its_own_charts():
         [{"title": "score", "series": [{"name": "a", "values": [1.0, 2.0, 3.0]}]}],
         "Batch")
     assert "<svg" in page and "score" in page
+
+
+# --------------------------------------------------------------------------- #
+# 格子版（PEAR 的 `equal cells`，F87 第八刀）
+# --------------------------------------------------------------------------- #
+def test_the_heat_map_is_a_plain_grid_by_default(grid):
+    """使用者 2026-09-07：「他就是示意圖，但目前顯示上會怪怪的 那個 heatmap
+    框大小」→「heatmap 裡面的 equal cell（像 pear 那樣）」。
+
+    照實鋪的每一格畫到與鄰居的中線為止 —— 間距不平均、或少了一格，相鄰兩格
+    的**面積就明顯不一樣**，而**面積不是這張圖在量的東西**。PEAR 的
+    `equal cells` 預設就是開的（`_paint_map_grid` 的 docstring 寫著理由：
+    「那才是一張 die map 該有的樣子」）。
+    """
+    from d4t.core.pipeline import chart_style
+
+    assert chart_style.DEFAULTS["equal_cells"] is True, "預設就該是格子版"
+    s = uc.chart_series([grid])
+    xc, yc, slots, (lo, hi) = uc.heat_lattice(s)
+    assert len(slots) == len(s["groups"][0]["values"])
+    assert xc and yc
+    # 每一格都落在一個槽位上，而槽位的範圍就是欄數／列數
+    for i, j, colour, _v in slots:
+        assert 0 <= i < len(xc) and 0 <= j < len(yc)
+        assert colour.startswith("#")
+    assert hi >= lo
+
+
+def test_the_grid_fills_the_plot_box_and_the_true_one_does_not(grid):
+    """格子版**刻意不保長寬比**（它是示意圖）；照實鋪的那一版保。
+
+    一開始只有照實鋪那一版，而它等比例置中 —— 於是一片寬扁的框陣列在圖上
+    只佔中間一條，兩邊全是空白。使用者說「不用跟影像一樣大或比例一樣沒關係」。
+    """
+    s = uc.chart_series([grid])
+    wide = uc.build_chart_svg(s, uc.CHART_MAP, {"equal_cells": True}, 640, 300)
+    tall = uc.build_chart_svg(s, uc.CHART_MAP, {"equal_cells": True}, 300, 640)
+    # 格子版：圖區就是 padding 之後剩下的那一塊，兩種尺寸下都鋪滿
+    assert wide != tall
+    for svg, w, h in ((wide, 640, 300), (tall, 300, 640)):
+        assert "viewBox='0 0 %d %d'" % (w, h) in svg
+
+
+def test_turning_equal_cells_off_goes_back_to_true_to_scale(grid):
+    """要看真實的空間關係時退得回去 —— 兩種鋪法畫出來不一樣。"""
+    s = uc.chart_series([grid])
+    a = uc.build_chart_svg(s, uc.CHART_MAP, {"equal_cells": True})
+    b = uc.build_chart_svg(s, uc.CHART_MAP, {"equal_cells": False})
+    assert a != b
+
+
+def test_the_grid_ticks_label_the_position_each_slot_stands_for(grid):
+    """槽位不是線性軸（欄距被拉成一樣寬了），刻度標的是那一欄自己的座標。"""
+    s = uc.chart_series([grid])
+    svg = uc.build_chart_svg(s, uc.CHART_MAP,
+                             {"equal_cells": True, "xticks": 5}, 640, 420)
+    cx = s["groups"][0]["cx"]
+    first = uc._fmt(min(cx))
+    assert ">%s<" % first in svg, "第一欄的位置要出現在軸上"
+
+
+def test_the_value_can_be_printed_in_each_cell_both_ways(grid):
+    """`map_values` 兩種鋪法**一字不差** —— 一種印一種不印的話，那一格會
+    變成「有時候有反應」。"""
+    s = uc.chart_series([grid])
+    for equal in (True, False):
+        base = {"equal_cells": equal}
+        off = uc.build_chart_svg(s, uc.CHART_MAP, base, 720, 460)
+        on = uc.build_chart_svg(s, uc.CHART_MAP,
+                                dict(base, map_values=True), 720, 460)
+        assert on != off, equal
+
+
+def test_a_cell_too_small_for_the_number_prints_nothing(grid):
+    """**印一半的數字比不印糟。** 放不下就不印（PEAR 同款的守則）。"""
+    s = uc.chart_series([grid])
+    tiny = uc.build_chart_svg(s, uc.CHART_MAP,
+                              {"equal_cells": True, "map_values": True},
+                              uc.MIN_WIDTH, uc.MIN_HEIGHT)
+    big = uc.build_chart_svg(s, uc.CHART_MAP,
+                             {"equal_cells": True, "map_values": True},
+                             900, 560)
+    assert tiny.count("<text") < big.count("<text")
+
+
+def test_the_heat_painted_on_the_image_is_always_true_to_scale():
+    """⚠ **疊在影像上的那一層不受 `equal_cells` 影響。**
+
+    它畫在影像上，位置要對得起那張圖 —— 拉成格子的話顏色會落在錯的地方，
+    而畫面上看起來完全正常。那正是這個 repo 最貴的那種 bug。
+    """
+    import inspect as _inspect
+
+    import d4t.core.steps  # noqa: F401
+    from d4t.core.pipeline import get_step
+
+    src = _inspect.getsource(get_step("output_uniformity").overlay_heat)
+    assert "heat_tiles(" in src
+    assert "heat_lattice(" not in src
