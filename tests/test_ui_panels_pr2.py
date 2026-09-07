@@ -131,17 +131,18 @@ def _unif_meta(n=24, metric="glv_mean"):
             "boxes": list(range(n))}}]}
 
 
-def test_the_uniformity_preview_lists_the_files_and_draws_the_charts(qapp):
-    """**畫面上看到的就是會寫出去的那一張** —— 同一支 `chart_series`、
-    同一支 `build_chart_svg`、同一組 style。
+def test_the_uniformity_preview_lists_the_files_and_the_numbers(qapp):
+    """F87：這個面板是**清單 ＋ 這一顆的數字 ＋ 一顆開圖的鈕**，不是圖。
 
-    這一條守的是計畫書風險表的第一行（「兩份繪圖程式碼漂掉」）：F85 動手時
-    發現 QtSvg 就裝在 PySide6 裡，所以那兩份收成了一份，而這裡問的是
-    **它真的還是一份**。
+    圖搬去自己的視窗了（使用者 2026-09-07：「右側 Uniformity folder 直接把
+    預覽的圖放上來好像也很奇怪」）。留下的那張小表要跟報告頁上那一張同源 ——
+    `summary_rows` 只有一支，而數字**從 features 來，不重算**。
     """
     insp = insp_mod.UniformityPreviewInspector()
     insp.set_context("out", params={"folder": "/tmp/x", "metric": "glv_mean",
                                     "charts": "box,histogram,profile,map"},
+                     result={"features": {"cells_glv_mean_cv_pct": 1.83,
+                                          "cells_glv_mean_slope_x": 0.42}},
                      meta=_unif_meta())
     names = [f["name"] for f in insp.plan()]
     assert any(n.endswith(".html") for n in names)
@@ -149,7 +150,40 @@ def test_the_uniformity_preview_lists_the_files_and_draws_the_charts(qapp):
     assert insp.charts() == ["box", "histogram", "profile", "map"]
     assert len(insp.series()["groups"]) == 1
     assert "24 box(es)" in insp.summary()
+    rows = insp.rows()
+    assert len(rows) == 1 and rows[0]["boxes"] == 24
+    assert rows[0]["cells"]["cv_pct"] == 1.83, \
+        "數字要從 features 讀 —— 重算的那一份會跟 CSV 上的分岔"
+    assert "range_pct" not in rows[0]["cells"], \
+        "沒寫出來的統計量要留白，不要生一個替身"
+    assert insp.can_preview() is True
     _paint(insp, 680, 520)          # 畫一次不准炸
+
+
+def test_the_uniformity_button_is_dead_when_there_is_nothing_to_show(qapp):
+    """**沒東西的鈕不該按得下去**（推廣鐵則：按了撞牆比沒有那顆鈕更糟）。"""
+    insp = insp_mod.UniformityPreviewInspector()
+    insp.set_context("out", params={"folder": "/tmp/x", "charts": ""},
+                     meta=_unif_meta())
+    assert insp.can_preview() is False, "一張圖都沒勾"
+    insp.set_context("out", params={"folder": "/tmp/x", "charts": "box"},
+                     meta={"glv_hist": [{"region": "cells", "spread": None}]})
+    assert insp.can_preview() is False, "沒有逐框數字"
+    insp.set_context("out", params={"folder": "/tmp/x", "charts": "box"},
+                     meta=_unif_meta())
+    assert insp.can_preview() is True
+
+
+def test_the_uniformity_panel_no_longer_draws_the_charts_itself(qapp):
+    """圖只剩**一個**畫的地方（`ui/uniformity_window`）。
+
+    這一條是反向的：把圖搬走之後，面板上不准偷偷留一份 —— 兩份繪圖程式碼
+    正是 F85 計畫書風險表的第一行，而它們漂掉的那天兩張都畫得出來。
+    """
+    import inspect as _inspect
+    src = _inspect.getsource(insp_mod.UniformityPreviewInspector)
+    assert "build_chart_svg" not in src
+    assert "QSvgRenderer" not in src
 
 
 def test_the_uniformity_preview_says_why_there_is_nothing_to_draw(qapp):

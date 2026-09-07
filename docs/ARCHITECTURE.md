@@ -266,7 +266,11 @@ d4t/
 │   │   ├── engine.py batch.py cache.py  #   單顆執行／ProcessPool 批次／影像段 checkpoint 快取
 │   │   ├── channels.py       #   這一顆的第幾張圖 → 叫什麼流名
 │   │   ├── cellrois.py       #   標在 Golden Cell 上的具名區域（一個名字、好幾個矩形）
-│   │   └── curve.py          #   tone curve 控制點的字串編碼（parse／format）
+│   │   ├── curve.py          #   tone curve 控制點的字串編碼（parse／format）
+│   │   └── chart_style.py    #   圖表長什麼樣 —— **一格參數裝得下的一整組設定**（F87）
+│   │                         #     同 `curve` 的形狀：複雜的值裝一格，配一個專屬
+│   │                         #     編輯器。⚠ 它**不認識任何一張圖的名字**（那會讓
+│   │                         #     `pipeline/` 反過來依賴 `export/`）
 │   ├── steps/                # 步驟卡片 —— **註冊 19 張，卡片庫可見 18 張**（`align` 收起來）
 │   │                         #   ⚠ 卡片庫由上而下的順序 ＝ `__init__.py` 的 import 順序
 │   │   ├── load.py           #   load_patch／load_single（**一種 source 一張卡**）
@@ -303,6 +307,11 @@ d4t/
     ├── gallery.py region_check.py      #   縮圖網格（虛擬捲動，撐 10k+）／區域畫在很多顆上
     ├── inspectors.py         #   每張卡自己的儀表（依 `Step.key` 註冊）
     ├── template_dialog.py    #   從大圖疊 Golden Cell 模板（模板存進 recipe）
+    ├── uniformity_window.py  #   均勻度那四張圖**自己的視窗**（F87）—— 儀表太窄讀不動
+    │                         #     ⚠ 這裡不畫圖：`core/export` 產的 SVG 交給 QSvgRenderer，
+    │                         #     畫面上跟寫出去的逐位元組相同
+    ├── chart_settings.py     #   上面那顆 `Chart settings…`：一列一個東西、屬性橫著擺
+    │                         #     （列怎麼分住在 `chart_style.ROWS`，不在這裡）
     ├── gc_generator.py gc_paint.py  #   **反過來**：貼一張 GC 進來，鋪成整批擬真
     │                         #     資料（F60）＋ 在那一張上畫出「缺陷可能在哪」
     │                         #     （F61 —— 畫一個週期＝畫每一個重複）

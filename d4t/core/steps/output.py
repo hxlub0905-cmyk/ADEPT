@@ -1539,6 +1539,11 @@ class OutputUniformityStep(_OutputStep):
             choice_labels={export_unif.AXIS_X: "Left to right",
                            export_unif.AXIS_Y: "Top to bottom"},
             label="Profile along",
+            # **沒勾那張圖就別問這件事**（F87）。`param_visible` 對逗號清單
+            # 做的是**成員比對**（F37），所以一條普通的 `show_when` 就夠了 ——
+            # 這一格的第一版把它攤在那裡，而它對只勾了盒鬚圖的人是一個
+            # 「答了也沒用」的問題（推廣鐵則）。
+            show_when=("charts", (export_unif.CHART_PROFILE,)),
             choice_help={
                 export_unif.AXIS_X: "Plot against the box's X, to see a tilt "
                                     "from one side of the image to the other.",
