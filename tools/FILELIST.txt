@@ -137,7 +137,7 @@ cd9b6800b5941de35efed2464b7c0a0db05e4a49 docs/plans/F79-grid-tells-the-truth.md
 3fdf5c58d00f59984d59c705c9d1516967c66766 docs/plans/F80-focus-visible-and-motion.md
 66963820c4b69d360394697ecd9d3ab2a8f2a46d docs/plans/F81-flat-for-real.md
 5f93bd942e201992944b1ba7359ffde449b14bbb docs/plans/F82-drag-magnet.md
-51f723dfc39ded2b58a2e08558a2ab67d82f19b3 docs/plans/F85-uniformity.md
+117d9f0de8517492b81564cc33a3123342c4f218 docs/plans/F85-uniformity.md
 81236a2c24b1a65f3021e5f578777644484fa874 fab_probe/README.md
 de08d63cbd4c1415acb2e0737c5b99db6ff57d54 fab_probe/probe_klarf.py
 368cc8e63736446813cc47ccc1fcc49b11abeec6 fab_probe/probe_stats.py
