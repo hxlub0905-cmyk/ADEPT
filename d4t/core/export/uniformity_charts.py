@@ -71,6 +71,25 @@ CHART_LABELS: Dict[str, str] = {
     CHART_MAP: "Heat map",
 }
 
+#: 每張圖**用得到**哪幾格「自己的字」（`chart_style.PER_CHART_KEYS` 的子集）。
+#:
+#: ⚠ 盒鬚圖的 X 軸是**類別**（一個區域一格），「橫著要幾個刻度」在那裡沒有
+#: 意思 —— 而 CLAUDE.md 的規矩是**不適用的收起來，不要攤在那裡讓使用者猜**。
+#: 一格答了也沒用的設定比沒有那一格更糟（推廣鐵則）。
+#:
+#: 這張表住在這裡而不是 `pipeline/chart_style`：它講的是「這種圖長什麼樣」，
+#: 而 `chart_style` **刻意不認識任何一張圖的名字**（認識的話 `pipeline/` 就
+#: 開始依賴 `export/`，方向是反的）。
+PER_CHART_APPLIES: Dict[str, Tuple[str, ...]] = {
+    CHART_BOX: ("title", "xlabel", "ylabel", "yticks"),
+    CHART_HIST: ("title", "xlabel", "ylabel", "xticks", "yticks"),
+    CHART_PROFILE: ("title", "xlabel", "ylabel", "xticks", "yticks"),
+    # 熱圖兩軸都是**影像上的位置**：沒有刻度數字（色條才是那張圖的尺），
+    # 也沒有軸名（「X (px)」對讀圖的人不是一句話，底下那一行
+    # `區域 - 統計量` 才是）。所以它只剩標題。
+    CHART_MAP: ("title",),
+}
+
 #: `profile` 沿哪一個軸。
 AXIS_X, AXIS_Y = "x", "y"
 AXES: Tuple[str, ...] = (AXIS_X, AXIS_Y)

@@ -158,7 +158,12 @@ def test_every_setting_has_a_home_on_the_page(qapp):
     dlg = ChartSettingsDialog("", list(uc.CHARTS))
     assert set(dlg.globals) == set(cs.GLOBAL_KEYS)
     for kind in uc.CHARTS:
-        assert set(dlg.per[kind]) == set(cs.PER_CHART_KEYS)
+        # 每張圖只放**用得到的**那幾格（`PER_CHART_APPLIES`）—— 盒鬚圖的 X 軸
+        # 是類別，「橫著幾個刻度」在那裡沒有意思，攤在那裡只是讓人猜。
+        assert set(dlg.per[kind]) == set(uc.PER_CHART_APPLIES[kind])
+    # 而**每一格至少有一張圖用得到**（不然那是一格沒有家的設定）
+    covered = set().union(*(set(v) for v in uc.PER_CHART_APPLIES.values()))
+    assert covered == set(cs.PER_CHART_KEYS)
 
 
 def test_the_bounds_come_from_core_not_from_a_copy(qapp):
@@ -212,12 +217,12 @@ def test_the_per_chart_tick_count_can_say_follow_the_others(qapp):
     """每張圖的刻度數要能說「跟大家一樣」—— 一個看起來像 1 的數字答不出
     「這是沒設定，還是真的設成 1」。"""
     dlg = ChartSettingsDialog("", ["box"])
-    w = dlg.per["box"]["xticks"]
+    w = dlg.per["box"]["yticks"]
     assert w.value() == w.minimum()
     assert w.specialValueText()
     assert dlg.value() == ""
     w.setValue(9)
-    assert cs.parse_style(dlg.value())["box.xticks"] == 9
+    assert cs.parse_style(dlg.value())["box.yticks"] == 9
 
 
 def test_a_broken_style_string_opens_on_the_defaults(qapp):
@@ -456,3 +461,161 @@ def test_an_empty_charts_box_still_opens_on_all_four(qapp):
     form.set_step(get_step("output_uniformity").describe(),
                   {"folder": "out", "charts": ""}, [], [])
     assert form._chart_kinds() == list(uc.CHARTS)
+
+
+# --------------------------------------------------------------------------- #
+# 即時預覽（F87 第七刀）
+# --------------------------------------------------------------------------- #
+def test_the_editor_previews_every_chart_it_offers(qapp):
+    """使用者 2026-09-07：「Chart setting 我是希望能支援即時 preview」。"""
+    dlg = ChartSettingsDialog("", list(uc.CHARTS))
+    assert sorted(dlg.views) == sorted(uc.CHARTS)
+    for kind, view in dlg.views.items():
+        assert view.svg(), kind
+
+
+def test_every_editor_moves_the_preview(qapp):
+    """**每一格都要有反應。**
+
+    漏接一種 widget 的下場是那一格「調了沒反應」—— 比沒有預覽更糟，因為使用者
+    會以為那個設定壞了。所以逐格動一下，然後問四張圖有沒有變。
+    ⚠ 有些格子只影響某一張（`bins` 只影響直方圖、`whiskers` 只影響盒鬚圖），
+    所以問的是「**至少一張**變了」。
+    """
+    from PySide6.QtWidgets import QCheckBox, QDoubleSpinBox, QLineEdit, QSpinBox
+
+    from d4t.ui.chart_settings import ColourButton
+
+    dlg = ChartSettingsDialog("", list(uc.CHARTS))
+    editors = list(dlg.globals.items()) + [
+        ("%s.%s" % (k, n), w)
+        for k, f in dlg.per.items() for n, w in f.items()]
+    # ⚠ `lock` **一格自己不算數**，而那是它的定義：`chart_style.style_for`
+    # 只在 `hi > lo` 時才鎖，兩格都是 0（預設）就是 auto。面板上也是這樣
+    # 帶的（關著的時候 Bottom/Top 是灰的）。所以先給它一段真的範圍。
+    dlg.globals["lo"].setValue(100.0)
+    dlg.globals["hi"].setValue(140.0)
+    qapp.processEvents()
+
+    for name, w in editors:
+        before = {k: v.svg() for k, v in dlg.views.items()}
+        if isinstance(w, ColourButton):
+            w.set_value("#123456")
+        elif isinstance(w, QCheckBox):
+            w.setChecked(not w.isChecked())
+        elif isinstance(w, QLineEdit):
+            # ⚠ **每一格一個不同的字**：全都填 "moved" 的話，`value_name` 會
+            # 先把直方圖的 X 軸變成 "moved"，接著 `histogram.xlabel` 也填
+            # "moved" —— 圖當然沒變，而那是「值一樣」不是「沒接上」。
+            w.setText("moved-%s" % name)
+        elif "." in name and isinstance(w, QSpinBox):
+            # ⚠ 每張圖自己的刻度數要給一個**跟全域不一樣**的值：上面那一輪已經
+            # 把全域的 `xticks`/`yticks` 拉到 20，再覆寫成 20 是 no-op，而那
+            # 是「值一樣」，不是「這一格沒接上」。
+            w.setValue(w.minimum() + 3)
+        elif name in ("lo", "hi"):
+            # ⚠ 這兩格**不能用極值試**：`lo` 拉到 1e9 之後 `hi` 再拉到 1e9，
+            # 兩次都是「上界沒有高過下界」→ 兩次都不鎖 → 圖都沒變，而那是
+            # 這兩格的定義，不是它們沒接上。給一段真的範圍才問得出來。
+            w.setValue(120.0 if name == "lo" else 200.0)
+        elif isinstance(w, (QSpinBox, QDoubleSpinBox)):
+            lo, hi = w.minimum(), w.maximum()
+            w.setValue(hi if w.value() != hi else lo)
+        else:
+            raise AssertionError("unknown editor for %s: %r" % (name, w))
+        qapp.processEvents()
+        after = {k: v.svg() for k, v in dlg.views.items()}
+        assert any(after[k] != before[k] for k in before), name
+
+
+def test_a_half_typed_value_does_not_break_the_preview(qapp):
+    """使用者正在打字，中途一定會經過打不完的狀態 —— 不准擋路。"""
+    dlg = ChartSettingsDialog("", ["box"])
+    dlg.globals["value_name"].setText("Gray")
+    qapp.processEvents()
+    assert dlg.views["box"].svg()
+    dlg.globals["tick_color"].set_value("#nothex")   # 繞過 UI 灌一個壞值
+    qapp.processEvents()
+    assert dlg.views["box"].svg(), "壞值只該讓預覽停住，不該炸"
+
+
+def test_the_preview_says_when_it_is_sample_data(qapp):
+    """沒有資料時預覽用樣本 —— 而**那件事要說出來**，不然他會以為那是他的圖。"""
+    dlg = ChartSettingsDialog("", ["box"])
+    assert dlg._is_sample is True
+    from PySide6.QtWidgets import QLabel
+
+    hints = [w.text() for w in dlg.findChildren(QLabel)
+             if "sample data" in w.text()]
+    assert hints, "沒有那一句提醒"
+
+
+def test_real_data_replaces_the_sample(qapp):
+    dlg = ChartSettingsDialog("", ["box"], series=_series())
+    assert dlg._is_sample is False
+    assert dlg._series["metric"] == "glv_mean"
+    dlg.set_series(None)
+    assert dlg._is_sample is True
+
+
+def test_the_window_hands_its_own_data_to_the_editor(qapp):
+    """調外觀最有用的是**用自己的資料看** —— 視窗要把手上那一顆帶進去。"""
+    import inspect as _inspect
+
+    from d4t.ui.uniformity_window import UniformityWindow
+
+    src = _inspect.getsource(UniformityWindow.open_settings)
+    assert "series=self._series" in src
+
+
+def test_the_card_row_can_be_fed_a_series(qapp):
+    """`Chart look` 那一列同理（Studio 從儀表餵）。"""
+    from d4t.core.pipeline import get_step
+    from d4t.ui.widgets import ParamForm
+
+    form = ParamForm()
+    form.set_step(get_step("output_uniformity").describe(),
+                  {"folder": "out", "charts": "box"}, [], [])
+    form.set_chart_series(_series())
+    assert form._rows["look"].editor._series["metric"] == "glv_mean"
+
+
+# --------------------------------------------------------------------------- #
+# 暗色主題（F87 第七刀）
+# --------------------------------------------------------------------------- #
+def test_all_four_charts_carry_their_own_white_background(qapp):
+    """使用者 2026-09-07：「暗色模式下 preview chart box plot 的表示會跟其他
+    人不一樣」。
+
+    以前盒鬚圖沒有底：在報表的白色頁面上看不出來，但圖的視窗用主題色當底 ——
+    暗色主題下那張圖是**透明**的，深灰的字落在近黑的底上幾乎看不見，而旁邊
+    三張都是白卡片。
+
+    補的是**底**不是主題：這四張會被寫進 HTML、貼進投影片，那些地方是白的。
+    """
+    s = _series()
+    for kind in uc.CHARTS:
+        svg = uc.build_chart_svg(s, kind, {})
+        assert "fill='#fff'" in svg or 'fill="#fff"' in svg, kind
+
+
+def test_the_preview_uses_the_same_style_resolver_as_the_file(qapp):
+    """**預覽只能有一條路** —— `uniformity_window.chart_style_for`。
+
+    這一條是踩出來的：第一版的預覽直接叫 `chart_style.style_for`，少了住在
+    卡片上的那一半（這張圖預設叫什麼、「值那一軸」的名字落在哪一軸）。症狀是
+    改 `Name of the value axis` 那一格**畫面完全沒有反應**，而它在寫出去的
+    檔案裡是有作用的 —— 「預覽跟輸出不一樣」正是這整個功能最貴的那種 bug。
+    抓到它的是 `test_every_editor_moves_the_preview`。
+    """
+    import inspect as _inspect
+
+    from d4t.ui.chart_settings import ChartSettingsDialog as _D
+
+    src = _inspect.getsource(_D.refresh_preview)
+    assert "chart_style_for(" in src
+    assert "cs.style_for(" not in src
+
+    # 而它真的把 value_name 帶到那一軸上（不是只有呼叫得到）
+    dlg = ChartSettingsDialog('{"value_name":"Gray level"}', ["histogram"])
+    assert "Gray level" in dlg.views["histogram"].svg()

@@ -5090,6 +5090,10 @@ class StudioWindow(QMainWindow):
         # 圖的視窗開著就跟著這一顆走 —— 換一顆 defect 而視窗停在上一顆的
         # 數字，是最難發現的那一種說謊（兩張圖都畫得出來）。
         self._refresh_charts_window(insp)
+        # `Chart look` 那一列的編輯器，預覽要畫**這一顆**（不是樣本）。
+        # 同 `set_histogram` 的先例：數字只有引擎那一份，UI 不再算一次。
+        self.param_form.set_chart_series(
+            insp.series() if hasattr(insp, "series") else None)
         # 分頁鈕的字由**儀表現在畫的東西**決定（使用者 2026-08-21：「title 要
         # 更詳細一點」）。放不下的那半句進 tooltip。
         if hasattr(insp, "tab_title"):

@@ -4568,6 +4568,17 @@ class ParamForm(QWidget):
         if gamma is not None and not gamma.has_error():
             gamma.set_dimmed(active, "Not used while a custom curve is drawn.")
 
+    def set_chart_series(self, series: Optional[Dict[str, Any]]) -> None:
+        """把目前這一顆的均勻度資料交給 `chart_style` 那一列（F87 第七刀）。
+
+        先例是 :meth:`set_histogram` —— 曲線欄位後面墊的那條分布也是這樣從
+        引擎那一份餵過來的。**UI 不自己再算一份**：畫面上的預覽跟真的跑出來
+        的不一樣，比沒有那個預覽更糟。
+        """
+        for row in self._rows.values():
+            if isinstance(row.editor, ChartStyleField):
+                row.editor.set_series(series)
+
     def _chart_kinds(self) -> List[str]:
         """`chart_style` 的編輯器要開哪幾個分頁 —— **這張卡勾了哪幾張圖**。
 
@@ -5490,6 +5501,7 @@ class ChartStyleField(QWidget):
         super().__init__(parent)
         self._text = ""
         self._kinds = [str(k) for k in (kinds or [])]
+        self._series: Dict[str, Any] = {}
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
@@ -5518,6 +5530,17 @@ class ChartStyleField(QWidget):
             said = "not readable - press the button to start over"
         self.summary.setText(said)
 
+    def set_series(self, series: Optional[Dict[str, Any]]) -> None:
+        """編輯器裡的預覽要畫哪一顆（Studio 餵目前選著的那一顆）。
+
+        沒有的時候編輯器會退到樣本資料 —— 調外觀不必先跑完一批，但**用自己
+        的資料看**是最有用的那一種，所以有就給。
+        """
+        self._series = dict(series or {})
+        dlg = getattr(self, "_dialog", None)
+        if dlg is not None and dlg.isVisible():
+            dlg.set_series(self._series)
+
     def set_charts(self, kinds: Optional[Sequence[str]]) -> None:
         """對話框右半要開哪幾個分頁 —— **就是這張卡勾了哪幾張圖**。
 
@@ -5528,12 +5551,17 @@ class ChartStyleField(QWidget):
     def open_dialog(self) -> None:
         from .chart_settings import ChartSettingsDialog
 
-        dlg = ChartSettingsDialog(self._text, self._kinds or None, self)
-        if dlg.exec():
-            got = dlg.value()
-            if got != self._text:
-                self.set_text(got)
-                self.style_changed.emit(got)
+        dlg = ChartSettingsDialog(self._text, self._kinds or None, self,
+                                  series=self._series)
+        self._dialog = dlg
+        try:
+            if dlg.exec():
+                got = dlg.value()
+                if got != self._text:
+                    self.set_text(got)
+                    self.style_changed.emit(got)
+        finally:
+            self._dialog = None
 
 
 class CurveDialog(QDialog):
