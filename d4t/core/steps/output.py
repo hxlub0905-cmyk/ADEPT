@@ -1595,13 +1595,14 @@ class OutputUniformityStep(_OutputStep):
         ),
         ParamSpec(
             name="spec", type="chart_spec", default="",
-            label="Scatter: what goes where",
+            label="Your own chart: what goes where",
             # 同 `axis` 的理由（F87）：沒勾那張圖就別問這件事。
-            show_when=("charts", (export_unif.CHART_SCATTER,)),
-            help=("Which measured number runs across the bottom, which one "
-                  "runs up the side, and what the colour and marker size "
-                  "mean. Press \u201cChart\u2026\u201d beside this row to "
-                  "pick them. It only changes the scatter chart."),
+            show_when=("charts", (export_unif.CHART_CUSTOM,)),
+            help=("The one chart you build yourself: which measured number "
+                  "runs across the bottom, which one runs up the side, what "
+                  "the colour and marker size mean - and whether it is drawn "
+                  "as dots, a line or bars. Press \u201cChart\u2026\u201d "
+                  "beside this row to pick them. It changes that chart only."),
         ),
         ParamSpec(
             name="boxes_csv", type="bool", default=False,
@@ -1687,8 +1688,8 @@ class OutputUniformityStep(_OutputStep):
             # 不要等跑完一批。
             out.append("No charts are ticked, so this card would write empty "
                        "pages. Tick at least one under “Which charts”.")
-        if export_unif.CHART_SCATTER in kinds:
-            # 散佈圖是唯一一張**兩條軸都要使用者自己挑**的圖，所以它是唯一
+        if export_unif.CHART_CUSTOM in kinds:
+            # 這是唯一一張**兩條軸都要使用者自己挑**的圖，所以它是唯一
             # 一張「勾了卻畫不出來」畫得出來的圖。講在畫布上，不要等跑完一批
             # 才發現那個檔案裡是一句「pick x and y」（同上面那條的理由）。
             try:
@@ -1697,10 +1698,10 @@ class OutputUniformityStep(_OutputStep):
                 need = []
             if need:
                 out.append(
-                    "The scatter chart has no %s yet, so it would be drawn "
-                    "empty. Press “Chart…” beside "
-                    "“Scatter: what goes where” to pick which "
-                    "number goes on each side."
+                    "“Your own chart” has no %s yet, so it would "
+                    "be drawn empty. Press “Chart…” beside "
+                    "“Your own chart: what goes where” to pick "
+                    "which number goes on each side."
                     % " or ".join(need))
         return out
 
@@ -1853,11 +1854,11 @@ class OutputUniformityStep(_OutputStep):
             # 前綴是給疊圖用的，而這幾張是圖表 —— 借它等於讓檔名說一件錯的事。
             # 要的只有消毒那一半。
             stem = overlay.safe_stem(did)
-            # 散佈圖吃的是**長表**（一列一格框），不是 series —— 兩條軸是
-            # 使用者自己挑的欄。⚠ 只在真的要畫的時候建：`build_frame` 要走
-            # 一遍所有區域的所有框，而沒勾散佈圖也沒勾表的人不該付那個錢。
+            # 自己配的那一張吃的是**長表**（一列一格框），不是 series ——
+            # 兩條軸是使用者自己挑的欄。⚠ 只在真的要畫的時候建：`build_frame`
+            # 要走一遍所有區域的所有框，而兩個都沒勾的人不該付那個錢。
             frame = None
-            if export_unif.CHART_SCATTER in kinds or bool(p["boxes_csv"]):
+            if export_unif.CHART_CUSTOM in kinds or bool(p["boxes_csv"]):
                 frame = export_frame.build_frame(notes)
             try:
                 charts = []

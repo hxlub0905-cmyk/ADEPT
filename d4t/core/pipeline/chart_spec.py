@@ -37,7 +37,8 @@ import json
 from typing import Any, Dict, List, Tuple
 
 __all__ = [
-    "ChartSpecError", "MARKS", "ROLES", "ROLE_HELP", "REQUIRED",
+    "ChartSpecError", "MARKS", "MARK_HELP", "MARK_LABELS",
+    "ROLES", "ROLE_HELP", "REQUIRED",
     "parse_spec", "format_spec", "describe",
 ]
 
@@ -49,7 +50,24 @@ class ChartSpecError(ValueError):
 #: 記號。**封閉字彙** —— 加一種要同時在 `export.chart_draw` 有人畫它，
 #: 而那件事有測試對著（少一支的症狀是那張圖畫不出來而畫面上不說為什麼）。
 MARK_POINT = "point"
-MARKS: Tuple[str, ...] = (MARK_POINT,)
+MARK_LINE = "line"
+MARK_BAR = "bar"
+MARKS: Tuple[str, ...] = (MARK_POINT, MARK_LINE, MARK_BAR)
+
+#: 每一種記號一句白話（編輯器上那一排膠囊的 tooltip）。
+MARK_HELP: Dict[str, str] = {
+    MARK_POINT: "A dot per box. Use it to see whether two numbers move "
+                "together.",
+    MARK_LINE: "A line through the boxes, in order of the bottom axis. Use it "
+               "when the bottom axis has an order - position, row, column.",
+    MARK_BAR: "A bar per box. Use it when the bottom axis is a name rather "
+              "than a number, and you are comparing heights.",
+}
+
+#: 每一種記號畫面上叫什麼（`MARK_LINE` 這個鍵不是給人看的字）。
+MARK_LABELS: Dict[str, str] = {
+    MARK_POINT: "Dots", MARK_LINE: "Line", MARK_BAR: "Bars",
+}
 
 #: 角色。順序就是編輯器上由上而下的順序。
 ROLE_X, ROLE_Y = "x", "y"
@@ -71,12 +89,19 @@ ROLE_HELP: Dict[str, str] = {
 #: 每一種記號**非有不可**的角色。
 REQUIRED: Dict[str, Tuple[str, ...]] = {
     MARK_POINT: (ROLE_X, ROLE_Y),
+    MARK_LINE: (ROLE_X, ROLE_Y),
+    MARK_BAR: (ROLE_X, ROLE_Y),
 }
 
 #: 每一種記號**用得到**的角色（沒列的收起來 —— 一格答了也沒用的設定比沒有
 #: 那一格更糟，同 `export.GLOBAL_APPLIES` 那條規矩）。
+#:
+#: ⚠ **只有點用得到「大小」。** 一條線沒有大小，而一根長條的寬度是版面決定
+#: 的、不是資料 —— 把值綁到寬度上等於畫出一張面積說謊的圖。
 USES: Dict[str, Tuple[str, ...]] = {
     MARK_POINT: (ROLE_X, ROLE_Y, ROLE_COLOR, ROLE_SIZE),
+    MARK_LINE: (ROLE_X, ROLE_Y, ROLE_COLOR),
+    MARK_BAR: (ROLE_X, ROLE_Y, ROLE_COLOR),
 }
 
 #: 空的 spec（還沒設定）。
@@ -137,7 +162,11 @@ def format_spec(spec: object) -> str:
     clean = {"mark": d["mark"]}
     for role in ROLES:
         got = str(d.get(role) or "")
-        if got:
+        # ⚠ **這一種記號用不到的角色不寫出去。** 一份折線圖的 spec 帶著一個
+        # `size` 的話，換回散點時它會**突然生效**，而使用者不記得設過。
+        # 規則住在這裡而不是編輯器：編輯器只是其中一個呼叫端，而手寫的
+        # recipe 走的是 `validate_params`（它叫的正是這一支）。
+        if got and role in USES.get(str(d["mark"]), ()):
             clean[role] = got
     return json.dumps(clean, sort_keys=True, separators=(",", ":"),
                       ensure_ascii=False)
@@ -165,7 +194,8 @@ def describe(spec: object) -> str:
     need = missing_roles(d)
     if need:
         return "not set up yet - pick %s" % " and ".join(need)
-    bits = ["%s / %s" % (d[ROLE_Y], d[ROLE_X])]
+    bits = ["%s, %s / %s" % (MARK_LABELS.get(d["mark"], d["mark"]),
+                             d[ROLE_Y], d[ROLE_X])]
     if d.get(ROLE_COLOR):
         bits.append("coloured by %s" % d[ROLE_COLOR])
     if d.get(ROLE_SIZE):

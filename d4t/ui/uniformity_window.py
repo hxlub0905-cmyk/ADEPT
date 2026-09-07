@@ -125,7 +125,7 @@ class ChartView(QWidget):
             # 長表配著一個空的 `groups` 是正常的（只有一格框、或走 pooled）。
             # 拿這一條擋它的話，畫面上是一句「no boxes to plot」而檔案裡
             # 有圖，兩邊說的話不一樣。
-            if self.kind != uc.CHART_SCATTER and not (
+            if self.kind != uc.CHART_CUSTOM and not (
                     self._series.get("groups") or []):
                 p.setPen(QColor(TOKENS["text_secondary"]))
                 p.drawText(QRectF(self.rect()), int(Qt.AlignCenter),

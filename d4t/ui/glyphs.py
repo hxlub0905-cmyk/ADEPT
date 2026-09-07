@@ -89,6 +89,8 @@ CHIP_ICONS = (
     "cells_plain", "cells_values",        # 熱圖每一格印不印值
     "range_auto", "range_locked",         # 數值範圍自己挑還是鎖死
     "ramp_mono", "ramp_rainbow",          # 顏色代表大小時走單色階還是彩虹
+    # Graph builder（F88 第三刀）：**這張圖用哪一種記號**。
+    "mark_dots", "mark_line", "mark_bars",
 )
 
 #: 「原本就在那裡的東西」的透明度。跟 `widgets._draw_profile_glyph` 同一個值
@@ -823,6 +825,30 @@ def _cell_values(g: _Pad, values: bool) -> None:
                 g.blk(x, y, x + 0.28, y + 0.08, True)
 
 
+def _mark_dots(g: _Pad) -> None:
+    # 四顆散開的空心點 —— **不排成一條線**（排成線就變成折線圖那一顆了）。
+    for x, y in ((0.18, 0.70), (0.40, 0.34), (0.62, 0.60), (0.84, 0.20)):
+        g.dot(x, y, 0.10, False)
+
+
+def _mark_line(g: _Pad) -> None:
+    # 一條折線，轉折處有點 —— 「照順序連起來」就是這一顆在說的事。
+    pts = ((0.12, 0.74), (0.38, 0.40), (0.62, 0.56), (0.88, 0.18))
+    for i in range(len(pts) - 1):
+        g.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], True, 0.09)
+    for x, y in pts:
+        g.dot(x, y, 0.07, True)
+
+
+def _mark_bars(g: _Pad) -> None:
+    # 四根從同一條基線長上來的長條 —— **基線要看得見**，那正是長條圖跟其他
+    # 兩種的差別（高度是從哪裡量的）。
+    for i, top in enumerate((0.52, 0.22, 0.64, 0.36)):
+        x = 0.12 + i * 0.21
+        g.blk(x, top, x + 0.14, 0.84, True)
+    g.line(0.08, 0.86, 0.92, 0.86, True, 0.06)
+
+
 def _ramp(g: _Pad, rainbow: bool) -> None:
     # 一條色階。**單色**是一路變深的四段；**彩虹**是四段各自跳一次
     # （差別做在「有沒有台階」而不是顏色 —— 這一排圖示只有一種墨色）。
@@ -938,6 +964,9 @@ _DRAW = {
     "range_locked": lambda g: _range(g, True),
     "ramp_mono": lambda g: _ramp(g, False),
     "ramp_rainbow": lambda g: _ramp(g, True),
+    "mark_dots": _mark_dots,
+    "mark_line": _mark_line,
+    "mark_bars": _mark_bars,
     "adc_number": _adc_number,
     "adc_question": _adc_question,
     "adc_tray": _adc_tray,
