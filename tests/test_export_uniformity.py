@@ -233,10 +233,64 @@ def test_a_lock_that_makes_no_sense_falls_back_to_auto(grid):
 # --------------------------------------------------------------------------- #
 # 4. 顏色的意思不准撞
 # --------------------------------------------------------------------------- #
-def test_the_region_palette_is_the_same_one_the_canvas_uses():
-    """`core` 不准 import Qt，所以這份是副本 —— **副本會漂，這條測試守它**。"""
+def test_the_region_palette_is_the_same_hues_the_canvas_uses():
+    """**同一組色相、同一個順序，另一個底上的另一階**（F88 第一刀 b）。
+
+    ⚠ 這一條以前是逐字相等。改掉是因為一組顏色服務不了兩個底：畫布那一組是
+    為了**深色的 SEM 影像**取的（那一份自己的說明就寫著「都偏亮」），而這幾張
+    圖畫在**白紙**上 —— 那一組在白底上八個全部對比度不到 3:1，一排 profile
+    在投影機上就是這樣發虛的。往下取步救得了紙，會毀掉影像上的框。
+
+    所以守的東西也跟著換：**身分是色相與順序**（第 3 個在哪裡都是那個藍），
+    不是亮度。亮度跟著底走，各自對著自己的底驗過 —— 跟深色模式同一條規矩。
+    """
+    import colorsys
+
     from d4t.ui import theme
-    assert uc.REGION_COLOURS == theme.REGION_COLORS
+
+    def _rgb(hex_colour):
+        h = hex_colour.lstrip("#")
+        return [int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4)]
+
+    def hue(hex_colour):
+        """⚠ **HSV 的色相是個便宜的替身**，不是感知上的那個。
+
+        真正量過的是 OKLCH（位移 ≤ 0.5°，記在 `REGION_COLOURS` 的說明裡，
+        而重取步要重跑那支配色檢查器）。這裡用 stdlib 的 `colorsys` 是因為
+        測試不該自己抄一份 OKLab 轉換 —— 它守的是「有沒有人把某一格換成
+        另一個顏色」，那件事 HSV 答得出來。所以下面的容差是 12° 而不是 1°：
+        往下取步時 HSV 的色相本來就會漂（實測最大 7.2°，那個綠）。
+        """
+        return colorsys.rgb_to_hsv(*_rgb(hex_colour))[0] * 360.0
+
+    def light(hex_colour):
+        # 相對亮度（sRGB 加權）—— 這裡只要問「誰比較深」，不必動到 OKLab。
+        r, g, b = _rgb(hex_colour)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    assert len(uc.REGION_COLOURS) == len(theme.REGION_COLORS)
+    for i, (paper, image) in enumerate(
+            zip(uc.REGION_COLOURS, theme.REGION_COLORS)):
+        drift = abs(hue(paper) - hue(image))
+        assert min(drift, 360.0 - drift) <= 12.0, i      # 同一個色相
+        assert light(paper) < light(image), i            # 紙上那一階比較深
+
+
+def test_every_region_colour_is_readable_on_white_paper():
+    """**這一條就是「投影機上看得清楚」寫成一個數字**（F88 第一刀 b）。
+
+    圖畫在白底上，而一條對比度 1.8:1 的細線在投影機上是看不到的 —— 舊那一組
+    八個**全部**在 3:1 以下（用配色檢查器量的，2026-09-07）。3:1 是非文字
+    圖形元件的通用門檻。
+
+    ⚠ 這一條**只管畫在紙上的那一組**。`theme.REGION_COLORS` 畫在深色的 SEM
+    影像上，那裡要的是反過來的東西（夠亮），所以它不在這條測試的範圍裡。
+    """
+    from d4t.ui.theme import contrast_ratio
+
+    bad = [(c, round(contrast_ratio(c, "#ffffff"), 2))
+           for c in uc.REGION_COLOURS if contrast_ratio(c, "#ffffff") < 3.0]
+    assert not bad, bad
 
 
 def test_the_trend_line_is_not_any_region_colour():
