@@ -275,7 +275,29 @@ describe，JSON 扁平鍵、**只存跟預設不一樣的**），卡片從 12 �
 而兩顆膠囊塞進三欄的格子會把整排的對齊撐爛。名字寫死在測試裡，所以新加一個
 bool 不會安靜地混進那張例外表。
 
-### ⑫ 一張**檔名**的例外清單，放過了它自己要擋的那件事
+### ⑫ 「Icon 很漂亮，但有全應用進去嗎」—— 兩個一眼看出來的
+
+使用者兩句話，兩個都中：
+
+**①「有全應用進去嗎」→ 有一格被登記了兩次。** `point_fill` 同時在
+`chart_style.ROWS`（「Data points：半徑｜**filled**｜顏色」的勾選框）與
+`BOOL_CHIPS`（「Markers：Hollow / Filled」那一排膠囊）。後放的那個把前面的
+從 `self.globals` 蓋掉 —— 於是那個勾選框**看得到、按得下、什麼都不會發生**。
+我加膠囊的時候忘了把它從網格拿掉。
+
+配一條測試：`ROWS` 與 `BOOL_CHIPS` **不准有交集**，而且兩張表加起來要蓋滿
+`GLOBAL_KEYS`（一格設定只能有一個家，而且一定要有一個家）。
+
+**②「不同 chart 可設定的應該要不一樣?」→ 對，而畫面上沒有說。**
+`GLOBAL_APPLIES` 早就知道哪一格影響哪幾張（不適用的整列收起來），但四張都
+勾著的時候每一列都在 —— 使用者在 Box plot 分頁上看著「Histogram bar height」，
+只能自己猜。現在每一列底下掛一行淡的小字說出它影響哪幾張。
+
+⚠ 第一版把那行掛在**每一列**上，結果是「Heat map cells / Heat map」「Box plot /
+Box plot」—— **標題已經說了的就不要再說一次**，因為噪音會讓真正需要那行的幾列
+（`Markers`、`Ticks across`）也被跳過不讀。現在只有四列有尾巴。
+
+### ⑬ 一張**檔名**的例外清單，放過了它自己要擋的那件事
 
 CI 紅在 `test_the_short_one_is_only_used_on_the_image`：熱圖色條用了
 `format_feature_value_short`，而那支的邊界是「只有畫在影像上的標記用它」——
@@ -297,7 +319,7 @@ assert users == ["inspectors.py"]
 （同一個形狀在 CLAUDE.md 裡已經有一條：`ALLOWED_ERRORS` 那張表要配一支反向
 測試，不然它就是一張只會變長的紙。這次是另一種爛法 —— 顆粒度太粗。）
 
-### ⑬ 一個把測試掛死的坑
+### ⑭ 一個把測試掛死的坑
 
 新的 UI 測試檔在 fixture 裡才 `import studio`，而 `conftest` 那支關掉「關閉時
 確認存檔」的 autouse fixture 是 `sys.modules.get("d4t.ui.studio")` ——
