@@ -301,3 +301,83 @@ def test_the_style_only_lands_on_a_uniformity_card(qapp, window):
     window.select_node(nid)
     window._on_chart_style_changed('{"tick_size":18}')
     assert "look" not in window.model.nodes[nid].params
+
+
+# --------------------------------------------------------------------------- #
+# 熱圖疊在影像上（F87 第五刀）
+# --------------------------------------------------------------------------- #
+def _heat_view(qapp, n=6):
+    import numpy as np
+
+    from d4t.ui.widgets import ImageView
+
+    view = ImageView()
+    view.resize(400, 380)
+    view.set_image(np.linspace(60, 200, 200 * 200,
+                               dtype=np.float32).reshape(200, 200))
+    cells = [(0.05 + 0.15 * i, 0.2, 0.15, 0.3) for i in range(n)]
+    colours = [uc.heat_hex(i / max(1, n - 1)) for i in range(n)]
+    view.set_heat(cells, colours, (10.0, 90.0, "glv_mean"))
+    return view
+
+
+def test_the_view_paints_the_heat_and_says_how_much(qapp):
+    view = _heat_view(qapp)
+    assert view.heat_count() == 6
+    assert view.heat_legend() == (10.0, 90.0, "glv_mean")
+    view.show()
+    qapp.processEvents()
+    view.grab()                       # 畫一次不准炸
+
+
+def test_a_mismatched_heat_is_dropped_whole(qapp):
+    """**長度對不上就整組不畫** —— 同 `set_overlay` / `set_marks` 的規矩。
+
+    錯位的顏色會把值畫在別的地方，而畫面上沒有任何東西透露那件事。
+    """
+    view = _heat_view(qapp)
+    view.set_heat([(0.1, 0.1, 0.2, 0.2), (0.4, 0.1, 0.2, 0.2)], ["#ff0000"],
+                  (0.0, 1.0, "x"))
+    assert view.heat_count() == 0
+
+
+def test_clearing_the_heat_takes_the_bar_with_it(qapp):
+    view = _heat_view(qapp)
+    view.clear_heat()
+    assert view.heat_count() == 0 and view.heat_legend() is None
+    view.grab()
+
+
+def test_the_heat_goes_under_the_boxes_not_over_them(qapp):
+    """順序就是意思：熱色是「量出來多少」，框是「量的是哪一塊」。
+
+    反過來畫的話，一片色塊會蓋掉框 —— 而「這一塊的顏色是從哪一格量來的」
+    那句話就沒了（PEAR 的 `_paint_heat_cells` 也是先熱後框）。
+    """
+    import inspect as _inspect
+
+    from d4t.ui.widgets import ImageView
+
+    src = _inspect.getsource(ImageView.paintEvent)
+    assert src.index("_paint_heat(") < src.index("_paint_overlay(")
+    assert src.index("_paint_overlay(") < src.index("_paint_marks(")
+
+
+def test_the_colour_bar_is_readable_on_any_image(qapp):
+    """色條底下要墊一塊 —— 影像可以是任何亮度，直接寫字的話深色圖上那兩個
+    數字看不見，而那些顏色就不再是資料、只是裝飾。"""
+    import inspect as _inspect
+
+    from d4t.ui.widgets import ImageView
+
+    src = _inspect.getsource(ImageView._paint_heat_bar)
+    assert "bg_surface" in src and "drawRoundedRect" in src
+
+
+def test_the_studio_hands_the_view_what_the_card_says(qapp, window):
+    """卡片交、UI 畫 —— 同 `measure_marks` 那條界線（`Step.overlay_heat`）。"""
+    nid = window.model.add_step("output_uniformity")
+    window.select_node(nid)
+    # 還沒跑過就什麼都沒有（熱色來自 context，不是 model）
+    assert window.heat_tiles("test") == ([], [], None)
+    assert window.image_view.heat_count() == 0

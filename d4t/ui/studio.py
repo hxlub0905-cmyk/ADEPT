@@ -5568,6 +5568,23 @@ class StudioWindow(QMainWindow):
         return (list(lines or []), list(points or []), focus,
                 [str(v) for v in (labels or [])])
 
+    def heat_tiles(self, stream: Optional[str] = None):
+        """選著那張卡要鋪的熱圖 ``(cells, colours, legend)``（F87）。
+
+        跟 :meth:`measure_marks` 一模一樣的形狀 —— 卡片自己交
+        （`Step.overlay_heat`），這裡只問「現在選著的是誰、正在看哪一條流」。
+        """
+        node = self.model.nodes.get(self.selected_node or "")
+        ctx = getattr(getattr(self, "_last_result", None), "context", None)
+        if node is None or ctx is None:
+            return [], [], None
+        try:
+            cells, colours, legend = get_step(node.step).overlay_heat(
+                ctx, node.params, stream)
+        except Exception:                  # noqa: BLE001 — 顯示用，不能擋畫面
+            return [], [], None
+        return list(cells or []), [str(c) for c in (colours or [])], legend
+
     def _refresh_measure_marks(self) -> None:
         """**一個 view 一次** —— 兩張圖顯示的可能是不同的流（比對模式）。
 
@@ -5581,6 +5598,9 @@ class StudioWindow(QMainWindow):
                 str(combo.currentText() or ""))
             view.set_marks(lines, points, focus, labels,
                            solid=self._marks_solid())
+            cells, colours, legend = self.heat_tiles(
+                str(combo.currentText() or ""))
+            view.set_heat(cells, colours, legend)
 
     def _marks_solid(self) -> bool:
         """選著那張卡的標記要不要畫滿（`Step.marks_solid`）。

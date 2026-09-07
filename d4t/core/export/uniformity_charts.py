@@ -234,8 +234,12 @@ def _span(values: Sequence[float], lock: Optional[Sequence[Any]] = None
     return lo - pad, hi + pad
 
 
-def _heat_hex(t: float) -> str:
-    """0–1 → 色階上的一個顏色（線性內插，兩端夾住）。"""
+def heat_hex(t: float) -> str:
+    """0–1 → 色階上的一個顏色（線性內插，兩端夾住）。
+
+    **色階唯一的出處** —— 寫出去的 SVG、疊在影像上的那一層、以及影像上那條
+    色條都問這一支。抄一份的那天，畫面上的紅跟報表裡的紅會是兩個紅。
+    """
     if not math.isfinite(t):
         return _MUTED
     t = min(1.0, max(0.0, float(t)))
@@ -495,6 +499,43 @@ def _svg_profile(series: Dict[str, Any], style: Dict[str, Any],
 # --------------------------------------------------------------------------- #
 # Heat map —— 不均勻在哪裡
 # --------------------------------------------------------------------------- #
+def heat_tiles(series: Dict[str, Any],
+               style: Optional[Dict[str, Any]] = None,
+               bounds: Optional[Sequence[Any]] = None
+               ) -> Tuple[List[Tuple[float, float, float, float]],
+                          List[str], Tuple[float, float]]:
+    """熱圖的**磚**：``([(x0, y0, x1, y1), …], [色, …], (lo, hi))``，像素座標。
+
+    ⚠ **這是熱圖唯一的出處。** 寫出去的 SVG（:func:`_svg_map`）與疊在影像上
+    的那一層（`OutputUniformityStep.overlay_heat` → `ImageView.set_heat`）都
+    問這一支 —— 各算一份的話，畫面上那一格的顏色跟報表裡的會在某一天分岔，
+    而那一天兩張都畫得出來（這個 repo 最貴的那種 bug）。
+
+    **所有區域一起鋪一次、色階共用**（PEAR 的 `heat_cells(self._rois, …)` 與
+    它那組 vmin/vmax）。``bounds = (w, h)`` 把鋪磚夾回影像裡。
+    對不上（框數與值數不等）就整組不畫 —— 錯位的顏色指向錯的地方。
+    """
+    from ..algo import uniformity as unif
+
+    st = dict(style or {})
+    vals: List[float] = []
+    rects: List[Tuple[float, ...]] = []
+    for g in series.get("groups") or []:
+        gv = list(g.get("values") or ())
+        gr = [tuple(r) for r in (g.get("rects") or ())]
+        if not gv or len(gr) != len(gv):
+            return [], [], (0.0, 0.0)
+        vals.extend(float(v) for v in gv)
+        rects.extend(gr)
+    if not rects:
+        return [], [], (0.0, 0.0)
+    lo, hi = _span(vals, st.get("hlock"))
+    cells = unif.cell_boxes(rects, bounds)
+    span = (hi - lo) or 0.0
+    colours = [heat_hex(0.5 if span <= 0 else (v - lo) / span) for v in vals]
+    return cells, colours, (lo, hi)
+
+
 def _svg_map(series: Dict[str, Any], style: Dict[str, Any],
              width: int, height: int) -> str:
     """框放在自己的 (x, y) 上，顏色＝值，旁邊一條色條。
@@ -504,23 +545,25 @@ def _svg_map(series: Dict[str, Any], style: Dict[str, Any],
     那一塊等於用最近的一次真實量測去填它 —— 於是整片的梯度看起來是一片梯度，
     不是一排小色塊。
 
-    ⚠ **只畫第一群。** 兩群的框疊在同一張 (x, y) 上，後畫的會蓋掉先畫的，
-    而畫面上看不出被蓋掉這件事。要比兩群請看另外三張圖 —— 那三張的 X 軸
-    分得開兩群，這一張的 X 軸是位置。
-    """
-    from ..algo import uniformity as unif
+    ⚠ **所有區域一起鋪一次**（PEAR 的做法，2026-09-07 使用者定調「都按照
+    PEAR 一樣」）。一開始這裡只畫第一群，理由寫的是「兩群的框疊在同一張
+    (x, y) 上，後畫的會蓋掉先畫的」—— 而**那個問題只在「一群鋪一次」的做法
+    下才存在**。PEAR 的 `heat_cells(self._rois, …)` 吃的是全部 ROI：中線由
+    全部的框一起決定，於是每一格各佔各的位置，根本不會互相蓋。我先製造了一
+    個問題，再用「只畫第一群」去繞開它。
 
+    由此而來的一句話：**色階跨區域共用**（PEAR 的 vmin/vmax 也是取全部）。
+    這一張問的是「這一片場上哪裡不一樣」，而那個問題的座標是位置、不是區域
+    ——每個區域各自縮放的話，兩塊一樣紅的地方其實不一樣亮。要比區域**之間**
+    請看盒鬚圖，那張的 X 軸就是區域。
+    """
     groups = [g for g in series.get("groups") or [] if g.get("values")]
     if not groups:
         return _empty(width, height, "no boxes to plot")
-    g = groups[0]
-    vals = g["values"]
-    lo, hi = _span(vals, style.get("hlock"))
-    rects = [tuple(r) for r in (g.get("rects") or ())]
-    if len(rects) != len(vals):
+    rects = [tuple(r) for g in groups for r in (g.get("rects") or ())]
+    cells, colours, (lo, hi) = heat_tiles(series, style)
+    if not cells:
         return _empty(width, height, "box positions do not line up")
-
-    cells = unif.cell_boxes(rects)
     xs = [c[0] for c in cells] + [c[2] for c in cells]
     ys = [c[1] for c in cells] + [c[3] for c in cells]
     x0, x1 = min(xs), max(xs)
@@ -542,13 +585,12 @@ def _svg_map(series: Dict[str, Any], style: Dict[str, Any],
 
     t_size, t_weight, t_ink = _text_attrs(style, "tick", _TEXT)
     o = _head(width, height, str(style.get("title") or ""))
-    for (cx0, cy0, cx1, cy1), v in zip(cells, vals):
-        t = 0.5 if hi <= lo else (float(v) - lo) / (hi - lo)
+    for (cx0, cy0, cx1, cy1), fill in zip(cells, colours):
         o.append("<rect x='%.2f' y='%.2f' width='%.2f' height='%.2f' "
                  "fill='%s' stroke='none'/>"
                  % (ox + (cx0 - x0) * scale, oy + (cy0 - y0) * scale,
                     max(0.5, (cx1 - cx0) * scale),
-                    max(0.5, (cy1 - cy0) * scale), _heat_hex(t)))
+                    max(0.5, (cy1 - cy0) * scale), fill))
     if style.get("points", True):
         # 量到的那個框仍然描出來 —— 「這一塊的顏色是從哪一格量來的」
         for (rx, ry, rw, rh) in rects:
@@ -566,7 +608,7 @@ def _svg_map(series: Dict[str, Any], style: Dict[str, Any],
         o.append("<rect x='%.1f' y='%.2f' width='%d' height='%.2f' fill='%s' "
                  "stroke='none'/>"
                  % (bx, pad_t + i * ph / 64.0, bw_, ph / 64.0 + 0.6,
-                    _heat_hex(t)))
+                    heat_hex(t)))
     o.append("<rect x='%.1f' y='%.1f' width='%d' height='%.1f' fill='none' "
              "stroke='%s' stroke-width='1'/>" % (bx, pad_t, bw_, ph, _AXIS))
     for t, ty in ((hi, pad_t + 4), (lo, pad_t + ph)):
@@ -576,15 +618,19 @@ def _svg_map(series: Dict[str, Any], style: Dict[str, Any],
     if style.get("hlock"):
         o.append("<text x='%.1f' y='%.1f' font-size='9' fill='%s'>locked</text>"
                  % (bx + bw_ + 4, pad_t + ph / 2, _MUTED))
+    # 底下那一行說出**這張圖畫的是誰** —— 一起鋪之後那不再是一個名字。
+    who = ", ".join(str(g.get("name") or "region") for g in groups)
     o.append("<text x='%.1f' y='%d' font-size='%g' font-weight='%s' "
              "fill='%s'>%s - %s</text>"
              % (pad_l, height - 10, t_size, t_weight, _MUTED,
-                _esc(g["name"]), _esc(str(series.get("metric") or "value"))))
+                _esc(who), _esc(str(series.get("metric") or "value"))))
     if len(groups) > 1:
-        # 蓋掉別群這件事**要講出來**（見 docstring 的警告）
+        # **色階是共用的**，而那件事圖上要看得到（見 docstring）——
+        # 不然兩個區域的紅會被讀成「各自最紅」。
         o.append("<text x='%d' y='%d' font-size='10' fill='%s' "
-                 "text-anchor='end'>%d more region(s) not shown</text>"
-                 % (width - pad_r, height - 10, _MUTED, len(groups) - 1))
+                 "text-anchor='end'>one colour scale across "
+                 "%d regions</text>"
+                 % (width - pad_r, height - 10, _MUTED, len(groups)))
     o.append("</svg>")
     return "".join(o)
 

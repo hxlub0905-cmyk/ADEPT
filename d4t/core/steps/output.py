@@ -88,7 +88,7 @@ Studio 的 Run trial 是調參數的迴圈 —— 每拖一下門檻就覆寫一
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..export import boxplot as export_boxplot
 from ..export import uniformity_charts as export_unif
@@ -1650,6 +1650,73 @@ class OutputUniformityStep(_OutputStep):
         """值那一軸叫什麼（副標題與摘要表共用 —— 各寫一份的那份會漂）。"""
         got = chart_style.style_for(p.get("look", ""))
         return str(got.get("value_name") or "").strip() or str(metric)
+
+    @classmethod
+    def overlay_heat(cls, ctx: Any, params: Dict[str, Any],
+                     stream: Optional[str] = None) -> Any:
+        """熱圖**疊回影像上**（F87 第五刀，2026-09-07 使用者：「都按照 PEAR
+        一樣」）。
+
+        PEAR 的熱圖從來不是一張白底的獨立圖 —— 它是半透明鋪在影像上、ROI
+        外框畫在熱色之上（`pear/ui/image_view.py::_paint_heat_cells`）。
+        理由很直接：「不均勻在**哪裡**」這個問題的答案要對得到晶圓上的位置，
+        而一張抽掉了影像的圖只剩「有一個角落比較亮」，對不回去。
+
+        ⚠ **磚跟寫出去的 SVG 是同一支** `export.uniformity_charts.heat_tiles`
+        —— 包含色階（跨區域共用）與鎖定範圍。各算一份的話，畫面上這一格的顏色
+        跟報表裡的會在某一天分岔，而那一天兩張都畫得出來。
+
+        座標正規化要影像尺寸，而 ``spread["rects"]`` 是**像素**的 —— 所以這裡
+        問 ``ctx.images`` 拿那條流的大小。拿不到就整組不畫（同 `set_marks` 的
+        規矩：錯位的顏色指向錯的地方，而畫面上不會說）。
+        """
+        notes = (getattr(ctx, "meta", None) or {}).get("glv_hist") or []
+        want = str(stream or "").strip()
+        mine = [n for n in notes
+                if isinstance(n, dict)
+                and not (want and str(n.get("stream") or "").strip()
+                         and str(n.get("stream")).strip() != want)]
+        if not mine:
+            return [], [], None
+        try:
+            pp = cls.validate_params(params)
+        except Exception:                  # noqa: BLE001 — 顯示用，不能擋畫面
+            return [], [], None
+        if export_unif.CHART_MAP not in parse_key_list(str(pp["charts"])):
+            # 沒勾熱圖就不鋪 —— 畫面上的東西要跟「會寫出去什麼」對得起來。
+            return [], [], None
+        series = export_unif.chart_series(mine,
+                                          metric=str(pp["metric"]).strip())
+        metric = str(series.get("metric") or "")
+        shape = cls._stream_shape(ctx, mine, want)
+        if not metric or shape is None:
+            return [], [], None
+        iw, ih = shape
+        st = cls()._style_for(export_unif.CHART_MAP, pp, metric)
+        cells, colours, span = export_unif.heat_tiles(series, st,
+                                                      bounds=(iw, ih))
+        if not cells:
+            return [], [], None
+        norm = [(x0 / iw, y0 / ih, (x1 - x0) / iw, (y1 - y0) / ih)
+                for (x0, y0, x1, y1) in cells]
+        return norm, colours, (span[0], span[1], cls()._value_name(pp, metric))
+
+    @staticmethod
+    def _stream_shape(ctx: Any, notes: Sequence[Any],
+                      stream: str = "") -> Optional[Tuple[int, int]]:
+        """那幾份 note 量在哪張影像上 → ``(寬, 高)``。拿不到就 ``None``。"""
+        images = dict(getattr(ctx, "images", None) or {})
+        names = [stream] if stream else []
+        names += [str(n.get("stream") or "") for n in notes
+                  if isinstance(n, dict)]
+        for name in names:
+            arr = images.get(name) if name else None
+            if arr is not None and getattr(arr, "ndim", 0) >= 2:
+                h, w = arr.shape[:2]
+                if w > 0 and h > 0:
+                    return int(w), int(h)
+        return None
+
 
     def run_batch(self, bctx: Any, params: Dict[str, Any]) -> None:
         p = self.validate_params(params)
