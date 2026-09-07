@@ -3436,9 +3436,13 @@ class UniformityPreviewInspector(OutputPreviewInspector):
                     % (row.get("name") or "region", int(row.get("boxes") or 0))]
             for key, head, unit in uc.UNIF_COLUMNS:
                 if key in cells:
-                    bits.append("%s %s %s" % (head,
-                                              format_feature_value_short(
-                                                  cells[key]), unit))
+                    # **面板走完整版**（`numbers` 那一支的邊界：短版只給畫在
+                    # 影像上的標記）。這裡是一張表，而表上的數字是使用者真的
+                    # 要讀的那一個 —— 少一位有效數字省不到什麼寬度，卻會讓
+                    # 面板上的 CV 跟 CSV 上的對不起來。
+                    bits.append("%s %s %s"
+                                % (head, format_feature_value(cells[key]),
+                                   unit))
             p.setPen(QColor(TOKENS["text_primary"] if i == 0
                             else TOKENS["text_secondary"]))
             # **放不下就 elide，不要讓它自己被邊界切掉**：切掉的那一刀落在
