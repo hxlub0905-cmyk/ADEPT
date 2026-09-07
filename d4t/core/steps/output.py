@@ -91,6 +91,7 @@ import os
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..export import boxplot as export_boxplot
+from ..export import chart_frame as export_frame
 from ..export import uniformity_charts as export_unif
 from ..pipeline import chart_style
 from ..export import html as export_html
@@ -1591,6 +1592,15 @@ class OutputUniformityStep(_OutputStep):
                   "one chart."),
         ),
         ParamSpec(
+            name="boxes_csv", type="bool", default=False,
+            label="Also write a table, one row per box",
+            help=("A CSV with one row for every measurement box: which "
+                  "region it belongs to, where it sits, which row and column "
+                  "it is in, and every number measured on it. The lot's own "
+                  "defects.csv has one row per defect, so it cannot show you "
+                  "the boxes inside one image - this can."),
+        ),
+        ParamSpec(
             name="look", type="chart_style", default="",
             label="Chart look",
             help=("How the charts look: titles, axis names, tick counts, "
@@ -1612,6 +1622,11 @@ class OutputUniformityStep(_OutputStep):
     ]
 
     # ---- 預覽（寫出前一定先看得到會寫什麼）----------------------------------
+    #: 一列一格框的那張表（F88 第一刀）。
+    TABLE_NAME = "boxes.csv"
+    #: 那張表的第一欄：**哪一顆**（20 顆的框混在一起而沒有它就沒有意義）。
+    TABLE_ID = "defect_id"
+
     @classmethod
     def planned_files(cls, params: Dict[str, Any]) -> List[Dict[str, str]]:
         """按下 Run 這張卡會寫哪幾個檔（**乾跑**）。
@@ -1636,6 +1651,10 @@ class OutputUniformityStep(_OutputStep):
         out.append({"tick": "index", "what": "an entry page, when more than "
                                              "one defect is drawn",
                     "name": cls.INDEX_NAME})
+        if bool(p.get("boxes_csv")):
+            out.append({"tick": "table",
+                        "what": "one row per measurement box",
+                        "name": cls.TABLE_NAME})
         return out
 
     @classmethod
@@ -1775,6 +1794,10 @@ class OutputUniformityStep(_OutputStep):
         no_spread = 0
         skipped = 0
         index: List[Dict[str, Any]] = []
+        # F88 第一刀：**一列一格框**的表。累加每一顆的，最後寫一份 —— 一顆
+        # 一個檔的話，20 顆就是 20 份要自己接起來的 CSV。
+        table: List[Dict[str, Any]] = []
+        table_cols: List[str] = []
         for row in chosen:
             did = str(row.get("defect_id", ""))
             item = by_id.get(did)
@@ -1828,6 +1851,16 @@ class OutputUniformityStep(_OutputStep):
                     os.path.join(folder, stem + self.PAGE_EXT))
                 index.append({"name": did, "href": stem + self.PAGE_EXT,
                               "rows": rows})
+                if bool(p["boxes_csv"]):
+                    frame = export_frame.build_frame(notes)
+                    for one in frame.rows:
+                        # **哪一顆**要在表上 —— 20 顆的框混在一起而沒有這一
+                        # 欄的話，那張表回答不了任何問題。
+                        one[self.TABLE_ID] = did
+                        table.append(one)
+                    for c in frame.columns:
+                        if c not in table_cols:
+                            table_cols.append(c)
             except OSError as e:
                 raise StepError(self.key, "could not write into %s: %s"
                                 % (folder, e)) from e
@@ -1844,6 +1877,20 @@ class OutputUniformityStep(_OutputStep):
                         index, "Uniformity - %d defects" % len(index),
                         subtitle="click a defect to see its four charts"),
                     os.path.join(folder, self.INDEX_NAME))
+            except OSError as e:
+                raise StepError(self.key, "could not write into %s: %s"
+                                % (folder, e)) from e
+
+        # ---- 一列一格框的表（F88 第一刀）----------------------------------
+        if bool(p["boxes_csv"]) and table:
+            try:
+                # ⚠ 走 `chart_frame.write_csv` 而不是 `_write_text`：
+                # 這一份要跟 `defects.csv` **同一套寫法**（`utf-8-sig`），
+                # 兩個檔躺在同一個資料夾裡而只有一個 Excel 開得乾淨的話，
+                # 使用者沒有線索知道為什麼。
+                export_frame.write_csv(
+                    export_frame.Frame([self.TABLE_ID] + table_cols, table),
+                    os.path.join(folder, self.TABLE_NAME))
             except OSError as e:
                 raise StepError(self.key, "could not write into %s: %s"
                                 % (folder, e)) from e

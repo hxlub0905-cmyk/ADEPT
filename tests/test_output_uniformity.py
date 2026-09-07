@@ -579,3 +579,36 @@ def test_every_card_can_be_asked_for_heat_without_blowing_up():
         cells, colours, legend = card.overlay_heat(ctx, {}, "")
         assert list(cells) == [] or len(cells) == len(colours)
         assert legend is None or len(tuple(legend)) == 3
+
+
+# --------------------------------------------------------------------------- #
+# 一列一格框的表（F88 第一刀）
+# --------------------------------------------------------------------------- #
+def test_the_card_can_write_one_row_per_box(tmp_path):
+    """`defects.csv` 是**一顆 defect 一列**，看不到一張影像裡的那些格。
+
+    計畫書 `docs/plans/F88-graph-builder.md` §2：長表就算之後不做 graph
+    builder 也值得，因為這張 CSV 現在完全沒有。
+    """
+    from d4t.core.pipeline import get_step
+
+    card = get_step("output_uniformity")
+    p = card.validate_params({"folder": str(tmp_path), "boxes_csv": True})
+    names = [f["name"] for f in card.planned_files(p)]
+    assert card.TABLE_NAME in names, "乾跑就要講得出它會寫這一份"
+    off = card.validate_params({"folder": str(tmp_path), "boxes_csv": False})
+    assert card.TABLE_NAME not in [f["name"] for f in card.planned_files(off)]
+
+
+def test_the_box_table_says_which_defect_each_row_came_from():
+    """20 顆的框混在一起，而沒有 `defect_id` 那一欄的話那張表回答不了任何
+    問題。"""
+    from d4t.core.export import chart_frame as cf
+    from d4t.core.pipeline import get_step
+
+    card = get_step("output_uniformity")
+    rows = [{"region": "epi", "box": 0, "x": 1.0, "y": 2.0,
+             card.TABLE_ID: "D-1"}]
+    text = cf.Frame([card.TABLE_ID, "region", "box", "x", "y"], rows).to_csv()
+    assert text.split("\n")[0].startswith(card.TABLE_ID)
+    assert "D-1" in text

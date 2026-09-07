@@ -291,6 +291,19 @@ auto —— **兩格的數字會留著**，所以比完一批再回到 auto 不�
 | **四張圖**（放進報告）| `Write to` 那個資料夾 | `Run all & write` 之後 |
 | **數字**（cv%、斜率）| 點 `Gray level` 卡，特徵表 | 跑一次預覽之後 |
 | **數字**（進 Excel）| 同一個資料夾的 `defects.csv` | 要有 `Write report` 那張卡 |
+| **每一格框的數字**（進 Excel）| 同一個資料夾的 `boxes.csv` | 打開 `Write uniformity` 的 **`Also write a table, one row per box`** |
+
+### ⚠ `defects.csv` 跟 `boxes.csv` 不是同一種表
+
+**一列是什麼**不一樣，而那就是全部的差別：
+
+| | 一列是 | 誰寫的 |
+|---|---|---|
+| `defects.csv` | **一顆 defect** | `Write report` |
+| `boxes.csv` | **一格框** | `Write uniformity`（要打開那一格） |
+
+要看「這一張影像裡哪幾格特別高」就是 `boxes.csv` —— 它帶著每一格的區域、
+位置、**第幾列第幾欄**，以及量在它身上的每一個數字。
 
 ### 資料夾裡會有什麼
 
