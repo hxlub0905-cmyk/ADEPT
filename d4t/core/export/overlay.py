@@ -37,7 +37,7 @@ __all__ = ["render_overlay", "write_png", "write_jpeg",
            "primary_blob_box", "pick_base", "pick_overlay_results",
            "overlay_label",
            "rank_value", "rank_is_meaningless", "RANK_BY_SCORE",
-           "overlay_filename", "OVERLAY_PREFIX", "BOX_COLOR"]
+           "overlay_filename", "safe_stem", "OVERLAY_PREFIX", "BOX_COLOR"]
 
 #: 疊圖 PNG 的檔名前綴。**留著**是因為使用者常常把疊圖寫進一個已經有東西的
 #: 資料夾裡 —— 前綴讓「這批是這一次跑出來的」一眼看得出來，也讓刪掉它們是
@@ -169,6 +169,21 @@ def primary_blob_box(features: Optional[Dict[str, Any]] = None
 
 
 
+def safe_stem(defect_id: Any) -> str:
+    """defect id → **可以當檔名的那一段**（不含前綴、不含副檔名）。
+
+    F86 從 :func:`overlay_filename` 裡抽出來的。抽的理由不是重複，是**意思**：
+    均勻度那幾張圖（`output_uniformity`）借了那一支，於是檔名長成
+    ``overlay_field-box.svg`` —— 而它們不是疊圖。要的只有這一半。
+
+    ⚠ 這件事本身是必要的：RSEM 那條路的 defect id 是從檔名來的，而一顆 id 裡
+    有 ``/`` 或 ``:`` 的 defect 會讓寫檔那一步整個失敗，症狀是「少了幾張圖」
+    （鐵則 7 把例外吃掉了）。
+    """
+    return "".join(ch if (ch.isalnum() or ch in "-_") else "_"
+                   for ch in str(defect_id)) or "unknown"
+
+
 def overlay_filename(defect_id: Any) -> str:
     """defect id → 疊圖的檔名（``overlay_<id>.png``）。
 
@@ -177,9 +192,7 @@ def overlay_filename(defect_id: Any) -> str:
     的 defect 會讓那張卡整個失敗，而症狀是「少了幾張 PNG」（鐵則 7 把例外
     吃掉了）。跟 :func:`overlay_label` 一樣是從 Export 精靈搬過來的。
     """
-    safe = "".join(ch if (ch.isalnum() or ch in "-_") else "_"
-                   for ch in str(defect_id)) or "unknown"
-    return "%s%s.png" % (OVERLAY_PREFIX, safe)
+    return "%s%s.png" % (OVERLAY_PREFIX, safe_stem(defect_id))
 
 
 def overlay_label(result: Dict[str, Any]) -> str:

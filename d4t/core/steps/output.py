@@ -1490,6 +1490,8 @@ class OutputUniformityStep(_OutputStep):
 
     #: 一顆一頁 ＋ 一張圖一個 SVG。
     PAGE_EXT, FIGURE_EXT = ".html", ".svg"
+    #: 好幾顆時的入口（一顆的時候不寫，見 `run_batch`）。
+    INDEX_NAME = "index.html"
 
     params = [
         ParamSpec(
@@ -1612,11 +1614,16 @@ class OutputUniformityStep(_OutputStep):
         kinds = [k for k in parse_key_list(str(p.get("charts") or ""))
                  if k in export_unif.CHARTS]
         out: List[Dict[str, str]] = [{
-            "tick": "page", "what": "the charts on one page",
+            "tick": "page", "what": "the charts and the numbers on one page",
             "name": "<defect>%s" % cls.PAGE_EXT}]
         for k in kinds:
             out.append({"tick": k, "what": export_unif.CHART_LABELS[k],
                         "name": "<defect>-%s%s" % (k, cls.FIGURE_EXT)})
+        # 索引頁只有**好幾顆**才寫，而「幾顆」跑完才知道 —— 所以這裡講的是
+        # 條件，不是一個承諾（同上面那幾列的 `<defect>` pattern）。
+        out.append({"tick": "index", "what": "an entry page, when more than "
+                                             "one defect is drawn",
+                    "name": cls.INDEX_NAME})
         return out
 
     @classmethod
@@ -1687,6 +1694,7 @@ class OutputUniformityStep(_OutputStep):
         written = 0
         no_spread = 0
         skipped = 0
+        index: List[Dict[str, Any]] = []
         for row in chosen:
             did = str(row.get("defect_id", ""))
             item = by_id.get(did)
@@ -1703,6 +1711,7 @@ class OutputUniformityStep(_OutputStep):
             except Exception:               # noqa: BLE001 — 鐵則 7 的跨顆版
                 skipped += 1
                 continue
+            feats = dict(getattr(r, "features", None) or {})
             if not series.get("groups"):
                 # 這一顆量不出「這幾格之間」（走 pooled、沒勾 report、或
                 # 只有一格框）。**不寫一張空頁** —— 一張畫得出來但沒有意義的
@@ -1710,7 +1719,10 @@ class OutputUniformityStep(_OutputStep):
                 no_spread += 1
                 continue
             metric = str(series.get("metric") or "")
-            stem = os.path.splitext(overlay.overlay_filename(did))[0]
+            # ⚠ **不要用 `overlay_filename`**（F86）：那一支加的 `overlay_`
+            # 前綴是給疊圖用的，而這幾張是圖表 —— 借它等於讓檔名說一件錯的事。
+            # 要的只有消毒那一半。
+            stem = overlay.safe_stem(did)
             try:
                 charts = []
                 for k in kinds:
@@ -1720,16 +1732,41 @@ class OutputUniformityStep(_OutputStep):
                                    "svg": svg})
                     _write_text(svg, os.path.join(
                         folder, "%s-%s%s" % (stem, k, self.FIGURE_EXT)))
+                # **數字跟圖在同一頁**（F86）。那一頁本來就該是「一顆的
+                # 答案」，而在這之前看圖的人得另外開 CSV 才知道 CV% 是多少。
+                # ⚠ 數字是從**這一顆的 features** 拿的，不在畫圖那一側重算
+                # —— 重算的那一份會漂，而 CSV 與報告頁上出現兩個 CV% 的那天，
+                # 沒有人看得出哪一個是對的。
+                rows = export_unif.summary_rows(series, feats)
                 export_html.write_html(
                     export_boxplot.build_boxplot_page(
                         charts, "Uniformity - %s" % did,
                         subtitle="%s, one point per measurement box"
-                                 % (str(p["value_name"]).strip() or metric)),
+                                 % (str(p["value_name"]).strip() or metric),
+                        lead=export_unif.build_summary_html(rows),
+                        extra_css=export_unif.SUMMARY_CSS),
                     os.path.join(folder, stem + self.PAGE_EXT))
+                index.append({"name": did, "href": stem + self.PAGE_EXT,
+                              "rows": rows})
             except OSError as e:
                 raise StepError(self.key, "could not write into %s: %s"
                                 % (folder, e)) from e
             written += 1
+
+        # ---- 好幾顆才寫索引頁（F86）---------------------------------------
+        # ⚠ **一顆的時候不寫**：那一顆的頁面本來就是答案，多一個檔只是多一層
+        # 要點進去的東西。而 20 顆的時候不寫才是問題 —— 20 個 HTML ＋ 80 個
+        # SVG 躺在同一個資料夾裡，沒有入口。
+        if len(index) > 1:
+            try:
+                export_html.write_html(
+                    export_unif.build_index_page(
+                        index, "Uniformity - %d defects" % len(index),
+                        subtitle="click a defect to see its four charts"),
+                    os.path.join(folder, self.INDEX_NAME))
+            except OSError as e:
+                raise StepError(self.key, "could not write into %s: %s"
+                                % (folder, e)) from e
 
         bctx.add_output(folder)
         if not written:

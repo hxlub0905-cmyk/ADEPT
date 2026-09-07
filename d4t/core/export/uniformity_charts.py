@@ -53,8 +53,9 @@ from .boxplot import (  # noqa: PLC2701 — 見上
 )
 
 __all__ = [
-    "CHARTS", "CHART_LABELS", "REGION_COLOURS", "AXES",
+    "CHARTS", "CHART_LABELS", "REGION_COLOURS", "AXES", "UNIF_COLUMNS",
     "chart_series", "build_chart_svg", "build_charts_page",
+    "summary_rows", "build_index_page",
 ]
 
 #: 四種圖的值（recipe / 參數用的 id，不要改）。
@@ -613,3 +614,136 @@ def build_charts_page(series: Dict[str, Any], kinds: Sequence[str],
         charts.append({"name": CHART_LABELS.get(kk, kk),
                        "svg": build_chart_svg(series, kk, one)})
     return build_boxplot_page(charts, title, subtitle=subtitle)
+
+
+# --------------------------------------------------------------------------- #
+# 數字 —— **那一頁本來就該是「一顆的答案」**（F86）
+# --------------------------------------------------------------------------- #
+#: 摘要表上的欄：``(特徵後綴, 表頭, 單位)``。
+#:
+#: ⚠ **順序就是使用者讀的順序**：先「散多開」再「往哪邊斜」，最後才是「量了
+#: 幾格」（那是信不信得過的旁證，不是答案）。
+UNIF_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
+    ("cv_pct", "CV", "%"),
+    ("range", "range", "gray"),
+    ("range_pct", "range", "%"),
+    ("slope_x", "left \u2192 right", "/100 px"),
+    ("slope_y", "top \u2192 bottom", "/100 px"),
+)
+
+
+def summary_rows(series: Dict[str, Any],
+                 features: Optional[Dict[str, Any]] = None
+                 ) -> List[Dict[str, Any]]:
+    """圖上方那張小表 —— 一個區域一列。
+
+    ⚠ **數字從 `features` 拿，不在這裡重算。** 重算的那一份會漂：同一顆
+    defect 的 CSV 與報告頁上會出現兩個 CV%，而沒有人看得出哪一個是對的。
+    這一支只做「找到那一格叫什麼名字」這件事。
+
+    ``features`` 沒給（或那一格不在裡面）就留 ``None`` —— 表上印 ``-``，
+    而不是一個算出來的替身。
+    """
+    feats = dict(features or {})
+    metric = str(series.get("metric") or "")
+    out: List[Dict[str, Any]] = []
+    for g in series.get("groups") or []:
+        name = str(g.get("name") or "")
+        cells: Dict[str, Any] = {}
+        for key, _head, _unit in UNIF_COLUMNS:
+            # 只接一個區域、一條流時前綴是空的 —— 兩種都找一次
+            # （`MultiSourceStep` 的既有文法，見 `steps/_util.stream_prefix`）。
+            for cand in ("%s_%s_%s" % (name, metric, key),
+                         "%s_%s" % (metric, key)):
+                if cand in feats:
+                    cells[key] = feats[cand]
+                    break
+        out.append({"name": name, "metric": metric,
+                    "boxes": len(g.get("values") or ()), "cells": cells})
+    return out
+
+
+def _num(value: Any) -> str:
+    return _MISSING if value is None else _fmt(float(value))
+
+
+def build_summary_html(rows: Sequence[Dict[str, Any]]) -> str:
+    """:func:`summary_rows` → 一小塊 HTML（沒有列就回空字串）。"""
+    if not rows:
+        return ""
+    head = "".join("<th>%s<span>%s</span></th>" % (_esc(h), _esc(u))
+                   for _k, h, u in UNIF_COLUMNS)
+    body = []
+    for r in rows:
+        cells = "".join("<td>%s</td>" % _esc(_num(r["cells"].get(k)))
+                        for k, _h, _u in UNIF_COLUMNS)
+        body.append("<tr><th class='r'>%s</th><td class='m'>%s</td>%s"
+                    "<td class='m'>%d</td></tr>"
+                    % (_esc(r["name"]), _esc(r["metric"]), cells,
+                       int(r["boxes"])))
+    return ("<table class='unif'><thead><tr><th>region</th><th>number</th>%s"
+            "<th>boxes</th></tr></thead><tbody>%s</tbody></table>"
+            % (head, "".join(body)))
+
+
+#: 摘要表的樣式。**跟 `boxplot.build_boxplot_page` 的版型是同一頁**，所以只補
+#: 這張表要的那幾條，不重寫整份 CSS。
+SUMMARY_CSS = (
+    "table.unif{border-collapse:collapse;margin:0 0 22px;font-size:12px}"
+    "table.unif th,table.unif td{border:1px solid #e2e5ea;padding:4px 10px;"
+    "text-align:right}"
+    "table.unif thead th{background:#f6f7f9;color:#555;font-weight:600}"
+    "table.unif thead th span{display:block;font-weight:400;color:#8a94a6;"
+    "font-size:10px}"
+    "table.unif th.r{text-align:left}"
+    "table.unif td.m{color:#666;text-align:left;font-family:monospace}")
+
+
+def build_index_page(entries: Sequence[Dict[str, Any]], title: str,
+                     subtitle: str = "") -> str:
+    """好幾顆的入口（F86）。
+
+    ``entries`` 每一項是 ``{"name", "href", "rows"}``（``rows`` 是
+    :func:`summary_rows` 的產物）。
+
+    ⚠ **一顆的時候不要寫這一頁**：多一個檔只是多一層要點進去的東西，而
+    那一顆的頁面本來就是答案。判斷在呼叫端 —— 這一支只負責畫。
+    """
+    o = ["<!doctype html><html><head><meta charset='utf-8'>",
+         "<title>%s</title>" % _esc(title),
+         "<style>",
+         "body{font-family:Segoe UI,Arial,sans-serif;margin:24px;color:#222}",
+         "h1{font-size:18px;margin:0 0 4px}",
+         ".sub{color:#666;font-size:12px;margin:0 0 18px}",
+         "a{color:#2b6cb0;text-decoration:none}a:hover{text-decoration:underline}",
+         SUMMARY_CSS,
+         "table.unif td.m{font-family:inherit}",
+         "</style></head><body>",
+         "<h1>%s</h1>" % _esc(title)]
+    if subtitle:
+        o.append("<p class='sub'>%s</p>" % _esc(subtitle))
+    if not entries:
+        o.append("<p class='sub'>Nothing was drawn.</p>")
+    head = "".join("<th>%s<span>%s</span></th>" % (_esc(h), _esc(u))
+                   for _k, h, u in UNIF_COLUMNS)
+    o.append("<table class='unif'><thead><tr><th>defect</th><th>region</th>"
+             "%s<th>boxes</th></tr></thead><tbody>" % head)
+    for e in entries:
+        rows = list(e.get("rows") or [])
+        span = max(1, len(rows))
+        link = "<a href='%s'>%s</a>" % (_esc(e.get("href", "")),
+                                        _esc(e.get("name", "")))
+        if not rows:
+            o.append("<tr><th class='r'>%s</th><td class='m'>%s</td>%s</tr>"
+                     % (link, _MISSING,
+                        "<td>%s</td>" % _MISSING * (len(UNIF_COLUMNS) + 1)))
+            continue
+        for i, r in enumerate(rows):
+            cells = "".join("<td>%s</td>" % _esc(_num(r["cells"].get(k)))
+                            for k, _h, _u in UNIF_COLUMNS)
+            first = ("<th class='r' rowspan='%d'>%s</th>" % (span, link)
+                     if i == 0 else "")
+            o.append("<tr>%s<td class='m'>%s</td>%s<td>%d</td></tr>"
+                     % (first, _esc(r["name"]), cells, int(r["boxes"])))
+    o.append("</tbody></table></body></html>")
+    return "\n".join(o)

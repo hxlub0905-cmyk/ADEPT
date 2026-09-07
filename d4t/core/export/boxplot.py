@@ -210,7 +210,8 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
 
 
 def build_boxplot_page(charts: Sequence[Dict[str, Any]], title: str,
-                       subtitle: str = "", note: str = "") -> str:
+                       subtitle: str = "", note: str = "",
+                       lead: str = "", extra_css: str = "") -> str:
     """一份只有圖的 HTML（一張圖一列，由上往下）。
 
     ``charts`` 的每一項要嘛帶 ``series``（這裡畫成盒鬚圖），要嘛帶 ``svg``
@@ -229,12 +230,19 @@ def build_boxplot_page(charts: Sequence[Dict[str, Any]], title: str,
          ".note{color:#666;font-size:12px;margin:0 0 20px;max-width:60em}",
          "figure{margin:0 0 26px}",
          "svg.boxplot{display:block;max-width:100%;height:auto}",
+         # 呼叫端補的樣式（F86：均勻度那一頁的摘要表）。版型仍然只有一份 ——
+         # 兩頁會並排在同一個報表資料夾裡。
+         str(extra_css or ""),
          "</style></head><body>",
          "<h1>%s</h1>" % _esc(title)]
     if subtitle:
         o.append("<p class='sub'>%s</p>" % _esc(subtitle))
     if note:
         o.append("<p class='note'>%s</p>" % _esc(note))
+    # 圖**上方**那一塊（F86：均勻度的數字表）。原樣放進去 —— 呼叫端已經
+    # 跳脫過了；`note` 那一格才是純文字。
+    if lead:
+        o.append(str(lead))
     if not charts:
         o.append("<p class='note'>Nothing to plot: none of the numbers you "
                  "picked came out of this run.</p>")

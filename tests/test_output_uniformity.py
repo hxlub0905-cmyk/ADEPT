@@ -102,7 +102,8 @@ def test_every_defect_gets_a_page_and_one_file_per_figure(dataset, tmp_path):
     做不到的事，所以兩種都寫。"""
     out = tmp_path / "unif"
     bctx, rows = run(dataset, out)
-    pages = sorted(out.glob("*.html"))
+    # ⚠ 好幾顆的時候多一份 `index.html`（F86）—— 它不是任何一顆的頁面
+    pages = [p for p in sorted(out.glob("*.html")) if p.name != "index.html"]
     assert len(pages) == len(rows) > 0
     for page in pages:
         stem = page.stem
@@ -115,9 +116,9 @@ def test_every_defect_gets_a_page_and_one_file_per_figure(dataset, tmp_path):
 
 def test_only_the_ticked_charts_are_drawn(dataset, tmp_path):
     out = tmp_path / "two"
-    run(dataset, out, charts="histogram,map")
+    _bctx, rows = run(dataset, out, charts="histogram,map")
     assert sorted(p.name.split("-")[-1] for p in out.glob("*.svg")) == \
-        sorted(["histogram.svg", "map.svg"] * len(list(out.glob("*.html"))))
+        sorted(["histogram.svg", "map.svg"] * len(rows))
 
 
 def test_the_preview_names_match_what_is_really_written(dataset, tmp_path):
@@ -229,3 +230,113 @@ def test_its_help_points_at_the_other_card_for_the_other_question():
     card = get_step("output_uniformity")
     assert "Write report" in card.help
     assert "each box" in card.help
+
+
+# --------------------------------------------------------------------------- #
+# F86：檔名、數字、索引頁、打錯的統計量
+# --------------------------------------------------------------------------- #
+def test_the_files_are_not_called_overlay(dataset, tmp_path):
+    """**這幾張不是疊圖。**
+
+    第一版借了 `overlay.overlay_filename()`，於是檔名長成
+    `overlay_field-box.svg` —— 而我要的只有它「把 / : 換成底線」那一半。
+    前綴是搭便車來的，意思是錯的。
+    """
+    out = tmp_path / "names"
+    run(dataset, out)
+    names = [p.name for p in out.iterdir()]
+    assert names, "什麼都沒寫"
+    assert not any(n.startswith("overlay_") for n in names), names
+
+
+def test_a_defect_id_that_is_not_a_legal_filename_still_writes():
+    """消毒那一半**要留著**：RSEM 的 id 是從檔名來的，一顆 id 裡有 `/` 或
+    `:` 的 defect 會讓寫檔整個失敗，而症狀是「少了幾張圖」（鐵則 7 把例外
+    吃掉了）。"""
+    from d4t.core.export.overlay import safe_stem
+    assert safe_stem("LOT/1:2") == "LOT_1_2"
+    assert safe_stem("") == "unknown"
+
+
+def test_the_page_carries_the_numbers_not_just_the_pictures(dataset, tmp_path):
+    """那一頁本來就該是「一顆的答案」。
+
+    在這之前它只有四張 SVG —— 看圖的人得另外開 CSV 才知道 CV% 是多少。
+    """
+    out = tmp_path / "numbers"
+    run(dataset, out)
+    page = next(out.glob("*.html")).read_text(encoding="utf-8")
+    assert "<table class='unif'" in page, "頁面上沒有數字表"
+    assert "CV" in page and "left" in page       # 散多開 ＋ 往哪邊斜
+    assert "boxes" in page
+
+
+def test_the_numbers_on_the_page_are_the_ones_in_the_csv(dataset, tmp_path):
+    """**同一顆的 CV% 不准有兩個。**
+
+    摘要表的數字是從那一顆的 features 拿的，不在畫圖那一側重算 —— 重算的
+    那一份會漂，而 CSV 與報告頁上出現兩個 CV% 的那天，沒有人看得出哪一個
+    是對的。
+    """
+    from d4t.core.export import uniformity_charts as uc
+    out = tmp_path / "same"
+    _bctx, rows = run(dataset, out)
+    feats = rows[0]["features"]
+    notes = []          # 直接問那一支，避免再跑一次 pipeline
+    got = uc.summary_rows({"metric": "glv_mean",
+                           "groups": [{"name": "cells", "values": [1.0, 2.0]}]},
+                          feats)
+    assert got[0]["cells"].get("cv_pct") == feats.get("glv_mean_cv_pct")
+    assert notes == []
+
+
+def test_one_defect_gets_no_index_page(dataset, tmp_path):
+    """**一顆的時候不寫索引**：那一顆的頁面本來就是答案，多一個檔只是多一層
+    要點進去的東西。"""
+    out = tmp_path / "single"
+    run(dataset, out, limit=1)
+    assert not (out / "index.html").exists()
+    assert len(list(out.glob("*.html"))) == 1
+
+
+def test_several_defects_get_an_entry_page(dataset, tmp_path):
+    """20 顆會寫出 20 個 HTML ＋ 80 個 SVG 躺在同一個資料夾裡 —— 沒有入口的話
+    要一個一個點。"""
+    out = tmp_path / "many"
+    _bctx, rows = run(dataset, out)
+    if len(rows) < 2:
+        pytest.skip("這份合成資料只有一顆")
+    index = out / "index.html"
+    assert index.is_file()
+    text = index.read_text(encoding="utf-8")
+    for r in rows:
+        assert str(r["defect_id"]) in text, "索引頁少了一顆"
+    assert text.count("<a href=") == len(rows)
+    assert "CV" in text, "索引頁上要有數字，不然挑不出該點哪一顆"
+
+
+def test_a_statistic_nobody_measured_is_caught_on_the_canvas():
+    """打成 `glv_mena` 的下場是四張圖全空、**沒有任何訊息**。
+
+    那一格是自由文字，而 d4t 對「指名上游東西」的欄位向來有型別。它不是
+    特徵名（是統計量 id），所以落在既有的 `stale-feature-ref` 之外 ——
+    要有自己的一條。
+    """
+    from d4t.core.pipeline import validate
+    r = recipe_for("/tmp/x")
+    assert [i for i in validate(r, kind=KIND)] == []
+    r.nodes["out"].params["metric"] = "glv_mena"
+    bad = [i for i in validate(r, kind=KIND)
+           if i.code == "unknown-chart-metric"]
+    assert bad, "打錯的統計量沒有被講出來"
+    assert "glv_mean" in bad[0].detail, "要說得出上游到底量了什麼"
+
+
+def test_pooled_upstream_is_caught_on_the_canvas():
+    """走 pooled 的話這張卡跑得完、資料夾出得來、裡面什麼都沒有。"""
+    from d4t.core.pipeline import validate
+    r = recipe_for("/tmp/x", glv={"across_boxes": "pooled"})
+    got = [i for i in validate(r, kind=KIND)
+           if i.code == "charts-need-each-box"]
+    assert got, "pooled 沒有被講出來"
+    assert "Odd box out" in got[0].detail, "要指名那顆鈕"

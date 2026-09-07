@@ -140,6 +140,7 @@
 | **跑完了但找不到資料夾** | 你按的是 `Run trial` —— 它**刻意不寫檔**。用右邊箭頭的 `Run all & write`（§5）|
 | **資料夾在，但不是我要的地方** | `Write to` 填的是相對路徑，落在啟動 Studio 的那個資料夾旁邊。填完整路徑 |
 | **有圖但沒有 CSV** | 少一張 `Write report`（§0 第 5 步）|
+| **四張圖都是空的** | `Which number to plot` 打錯了，或上游還在 `pooled`。**跑之前畫布上就會有黃字講這件事** —— 卡片上有驚嘆號就先讀它 |
 | **載入大圖之後卡很久** | 7680×7680 疊 Golden Cell 約 17 秒，會有進度條與取消鈕。沒有進度條代表那張圖小到不用等 |
 | **兩張圖比起來怪怪的** | 尺度沒鎖（§3）|
 | **Histogram 兩座山** | 框放錯位置，混到兩種材質（§2）|
@@ -176,16 +177,29 @@
 一顆 defect 寫五個檔，外加整批一份 CSV：
 
 ```
-overlay_<名字>.html            ← 先開這個：四張圖在同一頁
-overlay_<名字>-box.svg         ← 一張圖一個檔（丟進 Word/PPT 用，向量不會糊）
-overlay_<名字>-histogram.svg
-overlay_<名字>-profile.svg
-overlay_<名字>-map.svg
-defects.csv                    ← 數字（`Write report` 產的）
-recipe.json                    ← 這次的設定，之後重現得出來
+index.html                ← 好幾顆才有：每一顆一列，帶 CV% 讓你挑該點哪一個
+<名字>.html               ← 一顆的答案：四張圖 ＋ 上方一張數字表
+<名字>-box.svg            ← 一張圖一個檔（丟進 Word/PPT 用，向量不會糊）
+<名字>-histogram.svg
+<名字>-profile.svg
+<名字>-map.svg
+defects.csv               ← 每一顆每一欄（`Write report` 產的）
+recipe.json               ← 這次的設定，之後重現得出來
 ```
 
-`<名字>` 是你那張圖的檔名。
+`<名字>` 是你那張圖的檔名。**只有一顆的時候不寫 `index.html`** —— 那一顆的
+頁面本來就是答案。
+
+### `<名字>.html` 上方那張表
+
+```
+region   number      CV %   range   range %   left→right   top→bottom   boxes
+                                              /100 px      /100 px
+cells    glv_mean    0.25     -        -        0.13         0.03        100
+```
+
+沒勾的那幾格印 `-`（不是 0）。**這些數字跟 `defects.csv` 裡是同一份** ——
+報表這邊不重算，不然同一顆會出現兩個 CV%。
 
 ---
 
