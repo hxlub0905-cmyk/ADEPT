@@ -91,6 +91,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from ..export import boxplot as export_boxplot
+from ..export import uniformity_charts as export_unif
 from ..export import html as export_html
 from ..export import klarf_out, overlay
 from ..export import report as export_report
@@ -455,6 +456,25 @@ def picture_specs() -> List[ParamSpec]:
 #: （它為幾十顆設計，每一列都掛圖正是它讀得下去的理由）。**約定共用，
 #: 取捨各自保留。**
 LIMIT_ZERO_HELP = "Zero means every defect."
+
+#: 為什麼「鎖住尺度」值得兩格參數（F85）。
+#:
+#: auto 縮放在**看一批**的時候是對的，兩批擺在一起就會騙人：每一張各自挑
+#: 各自的範圍，於是兩張圖上一樣高的柱子其實不一樣高、一樣紅的格子其實不
+#: 一樣亮。而那件事**圖上沒有任何線索**（軸上的數字要一格一格去讀才發現）。
+#: 這是 PEAR `ChartSettingsDialog` 的 docstring 講的同一件事。
+_LOCK_WHY = ("Lock it whenever you will put two runs side by side: without "
+             "a lock each chart picks its own range, so two bars of the same "
+             "height are not the same number.")
+
+
+def _write_text(text: str, path: str) -> str:
+    """一份純文字 → 一個檔（**atomic**：`.tmp` + `os.replace`，鐵則 5）。
+
+    走 `export_html.write_html` 那一支 —— SVG 跟 HTML 在這裡是同一件事
+    （UTF-8 的文字檔），而寫入的規矩只該有一份。
+    """
+    return export_html.write_html(text, path)
 
 
 def ranked_feature(params: Dict[str, Any]) -> List[str]:
@@ -1427,3 +1447,303 @@ class OutputCharStep(_OutputStep):
             bctx.warn("Characterization report: more region boxes than “Draw "
                       "at most” (%d), so only the boxes near the winner are "
                       "drawn." % int(p["draw_boxes_cap"]))
+
+
+@register_step
+class OutputUniformityStep(_OutputStep):
+    """均勻度的四種圖：**一張影像之內，一格框一個點**（F85）。
+
+    為什麼是第三張寫資料夾的卡，不是 `Write report` 的一格 tick
+    ----------------------------------------------------------
+    那張卡寫的是「整批跑完**一份總表**」—— 每顆 defect 一列，加上判定結果的
+    盒鬚圖（**一個盒子＝一片葉子，一個點＝一顆 defect**）。這裡寫的是
+    「**一張影像之內**的分布」（一個盒子＝一個區域，一個點＝一格框）。
+
+    兩者在畫面上長得一模一樣，而「一個點是什麼」是唯一的差別。併成一張卡的
+    話，那張卡會有兩種跑法與兩種「一個點是什麼」，而 d4t 踩過這個坑：F50
+    刪掉 `ui/output_band.py` 的理由就是**框的意思是「這幾個是一組」，真相
+    卻是「跑的時間不一樣」**。
+
+    先例是 `pair_source` ↔ `Write comparison`：一張量測卡配一張輸出卡。
+    這裡是 **Gray level（``each box`` ＋ ``How even are the boxes``）↔
+    Write uniformity**。
+
+    一顆寫五個檔
+    ------------
+    ``<顆>.html``（四張圖一頁）＋ ``<顆>-<圖>.svg``（一張一個檔）。
+    後者不是多餘：**一份文件要的是一張圖一個檔**，而從一頁裡把 SVG 剪出來
+    是使用者做不到的事（PEAR 的 export 選單也是這樣分的）。
+
+    ⚠ ``limit`` **預設不是 0**（見那一格）。
+    """
+
+    key = "output_uniformity"
+    label = "Write uniformity"
+    PATH = "folder"
+    WHAT = "folder"
+    help = ("Write the four uniformity charts for each defect: a box plot, a "
+            "histogram, a position profile and a heat map - one point per "
+            "measurement box. They come from the Gray level card, so set it "
+            "to “each box” and tick something under “How even are the boxes” "
+            "first. For one row per defect across the whole lot use “Write "
+            "report” instead - these charts are about one image at a time.")
+
+    #: 一顆一頁 ＋ 一張圖一個 SVG。
+    PAGE_EXT, FIGURE_EXT = ".html", ".svg"
+
+    params = [
+        ParamSpec(
+            name="folder", type="str", default="",
+            label="Write to",
+            help=("Folder to write everything into. It is created if it does "
+                  "not exist; files with the same names are overwritten."),
+        ),
+        ParamSpec(
+            name="charts", type="multi_choice",
+            default=",".join(export_unif.CHARTS),
+            choices=list(export_unif.CHARTS),
+            label="Which charts",
+            choice_help={
+                export_unif.CHART_BOX:
+                    "One box per region, one point per measurement box - how "
+                    "spread out each region is, and how the regions compare.",
+                export_unif.CHART_HIST:
+                    "How the values spread out. Two humps usually mean the "
+                    "boxes are sitting on two different materials.",
+                export_unif.CHART_PROFILE:
+                    "The value against where the box sits. A uniform field "
+                    "reads as a flat line; the tilt is printed as a slope "
+                    "per 100 pixels.",
+                export_unif.CHART_MAP:
+                    "The boxes at their own place on the image, coloured by "
+                    "value - so you can see WHERE it is uneven, not just "
+                    "that it is.",
+            },
+            help=("Tick the charts to draw. Each one is written twice: on a "
+                  "page with the others, and on its own as an SVG you can "
+                  "drop straight into a document."),
+        ),
+        ParamSpec(
+            name="metric", type="str", default="",
+            label="Which number to plot",
+            help=("Which gray level statistic the charts are about, for "
+                  "example glv_median. Leave it empty to use the first one "
+                  "the Gray level card measured."),
+        ),
+        ParamSpec(
+            name="axis", type="chip_choice", default=export_unif.AXIS_X,
+            choices=list(export_unif.AXES), icons=["axis_x", "axis_y"],
+            choice_labels={export_unif.AXIS_X: "Left to right",
+                           export_unif.AXIS_Y: "Top to bottom"},
+            label="Profile along",
+            choice_help={
+                export_unif.AXIS_X: "Plot against the box's X, to see a tilt "
+                                    "from one side of the image to the other.",
+                export_unif.AXIS_Y: "Plot against the box's Y, to see a tilt "
+                                    "from top to bottom.",
+            },
+            help=("Which way the position profile runs. It only changes that "
+                  "one chart."),
+        ),
+        ParamSpec(
+            name="value_name", type="str", default="",
+            label="Call the measured value",
+            help=("What to write on the axis where the measured value goes. "
+                  "Leave it empty and the statistic's own id is used "
+                  "(glv_median). “Gray level” reads better in a report."),
+        ),
+        # ---- 鎖定範圍：這一輪唯一非做不可的外觀設定 ------------------------
+        ParamSpec(
+            name="value_lo", type="float", default=0.0, min=-1e9, max=1e9,
+            label="Lock the scale from",
+            help=("Fix the value scale instead of letting each chart pick "
+                  "its own. Leave both at 0 (or “from” not below “to”) and "
+                  "every chart scales itself. %s" % _LOCK_WHY),
+        ),
+        ParamSpec(
+            name="value_hi", type="float", default=0.0, min=-1e9, max=1e9,
+            label="…to",
+            help=("The top of the locked scale. %s" % _LOCK_WHY),
+        ),
+        ParamSpec(
+            name="points", type="bool", default=True,
+            label="Draw every box",
+            help=("On: each measurement box gets its own marker (and the heat "
+                  "map outlines the boxes it measured). Off: only the "
+                  "summary lines - which reads better when there are "
+                  "hundreds of boxes."),
+        ),
+        ParamSpec(
+            name="limit", type="int", default=20, min=0, max=100000,
+            label="At most this many defects",
+            help=("These charts are per image, so a lot of 400 defects would "
+                  "write 400 sets of them. The highest scoring this many are "
+                  "drawn. %s Set it to 0 for every defect - which is what you "
+                  "want when the lot is one big image." % LIMIT_ZERO_HELP),
+        ),
+        ParamSpec(
+            name="bins", type="int", default=24, min=4, max=128,
+            label="Histogram bars", advanced=True,
+            help=("How many bars the histogram is cut into. More bars show "
+                  "more shape and more noise."),
+        ),
+        ParamSpec(
+            name="percent", type="bool", default=False,
+            label="Histogram in percent", advanced=True,
+            help=("On: each region's bars are its own share of its boxes, so "
+                  "a region with 20 boxes and one with 500 compare. Off: the "
+                  "bars are counts."),
+        ),
+        rank_by_spec(),
+    ]
+
+    # ---- 預覽（寫出前一定先看得到會寫什麼）----------------------------------
+    @classmethod
+    def planned_files(cls, params: Dict[str, Any]) -> List[Dict[str, str]]:
+        """按下 Run 這張卡會寫哪幾個檔（**乾跑**）。
+
+        名字帶 ``<defect>`` 是 pattern —— 哪幾顆要跑完才知道，而那正是這張
+        卡跟 Write KLARF 同一條硬規則能守到的極限：**形狀**先講出來。
+        """
+        try:
+            p = cls.validate_params(dict(params or {}))
+        except Exception:  # noqa: BLE001 — 預覽要容錯，壞參數 validate 會講
+            p = dict(params or {})
+        kinds = [k for k in parse_key_list(str(p.get("charts") or ""))
+                 if k in export_unif.CHARTS]
+        out: List[Dict[str, str]] = [{
+            "tick": "page", "what": "the charts on one page",
+            "name": "<defect>%s" % cls.PAGE_EXT}]
+        for k in kinds:
+            out.append({"tick": k, "what": export_unif.CHART_LABELS[k],
+                        "name": "<defect>-%s%s" % (k, cls.FIGURE_EXT)})
+        return out
+
+    @classmethod
+    def configuration_issues(cls, params: Dict[str, Any]) -> List[str]:
+        out = list(super().configuration_issues(params))
+        # ⚠ **要看補完預設之後的值。** 直接讀 `params` 的話，一份還沒被
+        # `validate_params` 走過的 dict（registry 全掃的測試、手寫 recipe 省
+        # 略那一格）會讀到空字串，於是這張卡對一個**設定完全正常**的節點
+        # 說「你什麼都沒勾」。第一版就是這樣寫的，`test_output_convergence`
+        # 抓到 —— 那支測試存在的理由正是這種「每張卡各自寫一遍」的規則。
+        kinds = [k for k in parse_key_list(str(
+            params.get("charts", ",".join(export_unif.CHARTS))
+            if params.get("charts") is not None
+            else ",".join(export_unif.CHARTS)))
+                 if k in export_unif.CHARTS]
+        if not kinds:
+            # 一張圖都沒勾 ⇒ 這張卡只會寫出四個空白頁面。講在畫布上，
+            # 不要等跑完一批。
+            out.append("No charts are ticked, so this card would write empty "
+                       "pages. Tick at least one under “Which charts”.")
+        return out
+
+    # ---- 跑 ----------------------------------------------------------------
+    def _style_for(self, kind: str, p: Dict[str, Any],
+                   metric: str) -> Dict[str, Any]:
+        """一張圖的 ``style`` —— **值那一軸的名字四張共用，其餘各自預設**。
+
+        為什麼不給每張圖各自的 X/Y 名字（PEAR 有）：四張圖的 X 是四件不同的
+        事（區域 / 灰階值 / 位置 / 位置），一組共用的名字**一定有三張是錯的**。
+        真正共用的只有**值那一軸** —— 它在盒鬚圖是 Y、直方圖是 X、profile 是
+        Y、熱圖是色條，而那正是使用者會想改的那一個（`glv_median` →
+        `Gray level`）。所以這張卡給一格，不是四組。
+        """
+        lo, hi = float(p["value_lo"]), float(p["value_hi"])
+        lock = (lo, hi) if hi > lo else None
+        st: Dict[str, Any] = {
+            "title": export_unif.CHART_LABELS[kind],
+            "vlock": lock, "hlock": lock,
+            "points": bool(p["points"]),
+            "bins": int(p["bins"]), "percent": bool(p["percent"]),
+            "axis": str(p["axis"]),
+        }
+        name = str(p["value_name"]).strip() or metric
+        if kind == export_unif.CHART_HIST:
+            st["xlabel"] = name
+        elif kind == export_unif.CHART_PROFILE:
+            st["ylabel"] = name
+        return st
+
+    def run_batch(self, bctx: Any, params: Dict[str, Any]) -> None:
+        p = self.validate_params(params)
+        folder = self._folder_of(p)
+        rows = list(bctx.rows)
+        items = list(getattr(bctx.dataset, "items", None) or [])
+        by_id = {str(getattr(it, "defect_id", "")): it for it in items}
+        sources = dict(getattr(bctx.dataset, "sources", None) or {})
+        kinds = [k for k in parse_key_list(str(p["charts"]))
+                 if k in export_unif.CHARTS]
+        if not kinds:
+            raise StepError(self.key,
+                            "no charts are ticked, so there is nothing to "
+                            "write. Tick at least one under “Which charts”.")
+
+        rank_by = str(p["rank_by"]).strip() or overlay.RANK_BY_SCORE
+        chosen = overlay.pick_overlay_results(rows, int(p["limit"]), rank_by)
+        _warn_if_unranked(self.key, bctx, rows, rank_by, int(p["limit"]))
+
+        written = 0
+        no_spread = 0
+        skipped = 0
+        for row in chosen:
+            did = str(row.get("defect_id", ""))
+            item = by_id.get(did)
+            if item is None:
+                skipped += 1
+                continue
+            try:
+                r = bctx.rerun(item, sources={k: getattr(v, "items", v)
+                                              for k, v in sources.items()})
+                ctx = getattr(r, "context", None)
+                notes = (getattr(ctx, "meta", None) or {}).get("glv_hist") or []
+                series = export_unif.chart_series(
+                    notes, metric=str(p["metric"]).strip())
+            except Exception:               # noqa: BLE001 — 鐵則 7 的跨顆版
+                skipped += 1
+                continue
+            if not series.get("groups"):
+                # 這一顆量不出「這幾格之間」（走 pooled、沒勾 report、或
+                # 只有一格框）。**不寫一張空頁** —— 一張畫得出來但沒有意義的
+                # 圖比沒有圖糟，而下面那句 warning 會說出有幾顆這樣。
+                no_spread += 1
+                continue
+            metric = str(series.get("metric") or "")
+            stem = os.path.splitext(overlay.overlay_filename(did))[0]
+            try:
+                charts = []
+                for k in kinds:
+                    st = self._style_for(k, p, metric)
+                    svg = export_unif.build_chart_svg(series, k, st)
+                    charts.append({"name": export_unif.CHART_LABELS[k],
+                                   "svg": svg})
+                    _write_text(svg, os.path.join(
+                        folder, "%s-%s%s" % (stem, k, self.FIGURE_EXT)))
+                export_html.write_html(
+                    export_boxplot.build_boxplot_page(
+                        charts, "Uniformity - %s" % did,
+                        subtitle="%s, one point per measurement box"
+                                 % (str(p["value_name"]).strip() or metric)),
+                    os.path.join(folder, stem + self.PAGE_EXT))
+            except OSError as e:
+                raise StepError(self.key, "could not write into %s: %s"
+                                % (folder, e)) from e
+            written += 1
+
+        bctx.add_output(folder)
+        if not written:
+            # **一個檔都沒寫要講**：一個空資料夾跟「這張卡沒被跑到」在畫面上
+            # 長得一模一樣，而原因通常是 Gray level 那張卡還停在 pooled。
+            bctx.warn(
+                "Write uniformity: nothing was drawn. These charts need the "
+                "Gray level card set to “each box” with something ticked "
+                "under “How even are the boxes” - that is where the "
+                "box-by-box numbers come from.")
+        elif no_spread:
+            bctx.warn("Write uniformity: %d defect(s) had no box-by-box "
+                      "numbers and were skipped." % no_spread)
+        if skipped:
+            bctx.warn("Write uniformity: %d defect(s) could not be redrawn "
+                      "(no image, or the pipeline did not run for them)."
+                      % skipped)

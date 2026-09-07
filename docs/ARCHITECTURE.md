@@ -250,6 +250,7 @@ d4t/
 │   │   ├── align.py normalize.py histmatch.py       #   對位／正規化／直方圖匹配
 │   │   ├── enhance.py curve.py                      #   局部對比、去背景、去噪；tone curve 求值
 │   │   ├── glv.py snr.py quality.py                 #   GLV metric bank／SNR 正負號正典／對焦指標
+│   │   ├── uniformity.py                            #   這一群框之間差多少、有沒有斜掉（F85，vendored from PEAR）
 │   │   ├── iqi.py                                   #   OP-301 的對焦分數（切 64 塊 → 去背景 → 前 30% 平均，F77）
 │   │   ├── edge.py subpixel.py shape.py profile.py  #   CD 的四塊：剖面、次像素、團塊、投影
 │   │   ├── grid.py mask.py roi.py                   #   條紋→框／label map→框／MultiROISet
@@ -266,7 +267,7 @@ d4t/
 │   │   ├── channels.py       #   這一顆的第幾張圖 → 叫什麼流名
 │   │   ├── cellrois.py       #   標在 Golden Cell 上的具名區域（一個名字、好幾個矩形）
 │   │   └── curve.py          #   tone curve 控制點的字串編碼（parse／format）
-│   ├── steps/                # 步驟卡片 —— **註冊 18 張，卡片庫可見 17 張**（`align` 收起來）
+│   ├── steps/                # 步驟卡片 —— **註冊 19 張，卡片庫可見 18 張**（`align` 收起來）
 │   │                         #   ⚠ 卡片庫由上而下的順序 ＝ `__init__.py` 的 import 順序
 │   │   ├── load.py           #   load_patch／load_single（**一種 source 一張卡**）
 │   │   ├── load_sidecar.py pair_source.py               #   別的程式產的圖／另一份 lot 的那一顆
@@ -275,11 +276,12 @@ d4t/
 │   │   ├── roi_reference.py   #   Region 段（**只有這一張**，畫面上叫「ROI」）：四種找法 → 具名區域
 │   │   ├── roi_cross.py roi_template.py  #   ⚠ **不是卡片**：折進 `roi_reference` 的兩個 method（F30）
 │   │   ├── glv_stats.py cd.py quality.py #   Measure 段：GLV → CD → Focus index（**順序有意義**）
-│   │   ├── output.py         #   Output 段三張：output_report／output_klarf／output_char
+│   │   ├── output.py         #   Output 段四張：output_report／output_klarf／output_char／output_uniformity
 │   │   └── _util.py          #   卡片共用小工具（不註冊任何 step）
 │   ├── export/               # 寫出去
 │   │   ├── klarf_out.py      #   KLARF 三種寫回模式：inplace／annotate／topn
 │   │   ├── report.py html.py boxplot.py  #   CSV／Excel／HTML 報表／box plot（手寫 SVG，零新相依）
+│   │   ├── uniformity_charts.py  #   均勻度四種圖（同上手寫 SVG）⚠ 一個點＝一格框，不是一顆 defect
 │   │   └── overlay.py        #   缺陷疊圖：把「機器看到什麼」畫成人看得懂的圖
 │   ├── store/results.py      # SQLite 批次歷史 ＋ rescore
 │   └── calibration.py        # nm/px 校正 profile

@@ -233,6 +233,12 @@ GLYPH_ICONS = (
     # 工具列那五顆（F7-24）＋ 兩個沒有 KLARF 的入口（F11 Input-2／Input-3）
     "folder", "document", "save", "templates", "export", "stack",
     "folder_open", "layers",
+    # F85：**一張大圖**那個入口（`Open image…`）。四顆 Open 並排，所以它是
+    # 唯一內部有東西的那一個 —— 外框空的話它跟 `stack` 的最上層一樣。
+    "image",
+    # F85：`Write uniformity` 的「profile 沿哪一個軸」。兩顆並排，差別是
+    # **箭頭的方向**，而底下那條軸線相同 —— 那是它們是同一個問題的兩個答案。
+    "axis_x", "axis_y",
     # 畫布彈出視窗（F8-UI D 案）
     "popout",
     # 在 Golden Cell 上標區域的四支工具（F11 Region-1 第二輪）。名字說的是
@@ -516,6 +522,20 @@ def draw_glyph_icon(p: QPainter, name: str, size: float, color: str,
                               side * 0.76, side * 0.76))
         p.setPen(pen)
         p.setBrush(Qt.NoBrush)
+    elif n in ("axis_x", "axis_y"):
+        # 一條軸 ＋ 一個往那個方向的箭頭。兩顆並排時唯一的差別是方向，
+        # 所以軸線本身刻意一模一樣（換了長相的話，使用者要比對兩件事）。
+        if n == "axis_x":
+            a, b = QPointF(m, h * 0.72), QPointF(w - m, h * 0.72)
+            tip = (QPointF(w - m - w * 0.16, h * 0.72 - h * 0.12),
+                   QPointF(w - m - w * 0.16, h * 0.72 + h * 0.12))
+        else:
+            a, b = QPointF(w * 0.28, h - m), QPointF(w * 0.28, m)
+            tip = (QPointF(w * 0.28 - w * 0.12, m + h * 0.16),
+                   QPointF(w * 0.28 + w * 0.12, m + h * 0.16))
+        p.drawLine(a, b)
+        p.drawLine(b, tip[0])
+        p.drawLine(b, tip[1])
     elif n == "image":
         # 一張圖：外框 + 裡面一道山稜和一顆太陽（F85 Input-6）。
         # 四顆 Open 鈕的輪廓要各不相同（F7-24 的同一條）—— ``folder`` 與

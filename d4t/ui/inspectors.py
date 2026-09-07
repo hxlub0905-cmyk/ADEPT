@@ -3273,6 +3273,24 @@ class CharPreviewInspector(OutputPreviewInspector):
         return lines
 
 
+class UniformityPreviewInspector(OutputPreviewInspector):
+    """F85：`Write uniformity` 會寫哪幾個檔。
+
+    多講一行「畫哪幾張圖」—— 那一格是使用者勾的，而檔案數是它乘上顆數。
+    """
+
+    STEP_KEY = "output_uniformity"
+    title = "Uniformity folder"
+
+    def _lines(self) -> List[Tuple[str, str]]:
+        lines = super()._lines()
+        kinds = [c for c in str(self.params.get("charts", "") or "").split(",")
+                 if c.strip()]
+        lines.append(("Charts", "%d ticked" % len(kinds) if kinds
+                      else "(none - this card would write empty pages)"))
+        return lines
+
+
 class FocusInspector(MeasureInspector):
     """Focus index：**這一顆的三個銳利度值，選到就有**（PR-2 2e）。
 
@@ -3364,6 +3382,8 @@ INSPECTORS: Dict[str, type] = {
     # 選到卡就列出會寫哪幾個檔，跟 `run_batch` 讀同一張 `planned_files` 表。
     "output_report": ReportPreviewInspector,
     "output_char": CharPreviewInspector,
+    # F85：跟另外兩張走同一支 —— 寫出前一定先預覽（M5 的硬性規則）。
+    "output_uniformity": UniformityPreviewInspector,
     # ⚠ ``roi_reference`` **一個 key、三種面板**（F30）—— 見 :data:`BY_METHOD`。
     # 這裡放的是「沒有 method 可看時的那一個」。
     "roi_reference": GdsInspector,
