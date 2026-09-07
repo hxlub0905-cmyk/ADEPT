@@ -175,6 +175,12 @@ class ColourButton(QWidget):
             self.set_value(got.name())
 
 
+def _esc(text: str) -> str:
+    """QLabel 吃 rich text，所以標題要跳脫（`&` 在名字裡出現過就會吃掉字）。"""
+    return (str(text).replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;"))
+
+
 def _chips(key: str, parent: Optional[QWidget] = None) -> "BoolChips":
     """`BOOL_CHIPS` 的一列 → 一個 `BoolChips`。"""
     off, on, off_help, on_help = BOOL_CHIPS[str(key)]
@@ -567,8 +573,9 @@ class ChartSettingsDialog(QDialog):
 
     def _row(self, grid: QGridLayout, r: int, key: str, title: str,
              owner: QWidget, editor: QWidget) -> None:
-        lab = QLabel(str(title), owner)
+        lab = QLabel(self._row_title(key, title), owner)
         lab.setMinimumWidth(160)
+        lab.setWordWrap(True)
         if _TIPS.get(key):
             lab.setToolTip(_TIPS[key])
             editor.setToolTip(_TIPS[key])
@@ -577,6 +584,37 @@ class ChartSettingsDialog(QDialog):
         grid.setColumnStretch(2, 1)
         self.globals[key] = editor
         self._labels[key] = lab
+
+    def _row_title(self, key: str, title: str) -> str:
+        """標題 ＋ **這一格影響哪幾張圖**（影響全部就不加）。
+
+        使用者 2026-09-07：「不同 chart 可設定的應該要不一樣?」
+
+        左半這幾格名義上是「共用的」，但**共用不等於每一張都吃得到** ——
+        `Histogram bars` 只有直方圖用得到、`Markers` 只有 profile。
+        `GLOBAL_APPLIES` 本來就知道這件事（不適用的整列收起來），但四張圖都
+        勾著的時候每一列都在，而畫面上沒有說哪一列管哪一張 —— 於是使用者在
+        Box plot 分頁上看著「Histogram bar height」，只能自己猜。
+
+        只有**一張圖**在畫面上的時候不加：那時候每一列都是那張圖的。
+        """
+        uses = uc.GLOBAL_APPLIES.get(str(key))
+        if not uses or len(self._kinds) <= 1:
+            return str(title)
+        mine = [uc.CHART_LABELS.get(k, k) for k in self._kinds if k in uses]
+        if len(mine) >= len(self._kinds):
+            return str(title)          # 這一格四張都吃得到
+        # **標題已經說了就不要再說一次**：`Heat map cells` 底下再掛一行
+        # `Heat map` 是噪音，而噪音會讓真正需要那行的幾列（`Markers`、
+        # `Ticks across`）也被跳過不讀。
+        low = str(title).lower()
+        mine = [m for m in mine if m.lower() not in low]
+        if not mine:
+            return str(title)
+        # 尾巴要**看得出是註解不是標題** —— 同一個字級同一個顏色的話，
+        # 「Box plot / Box plot」讀起來像兩行標題（第一版就是那樣）。
+        return ("%s<br><span style='color:%s;font-size:11px'>%s</span>"
+                % (_esc(str(title)), TOKENS["text_hint"], _esc(" · ".join(mine))))
 
     def _numbers_group(self, parent: QWidget) -> QFrame:
         box = self._section("What is drawn", parent)
@@ -618,7 +656,7 @@ class ChartSettingsDialog(QDialog):
         grid.setHorizontalSpacing(10)
         grid.setVerticalSpacing(6)
         lock = _chips("lock")
-        self._row(grid, 0, "lock", "Value scale", box, lock)
+        self._row(grid, 0, "lock", "How the range is picked", box, lock)
         self._row(grid, 1, "lo", "Bottom", box, _number("lo", box))
         self._row(grid, 2, "hi", "Top", box, _number("hi", box))
         for key in ("lo", "hi"):

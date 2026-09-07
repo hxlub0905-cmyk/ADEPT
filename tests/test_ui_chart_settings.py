@@ -846,3 +846,50 @@ def test_a_chip_pair_behaves_like_a_checkbox(qapp):
     assert w.isChecked() is True and seen == [True]
     w.setChecked(True)
     assert seen == [True], "沒有變就不要發"
+
+
+def test_no_setting_has_two_controls(qapp):
+    """**一格設定只能有一個地方改得到。**
+
+    使用者 2026-09-07：「Icon 很漂亮，但有全應用進去嗎」—— 一眼看出
+    `point_fill` 同時是「Data points」那一列裡的 `filled` 勾選框、又是
+    「Markers」那一排膠囊。後放的把前面的從 `globals` 裡蓋掉，於是那個勾選框
+    看得到、按得下、**什麼都不會發生**。
+
+    這一條靠兩張表對得起來：`chart_style.ROWS`（那個網格）與
+    `chart_settings.BOOL_CHIPS`（一排兩顆的那些）**不准有交集**。
+    """
+    from d4t.ui.chart_settings import BOOL_CHIPS
+
+    in_grid = {k for _t, props in cs.ROWS for k, _c in props}
+    assert not (in_grid & set(BOOL_CHIPS)), sorted(in_grid & set(BOOL_CHIPS))
+    # 而每一格都要有**一個**家
+    homed = in_grid | set(BOOL_CHIPS) | {
+        "value_name", "bins", "xticks", "yticks", "lo", "hi"}
+    assert homed == set(cs.GLOBAL_KEYS), sorted(homed ^ set(cs.GLOBAL_KEYS))
+
+
+def test_a_row_says_which_charts_it_reaches(qapp):
+    """使用者 2026-09-07：「不同 chart 可設定的應該要不一樣?」
+
+    左半名義上是「共用的」，但**共用不等於每一張都吃得到**。四張都勾著的
+    時候每一列都在，而畫面上要說得出哪一列管哪一張。
+    """
+    dlg = ChartSettingsDialog("", list(uc.CHARTS))
+    assert "Position profile" in dlg._labels["point_fill"].text(), \
+        "「Markers」沒說它只影響 profile"
+    assert "Histogram" in dlg._labels["xticks"].text()
+    # **標題已經說了就不要再說一次** —— `Heat map cells` 底下再掛一行
+    # `Heat map` 是噪音，而噪音會讓真正需要那行的幾列也被跳過不讀。
+    for key in ("equal_cells", "map_values", "whiskers", "bins", "percent"):
+        assert "<span" not in dlg._labels[key].text(), key
+    # 四張都吃得到的那幾格也不加
+    assert "<span" not in dlg._labels["value_name"].text()
+    assert "<span" not in dlg._labels["lock"].text()
+
+
+def test_one_chart_needs_no_tag(qapp):
+    """只有一張圖在畫面上的時候，每一列本來就是那張圖的 —— 不必再說一次。"""
+    dlg = ChartSettingsDialog("", [uc.CHART_HIST])
+    assert "<span" not in dlg._labels["bins"].text()
+    assert "<span" not in dlg._labels["xticks"].text()

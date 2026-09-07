@@ -161,8 +161,12 @@ ROWS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
                      ("tick_color", "colour"))),
     ("Axis names", (("axis_size", "size"), ("axis_bold", "bold"),
                     ("axis_color", "colour"))),
-    ("Data points", (("point_size", "radius"), ("point_fill", "filled"),
-                     ("point_color", "colour"))),
+    # ⚠ ``point_fill`` **不在這裡**：它是「空心還是實心」——一個要哪一種長相
+    # 的問題，所以它在下面那一區是一排兩顆膠囊（`BOOL_CHIPS`）。
+    # 兩邊都放過一次，而後放的那個把前面的從 `globals` 裡蓋掉 —— 於是這一列
+    # 的「filled」勾選框看得到、按得下、**什麼都不會發生**。
+    # 使用者 2026-09-07 一眼看出來：「Icon 很漂亮，但有全應用進去嗎」。
+    ("Data points", (("point_size", "radius"), ("point_color", "colour"))),
     ("Lines", (("line_width", "width"), ("line_color", "colour"))),
     ("Fills", (("fill_strength", "strength"), ("fill_color", "colour"))),
 )
