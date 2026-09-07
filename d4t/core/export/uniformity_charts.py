@@ -53,6 +53,7 @@ from .boxplot import (  # noqa: PLC2701 — 見上
 )
 
 __all__ = [
+    "resolve_style",
     "CHARTS", "CHART_LABELS", "REGION_COLOURS", "AXES", "UNIF_COLUMNS",
     "chart_series", "build_chart_svg", "build_charts_page",
     "summary_rows", "build_index_page",
@@ -88,6 +89,27 @@ PER_CHART_APPLIES: Dict[str, Tuple[str, ...]] = {
     # 也沒有軸名（「X (px)」對讀圖的人不是一句話，底下那一行
     # `區域 - 統計量` 才是）。所以它只剩標題。
     CHART_MAP: ("title",),
+}
+
+#: 哪幾格**全域**設定只對某幾張圖有意思（沒列的就是四張都用得到）。
+#:
+#: ⚠ 同 :data:`PER_CHART_APPLIES` 的理由：一格答了也沒用的設定比沒有那一格更
+#: 糟。`Write report` 只畫盒鬚圖，而它的設定面板上以前照樣列著「熱圖的每一格
+#: 一樣大」「直方圖切幾根柱」—— 兩格永遠不會發生任何事。
+#:
+#: ⚠ **收起來不等於清掉**：值仍然留在那一格參數裡（把 Heat map 取消勾選再
+#: 勾回來，設定要還在），編輯器只是不顯示。
+GLOBAL_APPLIES: Dict[str, Tuple[str, ...]] = {
+    "bins": (CHART_HIST,),
+    "percent": (CHART_HIST,),
+    "whiskers": (CHART_BOX,),
+    "equal_cells": (CHART_MAP,),
+    "map_values": (CHART_MAP,),
+    # 一格框一個記號：profile 的散點，以及熱圖照實鋪時描出來的那個框
+    "points": (CHART_PROFILE, CHART_MAP),
+    # 盒鬚圖的 X 是類別、熱圖兩軸是位置 —— 兩張都沒有「橫著幾個刻度」
+    "xticks": (CHART_HIST, CHART_PROFILE),
+    "yticks": (CHART_BOX, CHART_HIST, CHART_PROFILE),
 }
 
 #: `profile` 沿哪一個軸。
@@ -251,6 +273,39 @@ def _span(values: Sequence[float], lock: Optional[Sequence[Any]] = None
         return lo - pad, hi + pad
     pad = (hi - lo) * 0.06
     return lo - pad, hi + pad
+
+
+def resolve_style(look: object, kind: str = CHART_BOX, axis: str = AXIS_X,
+                  metric: str = "") -> Dict[str, Any]:
+    """一張圖真正要用的那一份設定 —— **所有人唯一的入口**。
+
+    `chart_style.style_for` 只做「全域 ＋ 這張圖自己的覆寫」；還有兩件事需要
+    **認識圖的名字**，而那正是 `pipeline/chart_style` 刻意不知道的（知道的話
+    `pipeline/` 就開始依賴 `export/`，方向是反的）：
+
+    * 這張圖預設叫什麼（:data:`CHART_LABELS`）；
+    * 「值那一軸」的名字要落在**哪一軸** —— 直方圖是 X，盒鬚圖與 profile 是 Y。
+
+    ⚠ **這一支以前住在 `OutputUniformityStep._style_for` 上**，而那讓所有人
+    （寫檔的卡片、圖的視窗、設定編輯器的預覽、以及後來的 `Write report`）都
+    得去 `get_step("output_uniformity")` 繞一圈才問得到它。實際的代價已經付過
+    一次：設定編輯器的預覽少走了它，於是「值那一軸的名字」那一格**畫面上完全
+    沒有反應**，而它在寫出去的檔案裡是有作用的。住在這裡，繞路就沒有了。
+    """
+    from ..pipeline import chart_style
+
+    st = chart_style.style_for(look, str(kind))
+    st["axis"] = str(axis or AXIS_X)
+    if not st.get("title"):
+        st["title"] = CHART_LABELS.get(str(kind), str(kind))
+    name = str(st.get("value_name") or "").strip() or str(metric or "")
+    if kind == CHART_HIST:
+        st["xlabel"] = st.get("xlabel") or name
+    elif kind in (CHART_PROFILE, CHART_BOX):
+        # 盒鬚圖的 Y 也是值那一軸 —— 以前這裡漏了它，於是同一格設定對三張圖
+        # 有效、對一張沒有（而那張正是報表裡最常出現的）。
+        st["ylabel"] = st.get("ylabel") or name
+    return st
 
 
 def _is_dark(hex_colour: str) -> bool:

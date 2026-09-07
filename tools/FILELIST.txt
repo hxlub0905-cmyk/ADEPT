@@ -6,7 +6,7 @@
 a82bb6b6f02f0dd5f8b7fbceb9fa02556e696797 CLAUDE.md
 095a34ce7ca783934d2901bce9ee1154aa3d445f LICENSE
 1e93f3c5225a1b01666c67c75af022e8a1001060 README.md
-1207aa4c3177de6e8394600345306f683bf7c86f SESSION_LOG.md
+e86e4e849bcc95f0043ffa8b43cc994f5164646f SESSION_LOG.md
 4140d8b6ffc5c3b03a84d94968a2fadc51e233b0 conftest.py
 9597ad2e3abef8a3b9598e2c187e7b828c752f5c d4t/__init__.py
 8c86b85186b87b2eaec575c69764daea67ba61d2 d4t/__main__.py
@@ -40,7 +40,7 @@ c1049c4ae6c2505db6e37b7edeaf364e1244b026 d4t/core/algo/quality.py
 df85cecb3e142f94a5ccb6d8775cd3540d99fa97 d4t/core/export/klarf_out.py
 83479e87353e98ef6fdf38039f475badb7c93a77 d4t/core/export/overlay.py
 ab5031e7056134aa94c5551aba9b80a774b6397a d4t/core/export/report.py
-2cd19ac07a303e7d51847920aa2c808f11022b1a d4t/core/export/uniformity_charts.py
+add2cac60bf56cdd6f4b719674bb7e3808c0e401 d4t/core/export/uniformity_charts.py
 d68c0a05f05bcfc3fcd7fe2a51929c7c6d6e3d76 d4t/core/ingest/__init__.py
 fce8f2d36c5bdf0d41cee5d2ddba4ae365f46dc4 d4t/core/ingest/dataset.py
 8e73de19c7ae0e640d64a03465ef96248f7ae28c d4t/core/ingest/glas_export.py
@@ -60,7 +60,7 @@ fc42a98b3efa65fd3d4ab09e1c0a75dbc94840c1 d4t/core/pipeline/curve.py
 6fd67a7bf080d3cae2573042503bebae007ee104 d4t/core/pipeline/engine.py
 26b348a8525cbd923e325fe0b6d75413317a3e69 d4t/core/pipeline/expression.py
 09e901c1bee239835f2ed6e9f40d55f4597e0034 d4t/core/pipeline/recipe.py
-0dc669d2ac944f46f667006ee0bf0248ec2b0971 d4t/core/pipeline/step.py
+e113e06d60eb5bc7accdab0ec0e17793dbf151c8 d4t/core/pipeline/step.py
 b391a2389abc7ed223de0386c846a03d7e9e143f d4t/core/pipeline/verdict_features.py
 168c2e3811844d0267a24f4a69963848bd594e60 d4t/core/pipeline/verdict_trace.py
 d3e72923400050f8658da43716582d2ba7804df3 d4t/core/steps/__init__.py
@@ -75,7 +75,7 @@ e87f4657eafa91ae2c6c2f2f8d86a9f6ba72e7bf d4t/core/steps/align.py
 a776e192067df83cb88099ed6b82bb70c6f5a66d d4t/core/steps/load.py
 7b7e819770b0fe4589d12cdf23dc1bdad583c5fa d4t/core/steps/load_sidecar.py
 d8b1021ce4eb76b436ba9dea26d62951febd06ac d4t/core/steps/normalize.py
-0173a01fa36ee90fa9558971a99e9952245ffd4d d4t/core/steps/output.py
+79b5deacad5705545dafaf459636fd75f4fa0430 d4t/core/steps/output.py
 66ceffccbdda6a2582041b25342f1b2373bfb243 d4t/core/steps/pair_source.py
 ca28ce64ea62cad9dd025c2ec3968aba80967340 d4t/core/steps/quality.py
 70187a5147e8170f0b1bde393cfd6d9577e78690 d4t/core/steps/roi_cross.py
@@ -92,7 +92,7 @@ a2bef1c5504ba66b2165727e27800c5d72de791b d4t/ui/assets/d4t.svg
 87bce11608d08f4302947e917b2b24d076571775 d4t/ui/branding.py
 454769fb6531a5a30558a418a4d2f565d59f0832 d4t/ui/canvas.py
 3b58b7e078d58ad84a8939734b65952a75a029f3 d4t/ui/cell_canvas.py
-713a381bb84d2fd58ac809b4a50b2a4daf9c9548 d4t/ui/chart_settings.py
+7906541ea3db4f147a33a4f67b8d0cf7a2eae197 d4t/ui/chart_settings.py
 d95b5c98fdb13f64f60bc20a101e4f1938d73552 d4t/ui/decide_panel.py
 8deaa6bc59894a0fb5cb04f3d7b2c5b2b2579c21 d4t/ui/feature_panel.py
 ccd233c8486ce68c52818e2a4cbc2a7613658f95 d4t/ui/feature_tree.py
@@ -116,12 +116,12 @@ a0887c390d75f5210d0f510f10d69f35bffd9b23 d4t/ui/studio.py
 3cc7d61199e03eaba0eb61f5a749b9f6cfca9ba5 d4t/ui/threshold_view.py
 bbdccfae9846829b6542ae266580de5fedd11e2f d4t/ui/tree_panel.py
 fe2d80854c1208b72ad06730fe257d5d16d9057b d4t/ui/tree_scene.py
-0e3fa97e30758735926bd4eee2b322854ea9b0ed d4t/ui/uniformity_window.py
+961779198b5f459a2ff2fae6a68d3300ffba58d5 d4t/ui/uniformity_window.py
 c894b98548a3a06f98ed531901518a429768879f d4t/ui/verdict_band.py
 a1ad68f330e46c2fe585db66f88fbfbc39b4c9e3 d4t/ui/viewmodel.py
 db2453e83e06e1bde6fdcbb000f1a38cc16b3dcd d4t/ui/welcome.py
 34b6365ad97cc503caf8390297720e538dc26f6e d4t/ui/why_panel.py
-538c34b4637957f31f13508a4db76913258f4e77 d4t/ui/widgets.py
+608f2ff37243f7679ea432e6e1a2a31d573a16e3 d4t/ui/widgets.py
 768dbb379b84127e9cbb7ec62df8d51c34dd0100 d4t/ui/wiring_slot.py
 1a85c6e48b270775b997593c94aa048bc4d66feb d4t/ui/workers.py
 78eec1a43352101d12511456c76e15514ac3959e docs/ARCHITECTURE.md
@@ -136,7 +136,7 @@ a2976eb642d3d157db7b2cf008c8853faa21f93d docs/LICENSING.md
 7d6e3d3a6e7ca55d6c61bd7d218efe51f9d4fa38 docs/USING-CD.md
 4474b1853758a2c83b397a0608be2a98b539dcbf docs/USING-CHARACTERIZATION.md
 2d1b318a2e677cdefe00be01e02ca0c4f57765ae docs/USING-SIMGEN.md
-bcfb6a3848261a10148c7a41f09ab69c2dd96115 docs/USING-UNIFORMITY.md
+2274c5f50b7fde31e955095681516f0c4ae03618 docs/USING-UNIFORMITY.md
 31b8d2fb5550439e7b2007bb58ddc7b4c955dc19 docs/plans/F11-phase2-features.md
 49fea2d50709f217e302a38748fee9ddc06b67ce docs/plans/F78-canvas-focus-and-lod.md
 cd9b6800b5941de35efed2464b7c0a0db05e4a49 docs/plans/F79-grid-tells-the-truth.md
@@ -295,7 +295,7 @@ fb6202707688933d4c9d5523122223c097b41dd9 tests/test_ui_canvas_focus.py
 3af81196fa85db7008288cd3852607fe03718d65 tests/test_ui_canvas_one_line_per_input.py
 dd44172aed175c05a9dfca9295969a2470b404a7 tests/test_ui_canvas_ports.py
 650c29eb505d72a276eb6ee3848c0425f1d81cac tests/test_ui_canvas_truth.py
-f013a7387447c8d8cf57b3f6f1b2833300624510 tests/test_ui_chart_settings.py
+635d6cefd2d1563840cc60d26fe170846265c398 tests/test_ui_chart_settings.py
 aa3582995d2196b03cc865f531628e7d22055f5c tests/test_ui_controls_readable.py
 e5c44d0f9a0f8e48d9c19e933763061d9e29144f tests/test_ui_crossing_inspector.py
 6ce8b34f4aefbb77fc62a802cefc8e0c78cc7de5 tests/test_ui_decide_panel_redesign.py

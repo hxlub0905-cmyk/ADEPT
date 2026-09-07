@@ -301,11 +301,26 @@ def test_changing_the_style_in_the_window_writes_it_back_to_the_card(
 
 def test_the_style_only_lands_on_a_uniformity_card(qapp, window):
     """選到別張卡的時候那個訊號**什麼都不做** —— 視窗還開著、使用者按了
-    設定，而 `look` 落在一張沒有那一格的卡上會是一條驗證錯誤。"""
-    nid = window.model.add_step("output_report")
+    設定，而 `look` 落在一張沒有那一格的卡上會是一條驗證錯誤。
+
+    ⚠ 這裡以前用的是 `output_report`，而 F87 第九刀給了它自己的 `look` ——
+    那讓這條測試變成「寫得進去所以紅」。守的東西沒變（**那個視窗畫的是均勻度
+    的圖，寫回去也只該寫那張卡**），換一張真的沒有那一格的卡就好。
+    """
+    nid = window.model.add_step("output_klarf")
     window.select_node(nid)
     window._on_chart_style_changed('{"tick_size":18}')
     assert "look" not in window.model.nodes[nid].params
+
+
+def test_the_charts_window_does_not_write_to_the_report_card(qapp, window):
+    """`Write report` **也有** `look` 了，而那正是這一條要守的：兩張卡各有
+    各的一份，圖的視窗只寫它畫的那一張。"""
+    nid = window.model.add_step("output_report")
+    window.select_node(nid)
+    before = str(window.model.nodes[nid].params.get("look", ""))
+    window._on_chart_style_changed('{"tick_size":18}')
+    assert str(window.model.nodes[nid].params.get("look", "")) == before
 
 
 # --------------------------------------------------------------------------- #
@@ -631,3 +646,111 @@ def test_the_preview_uses_the_same_style_resolver_as_the_file(qapp):
     # 而它真的把 value_name 帶到那一軸上（不是只有呼叫得到）
     dlg = ChartSettingsDialog('{"value_name":"Gray level"}', ["histogram"])
     assert "Gray level" in dlg.views["histogram"].svg()
+
+
+# --------------------------------------------------------------------------- #
+# `Write report` 的盒鬚圖也吃同一份設定（F87 第九刀）
+# --------------------------------------------------------------------------- #
+def test_the_report_box_plot_takes_the_same_settings(qapp):
+    """使用者 2026-09-07：「有辦法把 report 的 box plot 跟 Uniformity 整合嗎」
+    → 先做「讓兩張圖長得一樣」。
+
+    兩張卡畫的本來就是**同一支** `build_boxplot_svg`，但以前只有
+    `Write uniformity` 吃得到 `Chart settings` —— 於是同一份投影片裡兩張盒鬚圖
+    的字級、線寬、鎖定範圍都不一樣，而畫面上沒有任何線索說為什麼。
+    """
+    from d4t.core.pipeline import get_step
+
+    names = [q["name"] for q in get_step("output_report").describe()["params"]]
+    assert "look" in names
+    spec = [q for q in get_step("output_report").describe()["params"]
+            if q["name"] == "look"][0]
+    assert spec["type"] == "chart_style"
+
+
+def test_the_report_card_offers_only_the_box_plot_and_no_per_chart_words(qapp):
+    """它只畫盒鬚圖，而且**一次畫好幾張**（一個數字一張）——
+    所以「這張圖的標題」那一格在這裡沒有意思（一組標題會套到五張上）。"""
+    from d4t.core.pipeline import get_step
+    from d4t.ui.widgets import ParamForm
+
+    card = get_step("output_report")
+    assert card.chart_kinds({}) == [uc.CHART_BOX]
+    assert card.chart_words is False
+
+    form = ParamForm()
+    form.set_step(card.describe(), {"folder": "out"}, [], [])
+    assert form._chart_kinds() == [uc.CHART_BOX]
+    assert form._chart_words() is False
+    dlg = ChartSettingsDialog("", form._chart_kinds(),
+                              words=form._chart_words())
+    assert sorted(dlg.views) == [uc.CHART_BOX], "預覽還是要有"
+    assert dlg.per[uc.CHART_BOX] == {}, "但沒有那幾格字"
+
+
+def test_the_uniformity_card_still_has_its_words(qapp):
+    """反過來的那一半 —— 換一張卡不該把別張卡的東西也拿掉。"""
+    from d4t.core.pipeline import get_step
+    from d4t.ui.widgets import ParamForm
+
+    card = get_step("output_uniformity")
+    assert card.chart_words is True
+    assert card.chart_kinds({"charts": "box,map"}) == ["box", "map"]
+    form = ParamForm()
+    form.set_step(card.describe(), {"folder": "out", "charts": "box"}, [], [])
+    assert form._chart_words() is True
+    assert form._chart_kinds() == ["box"]
+
+
+def test_the_report_box_plot_really_changes_with_the_look(qapp, tmp_path):
+    """不是「有那一格」而已 —— 設定要真的走到畫出來的 SVG 上。"""
+    from d4t.core.export import uniformity_charts as _uc
+    from d4t.core.pipeline import get_step
+
+    card = get_step("output_report")()
+    series = [{"name": "a", "values": [1.0, 2.0, 3.0, 4.0, 9.0]}]
+
+    class _B:
+        rows = [{"defect_id": "1", "ok": True, "features": {"m": 1.0}}]
+
+        def warn(self, *_a):
+            pass
+
+    groups = [{"name": "a", "ids": ["1"], "colour": "#5fd0a0"}]
+    plain = card._charts(_B(), ["m"], groups,
+                         style=_uc.resolve_style("", _uc.CHART_BOX))
+    big = card._charts(_B(), ["m"], groups,
+                       style=_uc.resolve_style('{"tick_size":22}',
+                                               _uc.CHART_BOX))
+    assert plain and big
+    assert plain[0]["svg"] != big[0]["svg"]
+    assert series  # 只是說明那個形狀，實際資料來自 bctx
+
+
+def test_settings_that_cannot_apply_are_hidden(qapp):
+    """只畫盒鬚圖的卡片不必看到「直方圖切幾根柱」（`GLOBAL_APPLIES`）。
+
+    ⚠ **收起來不等於清掉** —— 值仍然 round-trip 回去：把 Heat map 取消勾選
+    再勾回來，設定要還在。
+    """
+    look = '{"bins":40,"equal_cells":false,"tick_size":13}'
+    dlg = ChartSettingsDialog(look, [uc.CHART_BOX], words=False)
+    assert dlg.globals["bins"].isVisibleTo(dlg) is False
+    assert dlg.globals["equal_cells"].isVisibleTo(dlg) is False
+    assert dlg.globals["whiskers"].isVisibleTo(dlg) is True
+    assert dlg.globals["tick_size"].isVisibleTo(dlg) is True
+    assert cs.parse_style(dlg.value()) == cs.parse_style(look), \
+        "藏起來的那幾格不准被清掉"
+
+
+def test_all_four_charts_show_everything(qapp):
+    dlg = ChartSettingsDialog("", list(uc.CHARTS))
+    for key in cs.GLOBAL_KEYS:
+        assert dlg.globals[key].isVisibleTo(dlg) is True, key
+
+
+def test_every_global_setting_is_used_by_at_least_one_chart(qapp):
+    """一格沒有任何一張圖用得到的設定，是一格沒有家的設定。"""
+    for key, uses in uc.GLOBAL_APPLIES.items():
+        assert key in cs.GLOBAL_KEYS, key
+        assert uses and set(uses) <= set(uc.CHARTS), key
