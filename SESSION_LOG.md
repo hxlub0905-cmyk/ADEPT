@@ -230,7 +230,52 @@ describe，JSON 扁平鍵、**只存跟預設不一樣的**），卡片從 12 �
   ⚠ **收起來不等於清掉** —— 值照樣 round-trip，把 Heat map 取消勾選再勾回來，
   設定要還在。
 
-### ⑩ 一張**檔名**的例外清單，放過了它自己要擋的那件事
+### ⑩ 「底色可以設定嗎」→ 不能，一個都不能
+
+使用者：「histogram 的底色，例如直方圖或盒鬚圖的底 或 Position profile 的圓圈
+底顏色可以設定嗎?」查完的答案是**一個都設不到**：`point_color` / `line_color`
+管的是**線**，而 profile 的圓圈本來就是空心的（`fill='none'`），所以那一格設了
+只改邊；柱子與盒子的填色是區域色配一個寫死的 opacity。
+
+補了三件，跳過背景色（使用者：「背景色不用改沒關係，都預設白色」）：
+
+* **`fill_strength`** —— ⚠ **是一個倍率，不是一個絕對的 opacity。** 每一種圖
+  自己那個淡度是設計過的（柱 0.45、盒子 0.18 —— 盒鬚圖上的墨水本來就多），
+  一格絕對值會把那個關係抹平，而且**沒有一個值同時等於今天的兩個**。倍率
+  1.0 就逐位元組不變（`output_report` 的盒鬚圖沒給 style），有測試盯著。
+* **`fill_color`** —— 空 = 跟著區域色（同 `point_color` / `line_color`）。
+* **`point_fill`** —— profile 的圓圈填滿。空心在點多時看得到重疊，實心在投影
+  片上看得見。
+
+### ⑪ 開關改成一排兩顆膠囊（使用者：「like GLV card」）
+
+使用者：「如果可以也能以膠囊方式呈現(like GLV card)」。這是 F68 那條規矩搬進
+這個對話框，而理由一字不差：**勾選框把「另一個選項是什麼」藏起來了**。
+`Whiskers` 不打勾會變成什麼樣子？打勾的人心裡要自己補一張圖。
+
+七個開關 × 兩顆 = 14 張新的 chip 圖示（`ui/glyphs.py`，同一套共通文法：
+一排裡的每一顆共用同一個底、差別做在形狀不做在粗細）。**兩顆都要說得出自己
+是什麼** —— off 那一顆不是「不要」，是它自己那個樣子的名字（`Box only` /
+`With whiskers`、`Count` / `Share`、`True to scale` / `Same size`）。有測試守著
+這條，包含「`not ` 不准出現在 off 那顆的字裡」。
+
+⚠ 兩個踩到的：
+
+1. **`ChoiceChips.set_text` 不發訊號**（刻意的：載入 recipe 不該被當成使用者
+   改了），而 `QCheckBox.setChecked` 會 —— `BoolChips` 要長得像 QCheckBox，
+   那條差別就得補平。沒補的症狀是**即時預覽對每一顆膠囊都沒有反應**，而
+   `test_every_editor_moves_the_preview` 當場抓到（那條測試這一輪第三次派上
+   用場）。
+2. **`_ChipFlow.sizeHint` 講的是「最寬的那一顆」**（對一排十幾顆的統計量膠囊
+   是對的：它本來就要換行），於是兩顆的那一排被排成兩行 —— 同一個問題的兩個
+   答案分成兩行讀起來像兩件事。`BoolChips` 自己把兩顆的寬度加起來當下限。
+
+**例外只有那兩個粗體旗標**（`tick_bold` / `axis_bold`）：它們是「Tick values：
+大小｜粗體｜顏色」那一列裡的**一個屬性**，不是一個「要哪一種長相」的問題，
+而兩顆膠囊塞進三欄的格子會把整排的對齊撐爛。名字寫死在測試裡，所以新加一個
+bool 不會安靜地混進那張例外表。
+
+### ⑫ 一張**檔名**的例外清單，放過了它自己要擋的那件事
 
 CI 紅在 `test_the_short_one_is_only_used_on_the_image`：熱圖色條用了
 `format_feature_value_short`，而那支的邊界是「只有畫在影像上的標記用它」——
@@ -252,7 +297,7 @@ assert users == ["inspectors.py"]
 （同一個形狀在 CLAUDE.md 裡已經有一條：`ALLOWED_ERRORS` 那張表要配一支反向
 測試，不然它就是一張只會變長的紙。這次是另一種爛法 —— 顆粒度太粗。）
 
-### ⑪ 一個把測試掛死的坑
+### ⑬ 一個把測試掛死的坑
 
 新的 UI 測試檔在 fixture 裡才 `import studio`，而 `conftest` 那支關掉「關閉時
 確認存檔」的 autouse fixture 是 `sys.modules.get("d4t.ui.studio")` ——

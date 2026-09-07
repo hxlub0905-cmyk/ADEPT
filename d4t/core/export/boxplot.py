@@ -24,7 +24,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -101,6 +101,20 @@ def _fmt(v: float) -> str:
 def _esc(text: Any) -> str:
     return (str(text).replace("&", "&amp;").replace("<", "&lt;")
             .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+def _fill(style: Dict[str, Any], base: str, opacity: float) -> Tuple[str, str]:
+    """填色與濃度 —— **跟 `uniformity_charts.fill_attrs` 同一套規則**。
+
+    ⚠ 這裡不 import 那一支：``uniformity_charts`` 是 import **這個模組**的那
+    一邊（見檔頭），反過來會是循環。規則只有六行，而兩邊有一條測試對著。
+    倍率 1.0 時 opacity 逐位元組等於以前那個字面值。
+    """
+    ink = str(style.get("fill_color", "") or "") or base
+    k = float(style.get("fill_strength", 1.0) or 0.0)
+    a = max(0.0, min(1.0, float(opacity) * k))
+    text = ("%.3f" % a).rstrip("0").rstrip(".") or "0"
+    return ink, text
 
 
 def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
@@ -228,11 +242,12 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
                              'stroke="%s" stroke-width="%.1f"/>'
                              % (cx - bw / 4, yy, cx + bw / 4, yy, ink,
                                 1.2 * k_line))
+            face, alpha = _fill(st_all, col, 0.18)
             o.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" '
-                     'fill="%s" fill-opacity="0.18" stroke="%s" '
+                     'fill="%s" fill-opacity="%s" stroke="%s" '
                      'stroke-width="%.1f" rx="2"/>'
                      % (cx - bw / 2, min(y1, y3), bw, max(1.0, abs(y1 - y3)),
-                        col, ink, 1.4 * k_line))
+                        face, alpha, ink, 1.4 * k_line))
             o.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" '
                      'stroke="%s" stroke-width="%.1f"/>'
                      % (cx - bw / 2, ym, cx + bw / 2, ym, ink, 2.2 * k_line))

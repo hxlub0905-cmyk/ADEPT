@@ -30,7 +30,9 @@ from d4t.core.pipeline import chart_style as cs  # noqa: E402
 from d4t.core.pipeline import get_step  # noqa: E402
 from d4t.ui import studio as studio_mod  # noqa: E402
 from d4t.ui import theme as theme_mod  # noqa: E402
-from d4t.ui.chart_settings import ChartSettingsDialog, ColourButton  # noqa: E402
+from d4t.ui.chart_settings import (  # noqa: E402
+    BoolChips, ChartSettingsDialog, ColourButton,
+)
 from d4t.ui.uniformity_window import UniformityWindow, fit_into  # noqa: E402
 
 
@@ -189,13 +191,27 @@ def test_the_editors_match_the_kind_of_value(qapp):
     型別對不上不會炸，它會**安靜地存錯東西**（一個 QLineEdit 存出來的
     ``"True"`` 不是 ``true``）。
     """
+    from d4t.ui.chart_settings import BoolChips
+
     dlg = ChartSettingsDialog("", ["box"])
     for key, w in dlg.globals.items():
         default = cs.DEFAULTS[key]
         if key.endswith("_color"):
             assert isinstance(w, ColourButton), key
         elif isinstance(default, bool):
-            assert isinstance(w, QCheckBox), key
+            # F87 第十刀：獨立成一列的開關改成**一排兩顆膠囊**（`BoolChips`）。
+            # 它長得像 QCheckBox（isChecked / setChecked / toggled），所以
+            # 對話框其餘部分不必分兩種寫法。
+            #
+            # ⚠ **例外只有那兩個粗體旗標**，而且名字寫死在這裡：它們是
+            # 「Tick values：大小｜粗體｜顏色」那一列裡的**一個屬性**，不是
+            # 一個「要哪一種長相」的問題 —— 那一列的標題已經說了它是什麼，
+            # 而兩顆膠囊塞進三欄的格子會把整排的對齊撐爛。
+            # 寫死名字是刻意的：新加一個 bool 不會安靜地混進這張表。
+            if key in ("tick_bold", "axis_bold"):
+                assert isinstance(w, QCheckBox), key
+            else:
+                assert isinstance(w, BoolChips), key
         elif isinstance(default, str):
             assert isinstance(w, QLineEdit), key
         else:
@@ -528,7 +544,7 @@ def test_every_editor_moves_the_preview(qapp):
         before = {k: v.svg() for k, v in dlg.views.items()}
         if isinstance(w, ColourButton):
             w.set_value("#123456")
-        elif isinstance(w, QCheckBox):
+        elif isinstance(w, (QCheckBox, BoolChips)):
             w.setChecked(not w.isChecked())
         elif isinstance(w, QLineEdit):
             # ⚠ **每一格一個不同的字**：全都填 "moved" 的話，`value_name` 會
@@ -754,3 +770,79 @@ def test_every_global_setting_is_used_by_at_least_one_chart(qapp):
     for key, uses in uc.GLOBAL_APPLIES.items():
         assert key in cs.GLOBAL_KEYS, key
         assert uses and set(uses) <= set(uc.CHARTS), key
+
+
+# --------------------------------------------------------------------------- #
+# 填色與膠囊（F87 第十刀）
+# --------------------------------------------------------------------------- #
+def test_the_fills_can_be_set(qapp):
+    """使用者 2026-09-07：「histogram的底色，例如直方圖或盒鬚圖的底 或
+    Position profile的圓圈底顏色可以設定嗎?」→ 以前一個都設不到。"""
+    from d4t.core.export.boxplot import build_boxplot_svg
+
+    s = _series()
+    box = [{"name": "a", "values": [1.0, 2.0, 3.0, 4.0, 9.0]}]
+    base_box = build_boxplot_svg(box)
+    assert build_boxplot_svg(box, style={"fill_strength": 2.0}) != base_box
+    assert build_boxplot_svg(box, style={"fill_color": "#123456"}) != base_box
+    base_hist = uc.build_chart_svg(s, uc.CHART_HIST, {})
+    assert uc.build_chart_svg(s, uc.CHART_HIST,
+                              {"fill_strength": 2.0}) != base_hist
+    assert uc.build_chart_svg(s, uc.CHART_HIST,
+                              {"fill_color": "#123456"}) != base_hist
+    base_prof = uc.build_chart_svg(s, uc.CHART_PROFILE, {})
+    assert uc.build_chart_svg(s, uc.CHART_PROFILE,
+                              {"point_fill": True}) != base_prof
+
+
+def test_the_default_fill_is_byte_for_byte_the_old_one(qapp):
+    """**倍率 1.0 就是以前那個字面值。**
+
+    填色的濃度是倍率不是絕對值（每一種圖自己那個淡度是設計過的，而沒有一個
+    絕對值同時等於今天的 0.45 與 0.18）。所以預設下 `output_report` 的盒鬚圖
+    一個位元組都不准變。
+    """
+    from d4t.core.export.boxplot import build_boxplot_svg
+
+    box = [{"name": "a", "values": [1.0, 2.0, 3.0, 4.0, 9.0]}]
+    assert build_boxplot_svg(box) == build_boxplot_svg(box, style={})
+    assert 'fill-opacity="0.18"' in build_boxplot_svg(box)
+    assert "fill-opacity='0.45'" in uc.build_chart_svg(_series(),
+                                                       uc.CHART_HIST, {})
+
+
+def test_the_two_sides_of_a_switch_are_both_named(qapp):
+    """**每一個開關都是一排兩顆膠囊，而兩顆都要說得出自己是什麼。**
+
+    這一族的價值就在「不打勾會變成什麼樣子」本來看不見 —— 所以 off 那一顆
+    不是「不要」，是它自己那個樣子的名字。
+    """
+    from d4t.ui.chart_settings import BOOL_CHIPS
+    from d4t.ui.glyphs import CHIP_ICONS
+
+    bools = {k for k, v in cs.DEFAULTS.items() if isinstance(v, bool)}
+    # 兩個粗體旗標是那一列裡的一個屬性，不是「要哪一種長相」的問題
+    assert set(BOOL_CHIPS) == bools - {"tick_bold", "axis_bold"}
+    for key, (off, on, off_help, on_help) in BOOL_CHIPS.items():
+        assert off[0] and on[0] and off[0] != on[0], key
+        assert off[1] in CHIP_ICONS and on[1] in CHIP_ICONS, key
+        assert off_help and on_help, key
+        assert "not " not in off[0].lower(), (key, "說它自己是什麼，不是「不要」")
+
+
+def test_a_chip_pair_behaves_like_a_checkbox(qapp):
+    """`BoolChips` 長得像 QCheckBox，**而且設值會發訊號**。
+
+    ⚠ `ChoiceChips.set_text` 刻意不發（載入 recipe 不該被當成使用者改了），
+    而 `QCheckBox.setChecked` 會 —— 那條差別要在 `BoolChips` 補平，不然
+    「程式設值不重畫」會變成「這一格沒有反應」。踩過：即時預覽對每一顆膠囊
+    都沒反應。
+    """
+    seen = []
+    w = BoolChips(("Off", "dots_off"), ("On", "dots_on"), False)
+    w.toggled.connect(seen.append)
+    assert w.isChecked() is False
+    w.setChecked(True)
+    assert w.isChecked() is True and seen == [True]
+    w.setChecked(True)
+    assert seen == [True], "沒有變就不要發"

@@ -64,6 +64,13 @@ _NUM: Dict[str, Tuple[float, float, float]] = {
     "point_size": (2.6, 0.5, 12.0),
     # profile 線、中位線、盒子外框
     "line_width": (1.6, 0.4, 6.0),
+    # ⚠ **填色的濃度是一個倍率，不是一個絕對值。**
+    #
+    # 每一種圖自己那個淡度是設計過的（直方圖的柱 0.45、盒鬚圖的盒子 0.18 ——
+    # 盒鬚圖上的墨水本來就多，同樣濃度會糊成一團）。一格絕對的 opacity 會把
+    # 那個關係抹平，而且**沒有一個值能同時等於今天的兩個**；倍率則是 1.0 就
+    # 逐位元組不變，往上調投影機看得清楚、往下調幾乎只剩外框。
+    "fill_strength": (1.0, 0.0, 3.0),
     # 直方圖切幾根柱
     "bins": (24.0, 4.0, 128.0),
     # 兩軸各幾個刻度
@@ -79,6 +86,10 @@ _BOOL: Dict[str, bool] = {
     "axis_bold": False,
     #: 每一格框畫不畫記號（框幾百個的時候關掉，不然點會糊成一團）
     "points": True,
+    #: Position profile 的圓圈**填滿**（預設是空心的）。
+    #: 空心在點很多的時候看得到互相重疊，實心在投影片上比較看得見 ——
+    #: 兩種都對，看你要給誰看。
+    "point_fill": False,
     #: 盒鬚圖畫不畫鬚
     "whiskers": True,
     #: 直方圖畫比例而不是次數（兩群框數差很多時才有意義）
@@ -107,6 +118,10 @@ _TEXT: Dict[str, str] = {
     "axis_color": AUTO,
     "point_color": AUTO,
     "line_color": AUTO,
+    #: 柱子／盒子／實心記號的**填色**。空 = 跟著那一群自己的顏色走。
+    #: ⚠ 接兩個以上區域時填成同一色，圖例就分不出誰是誰 —— 跟
+    #: `point_color` / `line_color` 同一個取捨。
+    "fill_color": AUTO,
     #: 值那一軸要叫什麼（`glv_mean` → `Gray level`）。四張圖共用 ——
     #: 它在盒鬚圖是 Y、直方圖是 X、profile 是 Y、熱圖是色條，而那正是使用者
     #: 會想改的那一個。**其餘的軸名是每張圖自己的**（見 PER_CHART_KEYS）。
@@ -146,8 +161,10 @@ ROWS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
                      ("tick_color", "colour"))),
     ("Axis names", (("axis_size", "size"), ("axis_bold", "bold"),
                     ("axis_color", "colour"))),
-    ("Data points", (("point_size", "radius"), ("point_color", "colour"))),
+    ("Data points", (("point_size", "radius"), ("point_fill", "filled"),
+                     ("point_color", "colour"))),
     ("Lines", (("line_width", "width"), ("line_color", "colour"))),
+    ("Fills", (("fill_strength", "strength"), ("fill_color", "colour"))),
 )
 
 
