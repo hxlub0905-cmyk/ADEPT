@@ -211,7 +211,10 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
 
 def build_boxplot_page(charts: Sequence[Dict[str, Any]], title: str,
                        subtitle: str = "", note: str = "") -> str:
-    """一份只有圖的 HTML（一個特徵一張圖，由上往下）。
+    """一份只有圖的 HTML（一張圖一列，由上往下）。
+
+    ``charts`` 的每一項要嘛帶 ``series``（這裡畫成盒鬚圖），要嘛帶 ``svg``
+    （已經畫好的，原樣放進去）—— 後者是 F85 的四種均勻度圖走的路。
 
     刻意**不共用 `html.CSS`**：那一份是為了一張幾千列的表寫的（sticky 表頭、
     `max-height:70vh` 的捲動框），而這一頁上一張表都沒有。抄過來的話，改那一份
@@ -236,8 +239,12 @@ def build_boxplot_page(charts: Sequence[Dict[str, Any]], title: str,
         o.append("<p class='note'>Nothing to plot: none of the numbers you "
                  "picked came out of this run.</p>")
     for ch in charts or []:
-        o.append("<figure>%s</figure>" % build_boxplot_svg(
+        # 已經畫好的就直接放（F85：均勻度那四種圖不是盒鬚圖，但**版型只有
+        # 一份** —— 兩頁會並排在同一個報表資料夾裡，字級不一樣的那天沒有人
+        # 會知道為什麼）。沒有 `svg` 的照舊由這裡畫，既有呼叫端一個字不動。
+        ready = str(ch.get("svg") or "")
+        o.append("<figure>%s</figure>" % (ready or build_boxplot_svg(
             ch.get("series") or [], title=str(ch.get("title", "")),
-            subtitle=str(ch.get("subtitle", ""))))
+            subtitle=str(ch.get("subtitle", "")))))
     o.append("</body></html>")
     return "\n".join(o)
