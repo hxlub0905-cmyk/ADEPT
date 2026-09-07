@@ -105,12 +105,26 @@ def _esc(text: Any) -> str:
 
 def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
                       subtitle: str = "", width: int = 720,
-                      height: int = 340) -> str:
+                      height: int = 340,
+                      style: Optional[Dict[str, Any]] = None) -> str:
     """一張圖。``series`` 的每一項是 ``{name, values, colour?}``。
 
     **一組都畫不出來時仍然回一張圖**（一句「沒有數字」），不是空字串 ——
     呼叫端把它塞進 HTML，而一個消失的區塊讀起來是「這裡本來就沒有東西」。
     """
+    # 外觀（F87）：`style` 沒給就是以前那幾個寫死的值 —— 既有呼叫端
+    # （`output_report` 的盒鬚圖）一個位元組都沒有變。
+    #
+    # ⚠ **四張圖要吃同一份設定。** 盒鬚圖是唯一走這一支的那一張，而
+    # 「字級只對四張裡的兩張有效」是最難發現的那種不一致：使用者調了、
+    # 有三張變了、一張沒有，而畫面上沒有任何線索說為什麼。
+    st = dict(style or {})
+    tick_size = float(st.get("tick_size", 10) or 10)
+    tick_w = "700" if st.get("tick_bold") else "400"
+    tick_ink = str(st.get("tick_color", "") or "") or _TEXT
+    axis_size = float(st.get("axis_size", 11) or 11)
+    axis_w = "700" if st.get("axis_bold") else "400"
+    axis_ink = str(st.get("axis_color", "") or "") or _TEXT
     pad_l, pad_r, pad_t, pad_b = 66, 18, 34 if title else 14, 52
     plot_w = max(80, width - pad_l - pad_r)
     plot_h = max(80, height - pad_t - pad_b)
@@ -153,8 +167,10 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
         y = y_of(t)
         o.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="%s"/>'
                  % (pad_l, y, pad_l + plot_w, y, _GRID))
-        o.append('<text x="%d" y="%.1f" font-size="10" text-anchor="end" '
-                 'fill="%s">%s</text>' % (pad_l - 6, y + 3, _MUTED, _fmt(t)))
+        o.append('<text x="%d" y="%.1f" font-size="%g" font-weight="%s" text-anchor="end" '
+                 'fill="%s">%s</text>'
+                 % (pad_l - 6, y + tick_size * 0.3, tick_size, tick_w,
+                    tick_ink, _fmt(t)))
     o.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s"/>'
              % (pad_l, pad_t, pad_l, pad_t + plot_h, _AXIS))
 
@@ -167,9 +183,9 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
         if not st:
             # **這一類沒有這個數字** —— 說出來，不是留一格空白（那讀起來像
             # 「這一類不存在」，而它存在，只是每一顆都沒量到）。
-            o.append('<text x="%.1f" y="%.1f" font-size="10" '
+            o.append('<text x="%.1f" y="%.1f" font-size="%g" font-weight="%s" '
                      'text-anchor="middle" fill="%s">no data</text>'
-                     % (cx, pad_t + plot_h / 2, _MUTED))
+                     % (cx, pad_t + plot_h / 2, tick_size, tick_w, _MUTED))
         else:
             col = b["colour"]
             y1, y3, ym = y_of(st["q1"]), y_of(st["q3"]), y_of(st["med"])
@@ -198,12 +214,13 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
                         _fmt(st["q1"]), _fmt(st["q3"])))
         # ---- 底下的名字與顆數 ----
         label = name if len(name) <= 18 else name[:17] + "…"
-        o.append('<text x="%.1f" y="%d" font-size="11" text-anchor="middle" '
+        o.append('<text x="%.1f" y="%d" font-size="%g" font-weight="%s" text-anchor="middle" '
                  'fill="%s">%s</text>'
-                 % (cx, pad_t + plot_h + 16, _TEXT, _esc(label)))
-        o.append('<text x="%.1f" y="%d" font-size="10" text-anchor="middle" '
+                 % (cx, pad_t + plot_h + 16, axis_size, axis_w, axis_ink,
+                    _esc(label)))
+        o.append('<text x="%.1f" y="%d" font-size="%g" font-weight="%s" text-anchor="middle" '
                  'fill="%s">n=%d</text>'
-                 % (cx, pad_t + plot_h + 30, _MUTED,
+                 % (cx, pad_t + plot_h + 30, tick_size, tick_w, _MUTED,
                     st["n"] if st else 0))
     o.append("</svg>")
     return "\n".join(o)

@@ -37,6 +37,7 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional, Set, Tuple, Type
 
+from . import chart_style
 from .expression import ExpressionError, parse_expression
 from .step import (
     FEATURE_TYPES, GROUP_COMPARE, GROUP_ENHANCE, IMAGE_TYPES, REGION_TYPES,
@@ -1521,6 +1522,56 @@ def _migrate_renamed_cards(nodes: Dict[str, "RecipeNode"]) -> None:
                                 enabled=node.enabled)
 
 
+def _migrate_chart_params_into_look(nodes: Dict[str, "RecipeNode"]) -> None:
+    """`output_uniformity` 的五格外觀折進一格 ``look``（F87，2026-09-07）。
+
+    ``value_name`` / ``value_lo`` / ``value_hi`` / ``points`` / ``bins`` /
+    ``percent`` 六格變成一格 ``chart_style``。理由見
+    `pipeline/chart_style.py` 的檔頭：使用者要 PEAR 那種 chart settings，
+    而攤成 ParamSpec 是二十五列。
+
+    **不遷移的話舊檔案打不開**：`validate_params` 對認不得的 key 是
+    ``unknown parameters`` 的硬錯，而那句話的意思是「這份檔案壞了」——
+    真正的情況是「這一格搬家了」。
+
+    判準是**「舊東西在不在」**（鐵則 9）：那幾格在就折進去，不在就什麼都
+    不做。所以跑第二次是 no-op，``to_json_dict → from_json_dict`` 仍然是
+    identity —— 那是 ``run_batch`` 送 recipe 進 worker 的路。
+
+    ⚠ **鎖定那一組要把「規則」翻成「開關」**：舊的約定是「上界高過下界才算
+    鎖住」，而新的有一顆明著的 ``lock``。翻錯的話一份本來鎖著的 recipe 會
+    安靜地變成 auto —— 兩張圖擺在一起，一樣高的柱子其實不一樣高。
+    """
+    moved = ("value_name", "value_lo", "value_hi", "points", "bins", "percent")
+    for node in nodes.values():
+        if node.step != "output_uniformity":
+            continue
+        if not any(k in node.params for k in moved):
+            continue
+        style: Dict[str, Any] = {}
+        try:
+            style.update(chart_style.parse_style(node.params.get("look", "")))
+        except Exception:              # noqa: BLE001 — 遷移不准當機
+            style = {}
+        lo = node.params.pop("value_lo", None)
+        hi = node.params.pop("value_hi", None)
+        if lo is not None and hi is not None:
+            try:
+                lo_f, hi_f = float(lo), float(hi)
+            except (TypeError, ValueError):
+                lo_f = hi_f = 0.0
+            if hi_f > lo_f:            # 舊的「算不算鎖住」就是這一條
+                style.update({"lock": True, "lo": lo_f, "hi": hi_f})
+        for old, new in (("value_name", "value_name"), ("points", "points"),
+                         ("bins", "bins"), ("percent", "percent")):
+            if old in node.params:
+                style[new] = node.params.pop(old)
+        try:
+            node.params["look"] = chart_style.format_style(style)
+        except Exception:              # noqa: BLE001 — 同上
+            node.params["look"] = ""
+
+
 def _migrate_drop_use_within(nodes: Dict[str, "RecipeNode"]) -> None:
     """``normalize`` 的 ``use_within`` 那一格拿掉（2026-09-02）。
 
@@ -2552,6 +2603,8 @@ class Recipe:
         # `node.step == "normalize"`，而那個 key 從來沒有被改過名，所以早跑
         # 晚跑都對 —— 排在這裡只是讓「拿掉一格」跟「換一張卡」讀起來分得開。
         _migrate_drop_use_within(nodes)
+        # 圖表外觀六格收成一格（F87）。
+        _migrate_chart_params_into_look(nodes)
         # GDS 那張卡收成「參照區域」的一個 method（F29）。
         _migrate_roi_from_mask_into_roi_reference(nodes)
         # Profile / Template 也折進去（F30）—— 四張 Region 卡變一張。

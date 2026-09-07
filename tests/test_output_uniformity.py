@@ -173,7 +173,7 @@ def test_a_folder_that_is_a_file_is_caught_too(tmp_path):
 def test_locking_the_scale_reaches_every_chart(dataset, tmp_path):
     """鎖定是這一輪唯一非做不可的外觀設定，所以它要**真的鎖到圖上**。"""
     out = tmp_path / "lock"
-    run(dataset, out, value_lo=0.0, value_hi=255.0)
+    run(dataset, out, look='{"lock":true,"lo":0,"hi":255}')
     hist = next(out.glob("*-histogram.svg")).read_text(encoding="utf-8")
     heat = next(out.glob("*-map.svg")).read_text(encoding="utf-8")
     assert ">250<" in hist or ">200<" in hist      # 鎖到 0–255 才有的刻度
@@ -181,7 +181,11 @@ def test_locking_the_scale_reaches_every_chart(dataset, tmp_path):
 
 
 def test_an_unset_lock_leaves_every_chart_scaling_itself(dataset, tmp_path):
-    """兩格都是 0（預設）⇒ auto。0 不是哨兵值 —— 判準是「上界沒有高過下界」。"""
+    """`lock` 沒開 ⇒ auto。
+
+    F87 之前這是「上界沒有高過下界」那條**要用背的**約定；現在是一顆明著的
+    開關（舊 recipe 由 `_migrate_chart_params_into_look` 翻過來）。
+    """
     out = tmp_path / "auto"
     run(dataset, out)
     assert "locked" not in next(out.glob("*-map.svg")).read_text(encoding="utf-8")
@@ -191,7 +195,7 @@ def test_the_value_name_replaces_the_statistic_id_on_the_axis(dataset,
                                                               tmp_path):
     """`glv_mean` 在報告裡不是一句話，`Gray level` 才是。"""
     out = tmp_path / "named"
-    run(dataset, out, value_name="Gray level")
+    run(dataset, out, look='{"value_name":"Gray level"}')
     prof = next(out.glob("*-profile.svg")).read_text(encoding="utf-8")
     assert "Gray level" in prof
 
@@ -340,3 +344,77 @@ def test_pooled_upstream_is_caught_on_the_canvas():
            if i.code == "charts-need-each-box"]
     assert got, "pooled 沒有被講出來"
     assert "Odd box out" in got[0].detail, "要指名那顆鈕"
+
+
+# --------------------------------------------------------------------------- #
+# F87：外觀是**一格參數**，而且四張圖吃同一份
+# --------------------------------------------------------------------------- #
+def test_the_look_is_one_parameter_not_twenty_five(dataset, tmp_path):
+    """卡片上只剩「寫什麼」那幾格 —— 長相全部在 `look` 裡。"""
+    card = get_step("output_uniformity")
+    names = [p.name for p in card.params]
+    assert "look" in names
+    for gone in ("value_name", "value_lo", "value_hi", "points", "bins",
+                 "percent"):
+        assert gone not in names, "%s 應該折進 look 了" % gone
+    assert len(names) <= 8, "面板又長回去了：%s" % names
+
+
+@pytest.mark.parametrize("kind", ["box", "histogram", "profile", "map"])
+def test_every_chart_obeys_the_same_look(dataset, tmp_path, kind):
+    """**四張圖要吃同一份設定。**
+
+    「字級只對四張裡的兩張有效」是最難發現的那種不一致：使用者調了、三張變
+    了、一張沒有，而畫面上沒有任何線索說為什麼。實測踩過 —— 盒鬚圖走的是
+    `boxplot` 那一支、熱圖的標籤寫死 10px。
+    """
+    out = tmp_path / ("look_%s" % kind)
+    run(dataset, out, charts=kind,
+        look='{"tick_size":14,"tick_bold":true}')
+    svg = next(out.glob("*-%s.svg" % kind)).read_text(encoding="utf-8")
+    assert "14" in svg and "700" in svg, "這張圖沒有吃到字級／粗體"
+
+
+def test_a_per_chart_title_only_touches_that_chart(dataset, tmp_path):
+    """每張圖的標題與軸名是**它自己的**（四張圖的 X 是四件不同的事）。"""
+    out = tmp_path / "titles"
+    run(dataset, out, look='{"box.title":"EPI uniformity"}')
+    assert "EPI uniformity" in next(out.glob("*-box.svg")).read_text("utf-8")
+    assert "EPI uniformity" not in next(out.glob("*-map.svg")).read_text("utf-8")
+
+
+def test_an_impossible_setting_is_refused_when_you_type_it(dataset, tmp_path):
+    """擋在打字的當下（鐵則 4），而且**留著白話那句話**。"""
+    from d4t.core.pipeline.step import ParamError
+    card = get_step("output_uniformity")
+    with pytest.raises(ParamError) as e:
+        card.validate_params({"folder": "/tmp/x", "look": '{"tick_size":99}'})
+    assert "outside" in str(e.value), str(e.value)
+
+
+def test_an_old_recipe_keeps_its_locked_scale():
+    """⚠ **舊的約定要翻成新的開關。**
+
+    F87 之前「鎖住了嗎」是「上界高過下界」；現在是一顆 `lock`。翻錯的話一份
+    本來鎖著的 recipe 會安靜地變成 auto —— 兩張圖擺在一起，一樣高的柱子其實
+    不一樣高，而圖上沒有線索。
+    """
+    from d4t.core.pipeline import Recipe, chart_style
+    raw = {
+        "recipe_id": "old", "version": 3, "app_version": "0.1",
+        "routes": {KIND: ["c"]}, "edges": [],
+        "score": {"expr": "", "threshold": 0.0, "bins": {}},
+        "nodes": {"c": {"step": "output_uniformity", "params": {
+            "folder": "/tmp/x", "charts": "box", "value_lo": 10.0,
+            "value_hi": 200.0, "bins": 40, "points": False,
+            "value_name": "Gray level"}}}}
+    r = Recipe.from_json_dict(raw)
+    p = r.nodes["c"].params
+    assert "value_lo" not in p and "bins" not in p, "舊的格子沒有收掉"
+    st = chart_style.style_for(p["look"], "box")
+    assert st["vlock"] == (10.0, 200.0), "鎖定沒有翻過來"
+    assert st["bins"] == 40 and st["points"] is False
+    assert st["value_name"] == "Gray level"
+    # 跑第二次是 no-op（鐵則 9：round-trip 要是 identity）
+    assert Recipe.from_json_dict(r.to_json_dict()).to_json_dict() == \
+        r.to_json_dict()

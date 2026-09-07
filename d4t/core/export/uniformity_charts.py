@@ -180,6 +180,32 @@ def chart_series(notes: Sequence[Any], metric: str = "",
 
 
 # --------------------------------------------------------------------------- #
+# 外觀 —— **每一格都問 `style`，不再寫死**（F87）
+# --------------------------------------------------------------------------- #
+def _text_attrs(style: Dict[str, Any], which: str,
+                fallback_ink: str) -> Tuple[float, str, str]:
+    """``(字級, 粗細, 顏色)`` —— ``which`` 是 ``tick`` 或 ``axis``。
+
+    ⚠ **顏色空字串 = auto**，而 auto 在這裡是「主題的墨色」不是「隨便一個
+    灰」。PEAR 的 README 說得最直白：*a light grey tick label is not there on
+    a projector* —— 而這幾張圖的去處正是投影與報告（使用者 2026-09-07）。
+    """
+    size = float(style.get("%s_size" % which, 10.0) or 10.0)
+    bold = "700" if bool(style.get("%s_bold" % which)) else "400"
+    ink = str(style.get("%s_color" % which, "") or "") or fallback_ink
+    return size, bold, ink
+
+
+def _mark_colour(style: Dict[str, Any], which: str, fallback: str) -> str:
+    """資料的顏色：``point`` / ``line``。空 = **跟著那一群自己的顏色走**。
+
+    那是 PEAR 的語意，而且是對的：使用者八成不想手動指定每一群的顏色，
+    他只想在某一個特例上蓋掉。
+    """
+    return str(style.get("%s_color" % which, "") or "") or fallback
+
+
+# --------------------------------------------------------------------------- #
 # 共用的一點幾何
 # --------------------------------------------------------------------------- #
 def _span(values: Sequence[float], lock: Optional[Sequence[Any]] = None
@@ -231,14 +257,26 @@ def _frame(o: List[str], x: float, y: float, w: float, h: float) -> None:
 
 
 def _ylabels(o: List[str], ticks: Sequence[float], lo: float, hi: float,
-             x: float, y: float, h: float, w: float, size: int = 10) -> None:
+             x: float, y: float, h: float, w: float,
+             style: Optional[Dict[str, Any]] = None) -> None:
+    size, weight, ink = _text_attrs(dict(style or {}), "tick", _TEXT)
     for t in ticks:
         ty = y + h - (t - lo) / (hi - lo) * h
         o.append("<line x1='%.1f' y1='%.1f' x2='%.1f' y2='%.1f' stroke='%s' "
                  "stroke-width='1'/>" % (x, ty, x + w, ty, _GRID))
-        o.append("<text x='%.1f' y='%.1f' font-size='%d' fill='%s' "
-                 "text-anchor='end'>%s</text>"
-                 % (x - 6, ty + 3, size, _TEXT, _esc(_fmt(t))))
+        o.append("<text x='%.1f' y='%.1f' font-size='%g' font-weight='%s' "
+                 "fill='%s' text-anchor='end'>%s</text>"
+                 % (x - 6, ty + size * 0.3, size, weight, ink, _esc(_fmt(t))))
+
+
+def _xlabels(o: List[str], ticks: Sequence[float], to_x, y: float,
+             style: Optional[Dict[str, Any]] = None) -> None:
+    """X 軸上的刻度數字（三張圖共用 —— 各寫一份的那份會漂）。"""
+    size, weight, ink = _text_attrs(dict(style or {}), "tick", _TEXT)
+    for t in ticks:
+        o.append("<text x='%.1f' y='%.1f' font-size='%g' font-weight='%s' "
+                 "fill='%s' text-anchor='middle'>%s</text>"
+                 % (to_x(t), y + size * 0.5, size, weight, ink, _esc(_fmt(t))))
 
 
 def _axis_names(o: List[str], style: Dict[str, Any], width: int, height: int,
@@ -246,15 +284,17 @@ def _axis_names(o: List[str], style: Dict[str, Any], width: int, height: int,
                 xdef: str, ydef: str) -> None:
     xl = str(style.get("xlabel") or "") or xdef
     yl = str(style.get("ylabel") or "") or ydef
+    size, weight, ink = _text_attrs(style, "axis", _TEXT)
     if xl:
-        o.append("<text x='%.1f' y='%d' font-size='11' fill='%s' "
-                 "text-anchor='middle'>%s</text>"
-                 % (px + pw / 2, height - 8, _TEXT, _esc(xl)))
+        o.append("<text x='%.1f' y='%d' font-size='%g' font-weight='%s' "
+                 "fill='%s' text-anchor='middle'>%s</text>"
+                 % (px + pw / 2, height - 8, size, weight, ink, _esc(xl)))
     if yl:
         cy = py + ph / 2
-        o.append("<text x='12' y='%.1f' font-size='11' fill='%s' "
-                 "text-anchor='middle' transform='rotate(-90 12 %.1f)'>%s"
-                 "</text>" % (cy, _TEXT, cy, _esc(yl)))
+        o.append("<text x='12' y='%.1f' font-size='%g' font-weight='%s' "
+                 "fill='%s' text-anchor='middle' "
+                 "transform='rotate(-90 12 %.1f)'>%s</text>"
+                 % (cy, size, weight, ink, cy, _esc(yl)))
 
 
 def _empty(width: int, height: int, why: str) -> str:
@@ -316,7 +356,7 @@ def _svg_histogram(series: Dict[str, Any], style: Dict[str, Any],
     ph = max(80, height - pad_t - pad_b)
     o = _head(width, height, str(style.get("title") or ""))
     ticks = _nice_ticks(0.0, top, int(style.get("yticks") or 5))
-    _ylabels(o, ticks, 0.0, top, pad_l, pad_t, ph, pw)
+    _ylabels(o, ticks, 0.0, top, pad_l, pad_t, ph, pw, style)
     _frame(o, pad_l, pad_t, pw, ph)
 
     bw = pw / bins
@@ -330,11 +370,9 @@ def _svg_histogram(series: Dict[str, Any], style: Dict[str, Any],
                      "stroke-width='0.6'/>"
                      % (pad_l + i * bw, pad_t + ph - bh, max(0.6, bw - 0.6),
                         bh, g["colour"], g["colour"]))
-    for t in _nice_ticks(lo, hi, int(style.get("xticks") or 5)):
-        tx = pad_l + (t - lo) / (hi - lo) * pw
-        o.append("<text x='%.1f' y='%.1f' font-size='10' fill='%s' "
-                 "text-anchor='middle'>%s</text>"
-                 % (tx, pad_t + ph + 15, _TEXT, _esc(_fmt(t))))
+    _xlabels(o, _nice_ticks(lo, hi, int(style.get("xticks") or 5)),
+             lambda t: pad_l + (t - lo) / (hi - lo) * pw, pad_t + ph + 11,
+             style)
     _legend(o, groups, pad_l, pad_t + ph + 32)
     _axis_names(o, style, width, height, pad_l, pad_t, pw, ph,
                 str(series.get("metric") or "value"),
@@ -396,7 +434,7 @@ def _svg_profile(series: Dict[str, Any], style: Dict[str, Any],
     ph = max(80, height - pad_t - pad_b)
     o = _head(width, height, str(style.get("title") or ""))
     _ylabels(o, _nice_ticks(lo, hi, int(style.get("yticks") or 5)),
-             lo, hi, pad_l, pad_t, ph, pw)
+             lo, hi, pad_l, pad_t, ph, pw, style)
     _frame(o, pad_l, pad_t, pw, ph)
 
     def sx(p: float) -> float:
@@ -418,9 +456,10 @@ def _svg_profile(series: Dict[str, Any], style: Dict[str, Any],
         if fit is not None:
             slope, intercept = fit
             o.append("<line x1='%.1f' y1='%.1f' x2='%.1f' y2='%.1f' "
-                     "stroke='%s' stroke-width='1.6' stroke-dasharray='6 4'/>"
+                     "stroke='%s' stroke-width='%g' stroke-dasharray='6 4'/>"
                      % (sx(plo), sy(slope * plo + intercept),
-                        sx(phi), sy(slope * phi + intercept), _TREND))
+                        sx(phi), sy(slope * phi + intercept), _TREND,
+                        float(style.get("line_width") or 1.6)))
             notes.append("%s: %s / 100 px"
                          % (g["name"], _fmt(slope * unif.SLOPE_UNIT_PX)))
         else:
@@ -431,18 +470,19 @@ def _svg_profile(series: Dict[str, Any], style: Dict[str, Any],
             pts = " ".join("%.1f,%.1f" % (sx(a), sy(b))
                            for a, b in zip(px_, pv))
             o.append("<polyline points='%s' fill='none' stroke='%s' "
-                     "stroke-width='2'/>" % (pts, g["colour"]))
+                     "stroke-width='%g'/>"
+                     % (pts, _mark_colour(style, "line", g["colour"]),
+                        float(style.get("line_width") or 1.6)))
         # ---- 上層：每一格框 ------------------------------------------------
         if style.get("points", True):
             r = float(style.get("point_size") or 2.6)
+            dot = _mark_colour(style, "point", g["colour"])
             for a, b in zip(pos, vals):
                 o.append("<circle cx='%.1f' cy='%.1f' r='%.1f' fill='none' "
                          "stroke='%s' stroke-width='1'/>"
-                         % (sx(a), sy(b), r, g["colour"]))
-    for t in _nice_ticks(plo, phi, int(style.get("xticks") or 5)):
-        o.append("<text x='%.1f' y='%.1f' font-size='10' fill='%s' "
-                 "text-anchor='middle'>%s</text>"
-                 % (sx(t), pad_t + ph + 15, _TEXT, _esc(_fmt(t))))
+                         % (sx(a), sy(b), r, dot))
+    _xlabels(o, _nice_ticks(plo, phi, int(style.get("xticks") or 5)),
+             sx, pad_t + ph + 11, style)
     o.append("<text x='%.1f' y='%.1f' font-size='10' fill='%s'>slope %s</text>"
              % (pad_l, pad_t + ph + 32, _TREND, _esc("; ".join(notes))))
     _axis_names(o, style, width, height, pad_l, pad_t, pw, ph,
@@ -500,6 +540,7 @@ def _svg_map(series: Dict[str, Any], style: Dict[str, Any],
     ox = pad_l + (pw - dw) / 2.0
     oy = pad_t + (ph - dh) / 2.0
 
+    t_size, t_weight, t_ink = _text_attrs(style, "tick", _TEXT)
     o = _head(width, height, str(style.get("title") or ""))
     for (cx0, cy0, cx1, cy1), v in zip(cells, vals):
         t = 0.5 if hi <= lo else (float(v) - lo) / (hi - lo)
@@ -529,14 +570,16 @@ def _svg_map(series: Dict[str, Any], style: Dict[str, Any],
     o.append("<rect x='%.1f' y='%.1f' width='%d' height='%.1f' fill='none' "
              "stroke='%s' stroke-width='1'/>" % (bx, pad_t, bw_, ph, _AXIS))
     for t, ty in ((hi, pad_t + 4), (lo, pad_t + ph)):
-        o.append("<text x='%.1f' y='%.1f' font-size='10' fill='%s'>%s</text>"
-                 % (bx + bw_ + 4, ty, _TEXT, _esc(_fmt(t))))
+        o.append("<text x='%.1f' y='%.1f' font-size='%g' font-weight='%s' "
+                 "fill='%s'>%s</text>"
+                 % (bx + bw_ + 4, ty, t_size, t_weight, t_ink, _esc(_fmt(t))))
     if style.get("hlock"):
         o.append("<text x='%.1f' y='%.1f' font-size='9' fill='%s'>locked</text>"
                  % (bx + bw_ + 4, pad_t + ph / 2, _MUTED))
-    o.append("<text x='%.1f' y='%d' font-size='10' fill='%s'>%s - %s</text>"
-             % (pad_l, height - 10, _MUTED, _esc(g["name"]),
-                _esc(str(series.get("metric") or "value"))))
+    o.append("<text x='%.1f' y='%d' font-size='%g' font-weight='%s' "
+             "fill='%s'>%s - %s</text>"
+             % (pad_l, height - 10, t_size, t_weight, _MUTED,
+                _esc(g["name"]), _esc(str(series.get("metric") or "value"))))
     if len(groups) > 1:
         # 蓋掉別群這件事**要講出來**（見 docstring 的警告）
         o.append("<text x='%d' y='%d' font-size='10' fill='%s' "
@@ -590,7 +633,7 @@ def build_chart_svg(series: Dict[str, Any], kind: str = CHART_BOX,
          for g in groups],
         title=str(st.get("title") or ""),
         subtitle=str(st.get("subtitle") or ""),
-        width=width, height=height)
+        width=width, height=height, style=st)
 
 
 def build_charts_page(series: Dict[str, Any], kinds: Sequence[str],

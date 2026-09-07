@@ -32,6 +32,10 @@ from .context import Context
 from .cellrois import CellRoiError, format_cell_rois, parse_cell_rois
 from .channels import ChannelMapError, format_channel_map, parse_channel_map
 from .curve import CurveError, format_curve, parse_curve
+from .chart_style import (
+    ChartStyleError, format_style as format_chart_style,
+    parse_style as parse_chart_style,
+)
 
 CATEGORY_IMAGE = "image"
 CATEGORY_ALGO = "algo"
@@ -185,7 +189,8 @@ _CATEGORIES = (CATEGORY_IMAGE, CATEGORY_ALGO, CATEGORY_ADC, CATEGORY_BATCH)
 PARAM_TYPES = ("int", "float", "bool", "str", "expr",
                "feature_key", "feature_keys",
                "choice", "image_key",
-               "image_keys", "curve", "template", "multi_choice",
+               "image_keys", "curve", "chart_style", "template",
+               "multi_choice",
                "metric_chips", "metric_choice", "channel_map", "cell_rois",
                "region_key", "region_keys", "chip_choice")
 
@@ -678,6 +683,11 @@ class ParamSpec:
                 # 擋在這裡而不是等 run() 才炸（鐵則 4）。順便正規化：
                 # 排序、去空白、統一小數位 —— 手打的字串與 UI 拉出來的一樣。
                 v = format_curve(parse_curve(value))
+            elif self.type == "chart_style":
+                # 同 `curve`：擋在打字的當下（鐵則 4）並正規化 —— 排序、
+                # 丟掉等於預設的、整數存成整數，好讓 round-trip 是 identity
+                # （鐵則 9）。手寫 recipe 與編輯器產出的字串因此一模一樣。
+                v = format_chart_style(parse_chart_style(value))
             elif self.type == "cell_rois":
                 # 同上：擋在打字的當下，並正規化成「四位小數、去尾數零」——
                 # round-trip 要是 identity（見 cellrois.format_cell_rois）。
@@ -707,8 +717,11 @@ class ParamSpec:
                 raise ParamError(f"parameter '{self.name}': unknown type")
         except ParamError:
             raise
-        except (CurveError, ChannelMapError, CellRoiError) as exc:
-            # 這兩個的訊息已經是白話的，別被下面的通用訊息蓋掉
+        except (CurveError, ChannelMapError, CellRoiError,
+                ChartStyleError) as exc:
+            # 這幾個的訊息已經是白話的，別被下面的通用訊息蓋掉
+            # （「'{"tick_size":99}' cannot be converted to chart_style」對
+            # 使用者沒有意義；「tick_size is 99, which is outside 5–28」有）
             raise ParamError(f"parameter '{self.name}': {exc}") from None
         except (TypeError, ValueError):
             raise ParamError(

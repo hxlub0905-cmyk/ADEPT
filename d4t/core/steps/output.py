@@ -92,6 +92,7 @@ from typing import Any, Dict, List, Optional
 
 from ..export import boxplot as export_boxplot
 from ..export import uniformity_charts as export_unif
+from ..pipeline import chart_style
 from ..export import html as export_html
 from ..export import klarf_out, overlay
 from ..export import report as export_report
@@ -1548,32 +1549,13 @@ class OutputUniformityStep(_OutputStep):
                   "one chart."),
         ),
         ParamSpec(
-            name="value_name", type="str", default="",
-            label="Call the measured value",
-            help=("What to write on the axis where the measured value goes. "
-                  "Leave it empty and the statistic's own id is used "
-                  "(glv_median). “Gray level” reads better in a report."),
-        ),
-        # ---- 鎖定範圍：這一輪唯一非做不可的外觀設定 ------------------------
-        ParamSpec(
-            name="value_lo", type="float", default=0.0, min=-1e9, max=1e9,
-            label="Lock the scale from",
-            help=("Fix the value scale instead of letting each chart pick "
-                  "its own. Leave both at 0 (or “from” not below “to”) and "
-                  "every chart scales itself. %s" % _LOCK_WHY),
-        ),
-        ParamSpec(
-            name="value_hi", type="float", default=0.0, min=-1e9, max=1e9,
-            label="…to",
-            help=("The top of the locked scale. %s" % _LOCK_WHY),
-        ),
-        ParamSpec(
-            name="points", type="bool", default=True,
-            label="Draw every box",
-            help=("On: each measurement box gets its own marker (and the heat "
-                  "map outlines the boxes it measured). Off: only the "
-                  "summary lines - which reads better when there are "
-                  "hundreds of boxes."),
+            name="look", type="chart_style", default="",
+            label="Chart look",
+            help=("Titles, axis names, tick counts, text size and colour, "
+                  "marker and line width - and whether the value scale is "
+                  "locked. Open it with “Chart settings…” in the chart "
+                  "window. It travels with the recipe, so a reopened recipe "
+                  "draws the charts you left."),
         ),
         ParamSpec(
             name="limit", type="int", default=20, min=0, max=100000,
@@ -1582,19 +1564,6 @@ class OutputUniformityStep(_OutputStep):
                   "write 400 sets of them. The highest scoring this many are "
                   "drawn. %s Set it to 0 for every defect - which is what you "
                   "want when the lot is one big image." % LIMIT_ZERO_HELP),
-        ),
-        ParamSpec(
-            name="bins", type="int", default=24, min=4, max=128,
-            label="Histogram bars", advanced=True,
-            help=("How many bars the histogram is cut into. More bars show "
-                  "more shape and more noise."),
-        ),
-        ParamSpec(
-            name="percent", type="bool", default=False,
-            label="Histogram in percent", advanced=True,
-            help=("On: each region's bars are its own share of its boxes, so "
-                  "a region with 20 boxes and one with 500 compare. Off: the "
-                  "bars are counts."),
         ),
         rank_by_spec(),
     ]
@@ -1649,29 +1618,33 @@ class OutputUniformityStep(_OutputStep):
     # ---- 跑 ----------------------------------------------------------------
     def _style_for(self, kind: str, p: Dict[str, Any],
                    metric: str) -> Dict[str, Any]:
-        """一張圖的 ``style`` —— **值那一軸的名字四張共用，其餘各自預設**。
+        """一張圖真正要用的那一份設定 —— **一格參數展開來的**（F87）。
 
-        為什麼不給每張圖各自的 X/Y 名字（PEAR 有）：四張圖的 X 是四件不同的
-        事（區域 / 灰階值 / 位置 / 位置），一組共用的名字**一定有三張是錯的**。
-        真正共用的只有**值那一軸** —— 它在盒鬚圖是 Y、直方圖是 X、profile 是
-        Y、熱圖是色條，而那正是使用者會想改的那一個（`glv_median` →
-        `Gray level`）。所以這張卡給一格，不是四組。
+        `chart_style.style_for` 是唯一的入口：它把全域那幾格與「這張圖自己的
+        覆寫」疊起來，並把鎖定那一組換成畫圖那一側認得的 ``vlock`` / ``hlock``。
+
+        這裡只補兩件 `chart_style` **刻意不知道**的事（它不認識任何一張圖的
+        名字 —— 知道的話 `pipeline/` 就開始依賴 `export/`，而那個方向是反的）：
+
+        * 這張圖預設叫什麼；
+        * 「值那一軸」的名字要落在**哪一軸** —— 它在直方圖是 X、在 profile
+          是 Y，而那是四張圖各自的事。
         """
-        lo, hi = float(p["value_lo"]), float(p["value_hi"])
-        lock = (lo, hi) if hi > lo else None
-        st: Dict[str, Any] = {
-            "title": export_unif.CHART_LABELS[kind],
-            "vlock": lock, "hlock": lock,
-            "points": bool(p["points"]),
-            "bins": int(p["bins"]), "percent": bool(p["percent"]),
-            "axis": str(p["axis"]),
-        }
-        name = str(p["value_name"]).strip() or metric
+        st = chart_style.style_for(p.get("look", ""), kind)
+        st["axis"] = str(p["axis"])
+        if not st.get("title"):
+            st["title"] = export_unif.CHART_LABELS.get(kind, kind)
+        name = str(st.get("value_name") or "").strip() or metric
         if kind == export_unif.CHART_HIST:
-            st["xlabel"] = name
+            st["xlabel"] = st.get("xlabel") or name
         elif kind == export_unif.CHART_PROFILE:
-            st["ylabel"] = name
+            st["ylabel"] = st.get("ylabel") or name
         return st
+
+    def _value_name(self, p: Dict[str, Any], metric: str = "") -> str:
+        """值那一軸叫什麼（副標題與摘要表共用 —— 各寫一份的那份會漂）。"""
+        got = chart_style.style_for(p.get("look", ""))
+        return str(got.get("value_name") or "").strip() or str(metric)
 
     def run_batch(self, bctx: Any, params: Dict[str, Any]) -> None:
         p = self.validate_params(params)
@@ -1742,7 +1715,7 @@ class OutputUniformityStep(_OutputStep):
                     export_boxplot.build_boxplot_page(
                         charts, "Uniformity - %s" % did,
                         subtitle="%s, one point per measurement box"
-                                 % (str(p["value_name"]).strip() or metric),
+                                 % self._value_name(p, metric),
                         lead=export_unif.build_summary_html(rows),
                         extra_css=export_unif.SUMMARY_CSS),
                     os.path.join(folder, stem + self.PAGE_EXT))
