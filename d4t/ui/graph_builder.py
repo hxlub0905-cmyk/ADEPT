@@ -25,14 +25,15 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QDialogButtonBox, QGridLayout, QLabel, QVBoxLayout,
-    QWidget,
+    QComboBox, QDialog, QDialogButtonBox, QGridLayout, QHBoxLayout, QLabel,
+    QVBoxLayout, QWidget,
 )
 
+from ..core.export import chart_draw
 from ..core.export import uniformity_charts as uc
 from ..core.pipeline import chart_spec as cspec
 from .uniformity_window import ChartView, chart_style_for
-from .widgets import ChoiceChips
+from .widgets import ChoiceChips, small_button
 
 __all__ = ["GraphBuilderDialog", "NONE_WORD", "PICK_WORD", "SpecEditor"]
 
@@ -160,6 +161,32 @@ class SpecEditor(QWidget):
         need = role in cspec.REQUIRED.get(self._mark, ())
         return [PICK_WORD if need else NONE_WORD] + list(pool)
 
+    def set_spec(self, text: str) -> None:
+        """整份換掉（預設那一排按下去走這裡）。**發一次 `changed`**，不是
+        每一格各發一次 —— 中途那幾次畫的是半套設定，畫面會抖一下。"""
+        try:
+            got = cspec.parse_spec(text)
+        except cspec.ChartSpecError:
+            return
+        blocked = [w.blockSignals(True) for w in self.boxes.values()]
+        try:
+            self._mark = str(got.get("mark") or cspec.MARK_POINT)
+            if self.marks is not None:
+                self.marks.set_text(self._mark)
+            for role, box in self.boxes.items():
+                want = str(got.get(role) or "")
+                if want:
+                    at = box.findText(want)
+                    if at >= 0:
+                        box.setCurrentIndex(at)
+                        continue
+                box.setCurrentIndex(0)          # 「還沒挑」／「不用」
+        finally:
+            for box, was in zip(self.boxes.values(), blocked):
+                box.blockSignals(was)
+        self._sync_roles()
+        self.changed.emit()
+
     def spec(self) -> str:
         out: Dict[str, Any] = {"mark": self._mark}
         for role, box in self.boxes.items():
@@ -177,6 +204,48 @@ def _role_word(role: str) -> str:
             cspec.ROLE_Y: "Up the side",
             cspec.ROLE_COLOR: "Colour means",
             cspec.ROLE_SIZE: "Size means"}.get(str(role), str(role))
+
+
+class _PresetRow(QWidget):
+    """一排「從這個開始」的膠囊（`chart_draw.PRESETS`）。
+
+    ⚠ 這一排**不是設定**，是起點：按下去把下面每一格填好，然後使用者接著
+    改。所以它不記住「現在選的是哪一個」—— 改了一格之後就不再是那個預設了，
+    而一顆亮著的膠囊會說謊。
+    """
+
+    picked = Signal(str)
+
+    def __init__(self, frame: Any = None, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._frame = frame
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+        self.buttons: Dict[str, QWidget] = {}
+        for name, why, _template in chart_draw.PRESETS:
+            # ⚠ `kind="icon"` 是為了**看得出它是按鈕**。預設的 `ghost` 是
+            # 透明的，而這一排底下就是設定區 —— render 出來看，五顆讀起來像
+            # 一排標題而不是五顆按得下去的東西（`ColourButton` 的「auto」那
+            # 一格踩過同一個）。
+            btn = small_button(name, shape="wide", tip=why, parent=self,
+                               kind="icon")
+            btn.clicked.connect(lambda _c=False, n=name: self.picked.emit(n))
+            # 那一顆做不出來就**按不下去**（沒有統計量可放）—— 一顆按了沒有
+            # 反應的鈕比沒有那顆鈕更糟（推廣鐵則）。
+            btn.setEnabled(bool(chart_draw.preset_spec(name, frame)))
+            lay.addWidget(btn, 0)
+            self.buttons[name] = btn
+        lay.addStretch(1)
+
+    def first_spec(self) -> str:
+        """打開時落在哪一個 —— **第一個做得出來的**。一顆都做不出來（那一顆
+        沒有量出任何統計量）就回空字串，讓下面那幾格停在「還沒挑」。"""
+        for name, _why, _template in chart_draw.PRESETS:
+            got = chart_draw.preset_spec(name, self._frame)
+            if got:
+                return got
+        return ""
 
 
 class GraphBuilderDialog(QDialog):
@@ -203,13 +272,20 @@ class GraphBuilderDialog(QDialog):
         root.setContentsMargins(12, 10, 12, 12)
         root.setSpacing(8)
 
-        head = QLabel("Pick which measured number goes where. The chart "
-                      "below follows what you pick.", self)
+        head = QLabel("Start from one of these, then change any row below. "
+                      "The chart follows what you pick.", self)
         head.setObjectName("paramHint")
         head.setWordWrap(True)
         root.addWidget(head)
 
-        self.editor = SpecEditor(spec, cols, self, numeric=numeric)
+        # **打開時一定是一個預設，不是一片空白**（計畫書 §5）—— graph builder
+        # 最容易讓不寫 code 的人卡住的就是「面前一張白紙」（推廣鐵則）。
+        self.presets = _PresetRow(self._frame, self)
+        self.presets.picked.connect(self._use_preset)
+        root.addWidget(self.presets)
+
+        start = str(spec or "") or self.presets.first_spec()
+        self.editor = SpecEditor(start, cols, self, numeric=numeric)
         root.addWidget(self.editor)
         for box in self.editor.boxes.values():
             box.currentTextChanged.connect(self.refresh_preview)
@@ -226,6 +302,11 @@ class GraphBuilderDialog(QDialog):
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
         self.refresh_preview()
+
+    def _use_preset(self, name: str) -> None:
+        got = chart_draw.preset_spec(name, self._frame)
+        if got:
+            self.editor.set_spec(got)
 
     def refresh_preview(self, *_a) -> None:
         """**畫不出來就讓它說出原因** —— `chart_draw` 已經會畫那句話

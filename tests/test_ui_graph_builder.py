@@ -128,13 +128,13 @@ def test_the_preview_is_the_svg_that_would_be_written(qapp, frame):
 
 
 def test_picking_a_column_moves_the_preview(qapp, frame):
+    # ⚠ 打開時落在一個**預設**上（第五刀），所以起點不是那句「pick x and
+    # y」了 —— 起點是一張畫得出來的圖，而改一格要看得出差別。
     dlg = GraphBuilderDialog("", frame)
     before = dlg.view.svg()
-    assert "pick x and y" in before
-    dlg.editor.boxes["x"].setCurrentText("glv_mean")
-    dlg.editor.boxes["y"].setCurrentText("glv_std")
+    dlg.editor.boxes["y"].setCurrentText("w")
     after = dlg.view.svg()
-    assert after != before and after.count("<circle") == len(frame)
+    assert after != before
 
 
 def test_no_data_yet_still_opens_and_says_why(qapp):
@@ -142,6 +142,64 @@ def test_no_data_yet_still_opens_and_says_why(qapp):
     dlg = GraphBuilderDialog("", None)
     assert dlg.editor.boxes["x"].count() == 1      # 只有那句「還沒挑」
     assert "no boxes to plot" in dlg.view.svg()
+
+
+def test_it_never_opens_on_a_blank_page(qapp, frame):
+    """**打開時一定是一個預設**（計畫書 §5）。graph builder 最容易讓不寫
+    code 的人卡住的就是「面前一張白紙」（推廣鐵則）。
+
+    ⚠ 這跟第二刀刻意不做的「拿第一欄當預設」是兩回事：那個是隨便挑一欄，
+    畫出來是一團疊在同一點的圓、而且看起來像設定好了；這個是一張**有名字、
+    有意思**的圖，而名字就寫在那顆膠囊上。
+    """
+    dlg = GraphBuilderDialog("", frame)
+    assert dlg.editor.spec(), "打開是空白的"
+    assert "pick x and y" not in dlg.view.svg()
+    assert dlg.view.svg().count("<circle") == len(frame)
+
+
+def test_a_spec_that_is_already_set_is_not_overwritten_by_a_preset(qapp, frame):
+    """使用者存過的那一份**不准被起點蓋掉**。"""
+    text = '{"mark":"bar","x":"region","y":"glv_mean"}'
+    dlg = GraphBuilderDialog(text, frame)
+    assert dlg.editor.spec() == text
+
+
+def test_every_preset_lands_on_a_chart_that_actually_draws(qapp, frame):
+    """一顆按了畫不出東西的鈕，比沒有那顆鈕更糟。"""
+    from d4t.core.export import chart_draw
+
+    dlg = GraphBuilderDialog("", frame)
+    for name, _why, _t in chart_draw.PRESETS:
+        assert dlg.presets.buttons[name].isEnabled(), name
+        dlg.presets.buttons[name].click()
+        qapp.processEvents()
+        svg = dlg.view.svg()
+        assert "pick " not in svg and "no column called" not in svg, name
+        assert dlg.editor.spec(), name
+
+
+def test_with_no_numbers_measured_the_presets_are_not_offered(qapp):
+    """佔位符換不掉（那一顆沒有量出任何統計量）—— 一份指著不存在的欄的 spec
+    會畫出一句「no column called '@metric'」，那比空的更難懂。"""
+    from d4t.core.export import chart_draw
+    from d4t.core.export.chart_frame import build_frame
+
+    dlg = GraphBuilderDialog("", build_frame([]))
+    for name, _why, _t in chart_draw.PRESETS:
+        assert not dlg.presets.buttons[name].isEnabled(), name
+    assert dlg.editor.spec() == ""
+
+
+def test_setting_a_whole_spec_at_once_signals_once(qapp, frame):
+    """中途那幾次畫的是**半套**設定 —— 畫面會抖一下，而每一次都要重畫一張圖。"""
+    ed = SpecEditor("", frame.columns, numeric=frame.numeric_columns())
+    seen = []
+    ed.changed.connect(lambda: seen.append(1))
+    ed.set_spec('{"color":"region","mark":"box","x":"region","y":"glv_mean"}')
+    assert len(seen) == 1
+    assert ed.spec() == \
+        '{"color":"region","mark":"box","x":"region","y":"glv_mean"}'
 
 
 # --------------------------------------------------------------------------- #

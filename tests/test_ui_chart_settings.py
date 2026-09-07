@@ -920,3 +920,39 @@ def test_one_chart_needs_no_tag(qapp):
     dlg = ChartSettingsDialog("", [uc.CHART_HIST])
     assert "<span" not in dlg._labels["bins"].text()
     assert "<span" not in dlg._labels["xticks"].text()
+
+
+def test_a_setting_this_mark_cannot_use_is_hidden(qapp):
+    """F88 第五刀：`GLOBAL_APPLIES` 是**一張圖一列**，答不出「這張圖現在畫成
+    散點，那 `Whiskers` 有作用嗎」。
+
+    沒有這一層的話，把 `Your own chart` 配成散點的人在設定裡看得到
+    `Whiskers` 而它什麼都不做 —— 一格答了也沒用的設定比沒有那一格更糟。
+    """
+    from d4t.ui.chart_settings import _sample_frame
+
+    frame = _sample_frame()
+    seen = {}
+    for mark, spec in (
+            ("point", '{"mark":"point","x":"value","y":"spread"}'),
+            ("box", '{"mark":"box","x":"region","y":"value"}'),
+            ("cell", '{"color":"value","mark":"cell","x":"col","y":"row"}')):
+        dlg = ChartSettingsDialog("", [uc.CHART_CUSTOM], frame=frame,
+                                  spec=spec)
+        seen[mark] = {k for k in ("whiskers", "map_values", "points",
+                                  "point_fill", "fill_color")
+                      if dlg.globals[k].isVisibleTo(dlg)}
+    assert "whiskers" in seen["box"] and "whiskers" not in seen["point"]
+    assert "map_values" in seen["cell"] and "map_values" not in seen["box"]
+    assert "point_fill" in seen["point"] and "point_fill" not in seen["cell"]
+
+
+def test_the_hidden_ones_are_still_carried_back_out(qapp):
+    """**收起來不等於清掉** —— 換一種記號再換回來，設定要還在。"""
+    from d4t.ui.chart_settings import _sample_frame
+
+    look = '{"whiskers":false}'
+    dlg = ChartSettingsDialog(look, [uc.CHART_CUSTOM], frame=_sample_frame(),
+                              spec='{"mark":"point","x":"value","y":"spread"}')
+    assert not dlg.globals["whiskers"].isVisibleTo(dlg)
+    assert cs.parse_style(dlg.value()).get("whiskers") is False

@@ -150,6 +150,42 @@ GLOBAL_APPLIES: Dict[str, Tuple[str, ...]] = {
     "ramp": (CHART_MAP, CHART_CUSTOM),
 }
 
+#: `CHART_CUSTOM` 那一張**還要看它畫成哪一種記號** —— ``鍵 -> 哪幾種記號真的
+#: 讀它``。沒列的鍵就是「這張圖不管什麼記號都用得到」（標題、刻度數…）。
+#:
+#: 為什麼要有第二層：:data:`GLOBAL_APPLIES` 是**一張圖一列**，答得出「這一格
+#: 管不管得到這張圖」，答不出「這張圖現在畫成散點，那 `Whiskers` 有作用嗎」。
+#: 沒有這一層的話，把它配成散點的人在設定裡看得到 `Whiskers` 而它什麼都不做
+#: —— 一格答了也沒用的設定比沒有那一格更糟（推廣鐵則）。
+#:
+#: ⚠ **這張表會跟 `export.chart_draw` 漂**，所以它配著一支**兩個方向都測**的
+#: 測試：列出來的每一對（鍵, 記號）必須真的改變 SVG，而**沒**列出來的那幾對
+#: 必須不改變。少一邊的話這張表就只是一段註解。
+CUSTOM_BY_MARK: Dict[str, Tuple[str, ...]] = {
+    "whiskers": ("box",),
+    "map_values": ("cell",),
+    "points": ("line", "box"),
+    "point_fill": ("point", "line"),
+    "fill_strength": ("box", "bar"),
+    "fill_color": ("box", "bar"),
+}
+
+
+def applies(key: str, kind: str, mark: str = "") -> bool:
+    """這一格設定**改得到**那張圖嗎（`CHART_CUSTOM` 再看記號）。
+
+    UI 問這一支，不要自己讀那兩張表 —— 各讀一份的那天，編輯器收起來的與真的
+    沒有作用的會是兩組不一樣的東西。
+    """
+    uses = GLOBAL_APPLIES.get(str(key))
+    if uses is not None and str(kind) not in uses:
+        return False
+    if str(kind) != CHART_CUSTOM:
+        return True
+    marks = CUSTOM_BY_MARK.get(str(key))
+    return marks is None or str(mark) in marks
+
+
 #: `profile` 沿哪一個軸。
 AXIS_X, AXIS_Y = "x", "y"
 AXES: Tuple[str, ...] = (AXIS_X, AXIS_Y)
