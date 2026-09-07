@@ -4879,6 +4879,9 @@ class StudioWindow(QMainWindow):
         sig = getattr(insp, "calibrate_requested", None)
         if sig is not None:
             sig.connect(self._on_calibrate_requested)
+        sig = getattr(insp, "charts_requested", None)
+        if sig is not None:
+            sig.connect(self._on_charts_requested)
 
     #: 一鍵校正最多量幾顆。統計上 50 顆已經把單張雜訊除到 1/7，再多只是等待。
     CALIBRATE_LIMIT = 60
@@ -4976,6 +4979,49 @@ class StudioWindow(QMainWindow):
                 self.model.available_streams(before_node=nid),
                 self.model.available_regions(before_node=nid))
 
+    def _on_charts_requested(self) -> None:
+        """`Write uniformity` 儀表上的 `Preview charts…`（F87）。
+
+        視窗**只有一個**（開第二次是把同一個抬到最前面）—— 每按一次多開一個
+        的話，改設定會只改到其中一個，而其他幾個還畫著舊的樣子。
+        """
+        from .uniformity_window import UniformityWindow
+
+        win = getattr(self, "_charts_window", None)
+        if win is None:
+            win = UniformityWindow(self)
+            win.style_changed.connect(self._on_chart_style_changed)
+            self._charts_window = win
+        self._refresh_charts_window(self._inspector, force=True)
+        win.show()
+        win.raise_()
+        win.activateWindow()
+
+    def _refresh_charts_window(self, insp: Any, force: bool = False) -> None:
+        """把儀表現在那一顆餵給圖的視窗（開著才餵）。"""
+        win = getattr(self, "_charts_window", None)
+        if win is None or not (force or win.isVisible()):
+            return
+        if not hasattr(insp, "series") or not hasattr(insp, "charts"):
+            return
+        series = insp.series()
+        win.set_context(series, look=str(insp.params.get("look", "") or ""),
+                        axis=str(insp.params.get("axis", "") or "x"),
+                        metric=str(series.get("metric") or ""),
+                        kinds=insp.charts())
+
+    def _on_chart_style_changed(self, look: str) -> None:
+        """視窗裡改完設定 → 寫回那張卡的 ``look`` 那一格。
+
+        走「量給我填」同一條路（`_on_param_requested` → `set_param`），所以它
+        進得了復原堆疊、參數表也跟著顯示新值 —— 一個會改 recipe 而 Ctrl+Z
+        撤不掉的視窗，比沒有那個視窗糟。
+        """
+        node = self.model.nodes.get(self.selected_node or "")
+        if node is None or node.step != "output_uniformity":
+            return
+        self._on_param_requested("look", str(look))
+
     def _on_select_requested(self, axis: str, rule: str) -> None:
         """使用者在曲線上**點了一根條紋** → 那個方向改用那一種材質（F11 2b）。
 
@@ -5041,6 +5087,9 @@ class StudioWindow(QMainWindow):
                          feature_names=feats,
                          shown_streams=[s for s in shown if s])
         self.inspector_summary.setText(insp.summary())
+        # 圖的視窗開著就跟著這一顆走 —— 換一顆 defect 而視窗停在上一顆的
+        # 數字，是最難發現的那一種說謊（兩張圖都畫得出來）。
+        self._refresh_charts_window(insp)
         # 分頁鈕的字由**儀表現在畫的東西**決定（使用者 2026-08-21：「title 要
         # 更詳細一點」）。放不下的那半句進 tooltip。
         if hasattr(insp, "tab_title"):

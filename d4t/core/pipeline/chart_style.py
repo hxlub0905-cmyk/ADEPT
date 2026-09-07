@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 __all__ = [
     "ChartStyleError", "DEFAULTS", "GLOBAL_KEYS", "PER_CHART_KEYS", "ROWS",
-    "parse_style", "format_style", "style_for", "describe",
+    "bounds", "parse_style", "format_style", "style_for", "describe",
 ]
 
 
@@ -136,6 +136,17 @@ ROWS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
     ("Data points", (("point_size", "radius"), ("point_color", "colour"))),
     ("Lines", (("line_width", "width"), ("line_color", "colour"))),
 )
+
+
+def bounds(name: str) -> Optional[Tuple[float, float]]:
+    """``name`` 的 ``(最小, 最大)``；不是數字的鍵回 ``None``。
+
+    **編輯器上的每一格都問這裡。** 上一段說了「最小/最大是給 UI 與驗證共用的
+    同一份」—— 那句話要成立就得有一個公開的入口，不然 UI 只能自己抄一份
+    （而抄出來的那一份就是會漂的那一份，見 CLAUDE.md §0）。
+    """
+    got = _NUM.get(str(name))
+    return (got[1], got[2]) if got else None
 
 
 def _split(key: str) -> Tuple[str, str]:

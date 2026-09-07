@@ -418,3 +418,26 @@ def test_an_old_recipe_keeps_its_locked_scale():
     # 跑第二次是 no-op（鐵則 9：round-trip 要是 identity）
     assert Recipe.from_json_dict(r.to_json_dict()).to_json_dict() == \
         r.to_json_dict()
+
+
+def test_profile_along_only_asks_when_that_chart_is_ticked():
+    """**答了也沒用的問題不要問**（推廣鐵則）。
+
+    `Profile along` 只影響 position profile 那一張。第一版把它攤在那裡，
+    而對只勾了盒鬚圖的人那是一格永遠不生效的設定 —— 使用者填了值、畫面上
+    什麼都沒說。
+
+    ⚠ `show_when` 是**顯示**規則不是驗證規則：藏起來的 ``axis`` 照樣有預設
+    值，而那沒問題 —— 沒勾那張圖就不會有人用到它。
+    """
+    from d4t.core.pipeline import get_step
+    from d4t.core.pipeline.step import param_visible
+
+    spec = [p for p in get_step("output_uniformity").describe()["params"]
+            if p["name"] == "axis"][0]
+    rule = spec.get("show_when")
+    assert rule, "沒有這條規則的話那一格永遠都在"
+    assert param_visible(rule, {"charts": "box,histogram,profile,map"})
+    assert param_visible(rule, {"charts": "profile"})
+    assert not param_visible(rule, {"charts": "box,map"})
+    assert not param_visible(rule, {"charts": ""})

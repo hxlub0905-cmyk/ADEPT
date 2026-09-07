@@ -3273,51 +3273,48 @@ class CharPreviewInspector(OutputPreviewInspector):
         return lines
 
 
-def _fit(size: Any, box: QRectF) -> QRectF:
-    """把 ``size`` 等比例置中塞進 ``box``（畫圖用的那個「不要拉扁」）。"""
-    w, h = float(size.width()), float(size.height())
-    if w <= 0 or h <= 0:
-        return QRectF(box)
-    k = min(box.width() / w, box.height() / h)
-    dw, dh = w * k, h * k
-    return QRectF(box.left() + (box.width() - dw) / 2.0,
-                  box.top() + (box.height() - dh) / 2.0, dw, dh)
-
-
 class UniformityPreviewInspector(OutputPreviewInspector):
-    """F85：`Write uniformity` 會寫哪幾個檔 —— **而且順便就是那幾張圖**。
+    """F85：`Write uniformity` 會寫哪幾個檔 —— **而且這一顆量出來是多少**。
 
-    上半是檔案清單（Write KLARF 那條硬規則：寫出前一定先預覽）；下半把
-    **這一顆**的圖真的畫出來，勾了幾張就畫幾張。
+    為什麼圖不在這裡（F87，使用者 2026-09-07：「右側 Uniformity folder 直接
+    把預覽的圖放上來好像也很奇怪」）
+    ----------------------------------------------------------------------
+    同意。四張圖塞進這個窄面板，每張只剩約 250×180 —— 讀不動；而且那一排
+    Output 儀表本來的節奏是**一份乾淨的「按下去會寫哪幾個檔」清單**，
+    塞四張圖進去是把圖放在「UI 裡沒有別的家」的地方，不是設計。
 
-    為什麼圖住在這裡，不住在 `GlvInspector`
-    --------------------------------------
-    因為「畫哪幾張」是**這張卡的參數**。放在 GLV 那一張的話，畫面上要多一排
-    只在儀表裡有意義的切換鈕，而那個選擇既不進 recipe、也跟任何一格參數
-    對不起來 —— 選到卡就看到它會產出什麼，是這一排 Output 儀表本來的意思。
+    圖搬去 `ui/uniformity_window.UniformityWindow`（一顆 `Preview charts…`
+    開它），這裡留下**讀得動的那一半**：會寫哪幾個檔 ＋ 這一顆每個區域的
+    CV／斜率。那張小表跟報告頁上那一張是**同一支** `summary_rows` ——
+    各算一份的話，面板上與報告裡會出現兩個 CV%，而沒有人看得出哪個對。
 
-    ⚠ **這裡畫的跟寫出去的是同一份 SVG。**
-    ------------------------------------
-    計畫書第一版寫著「畫面與檔案兩份繪圖程式碼，那是鐵則 1 的直接後果」，
-    而理由之一是「QtSvg 不是相依」。**那是錯的** —— `QtSvg` 與
-    `QtSvgWidgets` 就裝在 `PySide6-Essentials` 裡（`requirements.txt` 的
-    `PySide6>=6.5` 已經帶著它），不是要另外裝的東西。
-
-    所以這裡不重畫一遍：`core` 產 SVG，這裡 `QSvgRenderer` 把同一份字串畫到
-    面板上。**一份繪圖程式碼，零漂移** —— 那是原本列在風險表第一行的東西。
-
-    賠掉的是 hover（滑到哪一格框、那一格亮起來）。那筆帳划算：`GlvInspector`
-    的直方圖本來也沒有 hover，而「畫面上的圖跟報表裡的圖不一樣，兩張都畫得
-    出來」是這個 repo 最貴的那種 bug。
+    ⚠ 數字**從 features 來，不在這裡重算**（`summary_rows` 的規矩）：
+    算不出來的那一格印 ``-``，不印一個算出來的替身。
     """
 
     STEP_KEY = "output_uniformity"
     title = "Uniformity folder"
 
-    #: 上半那張清單最多佔面板的幾成 —— 圖要有地方畫。
-    LIST_SHARE = 0.42
-    #: 一張圖畫得下的最小高度（再小就只剩一團色塊）。
-    MIN_CHART_H = 90.0
+    #: 按了要開圖的視窗 —— 這一份不開視窗（儀表不認識主視窗），只說出請求，
+    #: 跟 `CrossInspector.param_requested` 同一條界線。
+    charts_requested = Signal()
+
+    #: 下半那張小表最多佔幾成 —— 上半的檔案清單是硬規則（寫出前先預覽）。
+    TABLE_SHARE = 0.55
+    #: 按鈕那一條的高度（含上下留白）。
+    BUTTON_H = 30.0
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        from .widgets import small_button
+
+        self.btn_charts = small_button(
+            "Preview charts\u2026", shape="wide",
+            tip=("Open the four charts in their own window, big enough to "
+                 "read - and change how they look."),
+            parent=self)
+        self.btn_charts.clicked.connect(self.charts_requested)
+        self.btn_charts.hide()
 
     def charts(self) -> List[str]:
         """勾了哪幾張（照 `CHARTS` 的順序，不照使用者打字的順序）。"""
@@ -3337,6 +3334,13 @@ class UniformityPreviewInspector(OutputPreviewInspector):
         return uc.chart_series(notes, metric=str(
             self.params.get("metric", "") or "").strip())
 
+    def rows(self) -> List[Dict[str, Any]]:
+        """小表的列 —— **報告頁上那一張表的同一支**。"""
+        from ..core.export import uniformity_charts as uc
+
+        return uc.summary_rows(self.series(),
+                               self.result.get("features") or {})
+
     def _lines(self) -> List[Tuple[str, str]]:
         lines = super()._lines()
         kinds = self.charts()
@@ -3350,26 +3354,49 @@ class UniformityPreviewInspector(OutputPreviewInspector):
         if not groups:
             return base
         boxes = sum(len(g.get("values") or ()) for g in groups)
-        return "%s  ·  %d region(s), %d box(es)" % (base, len(groups), boxes)
+        return "%s  \u00b7  %d region(s), %d box(es)" % (
+            base, len(groups), boxes)
 
+    # -- 那顆鈕 -------------------------------------------------------------
+    def can_preview(self) -> bool:
+        """有東西可看嗎（**沒東西的鈕不該按得下去** —— 推廣鐵則）。"""
+        return bool(self.charts()) and bool(self.series().get("groups"))
+
+    def _place_button(self) -> None:
+        show = self.can_preview()
+        self.btn_charts.setVisible(show)
+        if not show:
+            return
+        size = self.btn_charts.sizeHint()
+        w = max(126, size.width())
+        h = max(22, size.height())
+        self.btn_charts.setGeometry(
+            int(self.width() - w - 14), int(self.height() - h - 12),
+            int(w), int(h))
+
+    def set_context(self, *a, **kw) -> None:          # noqa: D102
+        super().set_context(*a, **kw)
+        self._place_button()
+
+    def resizeEvent(self, event) -> None:             # noqa: D102, N802
+        super().resizeEvent(event)
+        self._place_button()
+
+    # -- 畫 -----------------------------------------------------------------
     def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
-        kinds = self.charts()
         series = self.series()
-        if not kinds or not series.get("groups"):
-            # 沒圖可畫就整塊留給清單 —— 一個空的圖區讀起來是「畫壞了」。
+        if not series.get("groups"):
             super().paint_body(p, rect)
-            if not series.get("groups"):
-                self._say_no_boxes(p, rect)
+            self._say_no_boxes(p, rect)
             return
-        list_h = min(rect.height() * self.LIST_SHARE,
-                     max(0.0, rect.height() - self.MIN_CHART_H))
-        super().paint_body(p, QRectF(rect.left(), rect.top(),
-                                     rect.width(), list_h))
-        area = QRectF(rect.left(), rect.top() + list_h + 6.0,
-                      rect.width(), rect.height() - list_h - 6.0)
-        if area.height() < self.MIN_CHART_H * 0.6:
-            return
-        self._paint_charts(p, area, kinds, series)
+        room = max(0.0, rect.height() - self.BUTTON_H)
+        rows = self.rows()
+        table_h = min(room * self.TABLE_SHARE, 18.0 + 16.0 * len(rows))
+        super().paint_body(p, QRectF(rect.left(), rect.top(), rect.width(),
+                                     max(0.0, room - table_h - 6.0)))
+        area = QRectF(rect.left(), rect.top() + room - table_h,
+                      rect.width(), table_h)
+        self._paint_table(p, area, rows, str(series.get("metric") or ""))
 
     def _say_no_boxes(self, p: QPainter, rect: QRectF) -> None:
         """為什麼沒有圖 —— **原因通常是上游那張卡，不是這一張**。"""
@@ -3378,55 +3405,43 @@ class UniformityPreviewInspector(OutputPreviewInspector):
                           rect.width(), 28.0),
                    int(Qt.AlignLeft | Qt.AlignVCenter | Qt.TextWordWrap),
                    "No box-by-box numbers yet: set the Gray level card to "
-                   "“each box” and tick something under “How even are the "
-                   "boxes”.")
+                   "\u201ceach box\u201d and tick something under \u201cHow "
+                   "even are the boxes\u201d.")
 
-    def _paint_charts(self, p: QPainter, area: QRectF, kinds: List[str],
-                      series: Dict[str, Any]) -> None:
-        """把**同一份 SVG** 畫到面板上（見 class docstring 的警告）。"""
-        try:
-            from PySide6.QtSvg import QSvgRenderer
-        except ImportError:                # noqa: BLE001 — 畫不出來不准擋畫面
-            p.setPen(QColor(TOKENS["text_secondary"]))
-            p.drawText(area, int(Qt.AlignCenter | Qt.TextWordWrap),
-                       "Charts need QtSvg, which is part of PySide6 - "
-                       "reinstall it to see them here. The files this card "
-                       "writes are unaffected.")
-            return
+    def _paint_table(self, p: QPainter, area: QRectF,
+                     rows: List[Dict[str, Any]], metric: str) -> None:
+        """一個區域一列：``epi · 24 boxes   CV 1.8 %   L→R 0.42 /100 px``。"""
         from ..core.export import uniformity_charts as uc
 
-        cols = 2 if len(kinds) > 1 else 1
-        rows_n = (len(kinds) + cols - 1) // cols
-        cw = area.width() / cols
-        ch = area.height() / rows_n
-        for i, kind in enumerate(kinds):
-            cell = QRectF(area.left() + (i % cols) * cw,
-                          area.top() + (i // cols) * ch,
-                          cw - 4.0, ch - 4.0)
-            if cell.width() < 60.0 or cell.height() < 50.0:
-                continue
-            svg = uc.build_chart_svg(
-                series, kind, self._style(kind),
-                width=int(cell.width()), height=int(cell.height()))
-            try:
-                r = QSvgRenderer(bytearray(svg, "utf-8"))
-                # **等比例塞進去**。`render(p, rect)` 會把 viewBox 拉滿整個
-                # rect —— 圖比格子瘦的時候（小面板一定會，`MIN_WIDTH` 夾過）
-                # 那是把圖橫向拉扁，而一張被拉扁的散佈圖讀起來是另一組資料。
-                r.render(p, _fit(r.viewBoxF().size(), cell))
-            except Exception:              # noqa: BLE001 — 鐵則 7 的 UI 版
-                continue
+        if area.height() < 20.0:
+            return
+        p.setPen(QColor(TOKENS["text_secondary"]))
+        p.drawText(QRectF(area.left(), area.top(), area.width(), 14.0),
+                   int(Qt.AlignLeft | Qt.AlignVCenter),
+                   "This defect%s" % (" \u00b7 %s" % metric if metric else ""))
+        y = area.top() + 16.0
+        for i, row in enumerate(rows):
+            if y + 15.0 > area.bottom():
+                p.setPen(QColor(TOKENS["text_hint"]))
+                p.drawText(QRectF(area.left(), y, area.width(), 14.0),
+                           int(Qt.AlignLeft | Qt.AlignVCenter),
+                           "\u2026 %d more" % (len(rows) - i))
+                break
+            cells = row.get("cells") or {}
+            bits = ["%s \u00b7 %d box(es)"
+                    % (row.get("name") or "region", int(row.get("boxes") or 0))]
+            for key, head, unit in uc.UNIF_COLUMNS:
+                if key in cells:
+                    bits.append("%s %s %s" % (head,
+                                              format_feature_value_short(
+                                                  cells[key]), unit))
+            p.setPen(QColor(TOKENS["text_primary"] if i == 0
+                            else TOKENS["text_secondary"]))
+            p.drawText(QRectF(area.left(), y, area.width(), 14.0),
+                       int(Qt.AlignLeft | Qt.AlignVCenter),
+                       "    ".join(bits))
+            y += 16.0
 
-    def _style(self, kind: str) -> Dict[str, Any]:
-        """**跟 `OutputUniformityStep._style_for` 同一組設定** —— 面板上看到的
-        就是會寫出去的那一張，包括鎖住的尺度與軸上的名字。"""
-        try:
-            from ..core.pipeline.step import get_step
-            card = get_step(self.STEP_KEY)
-            return card()._style_for(kind, card.validate_params(self.params),
-                                     str(self.series().get("metric") or ""))
-        except Exception:                  # noqa: BLE001 — 提示不准擋路
-            return {}
 
 
 class FocusInspector(MeasureInspector):
