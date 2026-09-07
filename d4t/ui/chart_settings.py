@@ -26,7 +26,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox, QColorDialog, QDialog, QDialogButtonBox, QDoubleSpinBox,
@@ -37,7 +36,7 @@ from PySide6.QtWidgets import (
 from ..core.export import uniformity_charts as uc
 from ..core.pipeline import chart_style as cs
 from .theme import TOKENS
-from .widgets import apply_button_cursors
+from .widgets import apply_button_cursors, small_button
 
 __all__ = ["ChartSettingsDialog", "ColourButton"]
 
@@ -96,6 +95,9 @@ _PER_TIPS: Dict[str, str] = {
 class ColourButton(QWidget):
     """一顆色塊 ＋ 一顆 ×。空字串＝**自動**（跟著區域色／主題走）。"""
 
+    #: 色塊最小寬度 —— 高度是 QSS 的事，這一個是「`auto` 四個字要放得下」。
+    SWATCH_W = 58
+
     def __init__(self, value: str = "", tip: str = "",
                  parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -103,24 +105,20 @@ class ColourButton(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
         self._value = str(value or "")
-        self.swatch = QPushButton("", self)
-        self.swatch.setObjectName("cardButton")
-        self.swatch.setFixedHeight(22)
-        self.swatch.setMinimumWidth(58)
-        self.swatch.setCursor(Qt.PointingHandCursor)
+        # **尺寸交給 QSS 的 `shape`，不寫在這裡**（F7-23：以前六個呼叫端各自
+        # 寫死一組，於是同一種視覺語言沒有兩顆一樣大）。這裡只說寬一點的那顆
+        # 至少要放得下 `auto` 那四個字。
+        self.swatch = small_button("", tip=tip, shape="wide", parent=self)
+        self.swatch.setMinimumWidth(self.SWATCH_W)
         self.swatch.clicked.connect(self._pick)
-        self.clear_btn = QPushButton("×", self)
-        self.clear_btn.setObjectName("cardButton")
-        self.clear_btn.setFixedSize(22, 22)
-        self.clear_btn.setCursor(Qt.PointingHandCursor)
-        self.clear_btn.setToolTip("Back to the automatic colour")
+        self.clear_btn = small_button(
+            "\u00d7", tip="Back to the automatic colour", shape="square",
+            parent=self)
         self.clear_btn.clicked.connect(lambda: self.set_value(""))
         lay.addWidget(self.swatch, 0)
         lay.addWidget(self.clear_btn, 0)
         lay.addStretch(1)
-        self.setMinimumWidth(58 + 4 + 22)
-        if tip:
-            self.swatch.setToolTip(str(tip))
+        self.setMinimumWidth(self.SWATCH_W + 4 + 24)
         self._paint()
 
     def value(self) -> str:
