@@ -895,11 +895,24 @@ def test_a_row_says_which_charts_it_reaches(qapp):
     assert "Histogram" in dlg._labels["xticks"].text()
     # **標題已經說了就不要再說一次** —— `Heat map cells` 底下再掛一行
     # `Heat map` 是噪音，而噪音會讓真正需要那行的幾列也被跳過不讀。
-    for key in ("equal_cells", "map_values", "whiskers", "bins", "percent"):
-        assert "<span" not in dlg._labels[key].text(), key
-    # 四張都吃得到的那幾格也不加
+    #
+    # ⚠ 這一條以前是一張寫死的鍵清單（那幾格「只影響它標題上那張圖」）。
+    # F88 第四刀之後不成立了：`Heat map labels` 現在**也**管自己配的那一張，
+    # 而那件事標題沒說 —— 所以那一列該有尾巴。規則本身沒有變，所以改成直接
+    # 問規則：**尾巴裡不准出現標題已經講過的那張圖**。
+    for key, lab in dlg._labels.items():
+        text = lab.text()
+        if "<span" not in text:
+            continue
+        title, tail = text.split("<br>", 1)
+        for label in uc.CHART_LABELS.values():
+            if label.lower() in title.lower():
+                assert label not in tail, (key, text)
+    # 每一張都吃得到的那幾格連尾巴都不加
     assert "<span" not in dlg._labels["value_name"].text()
     assert "<span" not in dlg._labels["lock"].text()
+    # 而標題**沒有**說出來的那幾張要有尾巴（上面那兩條 `point_fill` /
+    # `xticks` 就是；`bins` 的標題是「Histogram bars」，它自己說完了）。
 
 
 def test_one_chart_needs_no_tag(qapp):

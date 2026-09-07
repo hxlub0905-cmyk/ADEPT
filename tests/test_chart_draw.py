@@ -274,3 +274,101 @@ def test_size_is_not_offered_to_a_line_or_a_bar():
     assert chart_spec.uses({"mark": "point"}, "size")
     assert not chart_spec.uses({"mark": "line"}, "size")
     assert not chart_spec.uses({"mark": "bar"}, "size")
+
+
+# --------------------------------------------------------------------------- #
+# 7. 盒子與格子（F88 第四刀）
+# --------------------------------------------------------------------------- #
+def test_a_box_per_slot_with_the_median_inside_it():
+    import re
+
+    f = _frame(_note("epi", 110.0), _note("mg", 128.0, x0=400))
+    svg = draw(f, {"mark": "box", "x": "region", "y": "glv_mean"})
+    _xml(svg)
+    # 一個區域一個盒子 ＋ 一條中位數線
+    bodies = re.findall(r"<rect x='[0-9.]+' y='[0-9.]+' width='[0-9.]+' "
+                        r"height='[0-9.]+' fill='[^']+' fill-opacity=", svg)
+    assert len(bodies) == 2
+    # ⚠ **不能數 `<line`** —— `_ylabels` 順手畫的橫格線也是 `<line`
+    # （第一版數到 5）。中位數那一條的記號是它穿著區域色。
+    medians = [ln for ln in re.findall(r"<line [^>]*>", svg)
+               if any("stroke='%s'" % c in ln for c in uc.REGION_COLOURS)]
+    assert len(medians) == 2
+
+
+def test_the_box_statistics_are_the_ones_boxplot_already_defined():
+    """⚠ **不在這裡再算一次。** `box_stats` 已經定死了「鬚的端點是落在
+    1.5×IQR 之內的**真實資料點**，不是算出來的柵欄」—— 差別在圖上看得見。
+    各算一份的那天，同一份報表裡兩張盒鬚圖的鬚會不一樣長。
+    """
+    from d4t.core.export.boxplot import box_stats
+
+    f = _frame()
+    vals = [r["glv_mean"] for r in f.rows]
+    st = box_stats(vals)
+    svg = draw(f, {"mark": "box", "x": "region", "y": "glv_mean"},
+               {"vlock": (st["lo"], st["hi"])})
+    # 鬚鎖在資料的端點上 ⇒ 兩端剛好貼著圖區
+    _xml(svg)
+    assert "<path" in svg
+
+
+def test_whiskers_can_be_turned_off():
+    f = _frame()
+    on = draw(f, {"mark": "box", "x": "region", "y": "glv_mean"})
+    off = draw(f, {"mark": "box", "x": "region", "y": "glv_mean"},
+               {"whiskers": False})
+    assert "<path" in on and "<path" not in off
+
+
+def test_cells_need_a_colour_because_a_grid_of_nothing_says_nothing():
+    """一片沒有顏色的格子跟「還沒挑完」在畫面上長得一模一樣。"""
+    from d4t.core.pipeline import chart_spec
+
+    assert chart_spec.missing_roles(
+        '{"mark":"cell","x":"col","y":"row"}') == ["color"]
+    svg = draw(_frame(), {"mark": "cell", "x": "col", "y": "row"})
+    assert "pick color" in svg
+
+
+def test_one_cell_per_box_on_a_grid_of_slots():
+    import re
+
+    f = _frame(_note("epi", 110.0, cols=3, rows=2))
+    svg = draw(f, {"mark": "cell", "x": "col", "y": "row",
+                   "color": "glv_mean"})
+    _xml(svg)
+    # ⚠ 圖例的色塊也是 `<rect … fill='#…'/>`（第一版數到 7）。格子的座標是
+    # 兩位小數，圖例的是整數 —— 那是這兩者在字串上唯一穩定的差別。
+    cells = re.findall(r"<rect x='[0-9]+\.[0-9]{2}' y='[0-9]+\.[0-9]{2}' "
+                       r"width='[0-9]+\.[0-9]{2}' height='[0-9]+\.[0-9]{2}' "
+                       r"fill='#[0-9a-f]{6}'/>", svg)
+    assert len(cells) == len(f) == 6
+
+
+def test_a_slot_with_no_box_is_left_blank_not_painted_at_zero():
+    """留白說的是「這裡沒有量到」；畫成色階最低的那一格說的是「這裡很低」。"""
+    import re
+
+    f = _frame(_note("epi", 110.0, cols=3, rows=2))
+    f.rows.pop()                                  # 少一格
+    svg = draw(f, {"mark": "cell", "x": "col", "y": "row",
+                   "color": "glv_mean"})
+    cells = re.findall(r"<rect x='[0-9]+\.[0-9]{2}' y='[0-9]+\.[0-9]{2}' "
+                       r"width='[0-9]+\.[0-9]{2}' height='[0-9]+\.[0-9]{2}' "
+                       r"fill='#[0-9a-f]{6}'/>", svg)
+    assert len(cells) == 5
+
+
+def test_the_cell_labels_follow_the_heat_map_s_own_rule():
+    """門檻、字重、以及「淺底印深字、深底印白字」**跟熱圖同一份**
+    （`_svg_map` ＋ `_is_dark`）—— 第一版在這裡自己寫了一條 `t > 0.55`，
+    那就是同一句話長出兩種意思的起點。"""
+    f = _frame(_note("epi", 110.0, cols=3, rows=2))
+    spec = {"mark": "cell", "x": "col", "y": "row", "color": "glv_mean"}
+    plain = draw(f, spec)
+    shown = draw(f, spec, {"map_values": True})
+    assert "<text" in shown and shown != plain
+    assert "font-weight='700'" in shown
+    # 深的那一端印白字（熱圖用的是同一個 `#ffffff` / `#1f2430`）
+    assert "fill='#ffffff'" in shown and "fill='#1f2430'" in shown

@@ -52,7 +52,10 @@ class ChartSpecError(ValueError):
 MARK_POINT = "point"
 MARK_LINE = "line"
 MARK_BAR = "bar"
-MARKS: Tuple[str, ...] = (MARK_POINT, MARK_LINE, MARK_BAR)
+MARK_BOX = "box"
+MARK_CELL = "cell"
+MARKS: Tuple[str, ...] = (MARK_POINT, MARK_LINE, MARK_BAR, MARK_BOX,
+                          MARK_CELL)
 
 #: 每一種記號一句白話（編輯器上那一排膠囊的 tooltip）。
 MARK_HELP: Dict[str, str] = {
@@ -62,11 +65,17 @@ MARK_HELP: Dict[str, str] = {
                "when the bottom axis has an order - position, row, column.",
     MARK_BAR: "A bar per box. Use it when the bottom axis is a name rather "
               "than a number, and you are comparing heights.",
+    MARK_BOX: "One box per group along the bottom - the middle half, the "
+              "median, and the whiskers. Use it to compare how spread out "
+              "several groups are.",
+    MARK_CELL: "A grid of coloured cells. Pick what the colour means - this "
+               "is the heat map, but over any two columns you like.",
 }
 
 #: 每一種記號畫面上叫什麼（`MARK_LINE` 這個鍵不是給人看的字）。
 MARK_LABELS: Dict[str, str] = {
     MARK_POINT: "Dots", MARK_LINE: "Line", MARK_BAR: "Bars",
+    MARK_BOX: "Boxes", MARK_CELL: "Cells",
 }
 
 #: 角色。順序就是編輯器上由上而下的順序。
@@ -91,6 +100,10 @@ REQUIRED: Dict[str, Tuple[str, ...]] = {
     MARK_POINT: (ROLE_X, ROLE_Y),
     MARK_LINE: (ROLE_X, ROLE_Y),
     MARK_BAR: (ROLE_X, ROLE_Y),
+    MARK_BOX: (ROLE_X, ROLE_Y),
+    # ⚠ **格子非有顏色不可。** 一片沒有顏色的格子什麼都沒說 —— 而它跟
+    # 「還沒挑完」在畫面上長得一模一樣，所以它是必填而不是一個預設。
+    MARK_CELL: (ROLE_X, ROLE_Y, ROLE_COLOR),
 }
 
 #: 每一種記號**用得到**的角色（沒列的收起來 —— 一格答了也沒用的設定比沒有
@@ -102,6 +115,8 @@ USES: Dict[str, Tuple[str, ...]] = {
     MARK_POINT: (ROLE_X, ROLE_Y, ROLE_COLOR, ROLE_SIZE),
     MARK_LINE: (ROLE_X, ROLE_Y, ROLE_COLOR),
     MARK_BAR: (ROLE_X, ROLE_Y, ROLE_COLOR),
+    MARK_BOX: (ROLE_X, ROLE_Y, ROLE_COLOR),
+    MARK_CELL: (ROLE_X, ROLE_Y, ROLE_COLOR),
 }
 
 #: 空的 spec（還沒設定）。
