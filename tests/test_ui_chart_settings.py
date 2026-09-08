@@ -956,3 +956,72 @@ def test_the_hidden_ones_are_still_carried_back_out(qapp):
                               spec='{"mark":"point","x":"value","y":"spread"}')
     assert not dlg.globals["whiskers"].isVisibleTo(dlg)
     assert cs.parse_style(dlg.value()).get("whiskers") is False
+
+
+# --------------------------------------------------------------------------- #
+# F89-1：預覽讀得動（使用者 2026-09-08：「預覽圖每次都會太小」）
+# --------------------------------------------------------------------------- #
+def test_the_preview_keeps_its_shape_instead_of_becoming_a_tall_strip(qapp):
+    """**問題不是「太小」，是長寬比是反的。**
+
+    以前那一格只給了最小高度再 `setRowStretch(..., 1)`，於是它吃掉分頁裡所有
+    垂直空間，被拉成 390 寬 × 655 高 —— 而 SVG 是**照那個尺寸產的**，所以
+    盒鬚圖被畫成一根直條，第二個盒子掉到摺線下面。圖表要的是寬 > 高。
+    """
+    from d4t.ui.chart_settings import _sample_frame
+
+    want = ChartSettingsDialog.PREVIEW_ASPECT
+    for w, h in ((1180, 940), (1600, 1100), (1020, 700)):
+        dlg = ChartSettingsDialog("", list(uc.CHARTS), frame=_sample_frame())
+        dlg.resize(w, h)
+        dlg.show()
+        qapp.processEvents()
+        view = dlg.views[uc.CHART_BOX]
+        got = view.width() / float(max(1, view.height()))
+        assert abs(got - want) < 0.1, (w, h, view.width(), view.height())
+
+
+def test_the_preview_grows_with_the_window(qapp):
+    from d4t.ui.chart_settings import _sample_frame
+
+    seen = []
+    for w, h in ((1180, 940), (1700, 1200)):
+        dlg = ChartSettingsDialog("", list(uc.CHARTS), frame=_sample_frame())
+        dlg.resize(w, h)
+        dlg.show()
+        qapp.processEvents()
+        seen.append(dlg.views[uc.CHART_BOX].width())
+    assert seen[1] > seen[0], seen
+
+
+def test_the_chart_does_not_scroll_away_while_you_change_a_setting(qapp):
+    """整頁在一個捲動區裡的話，拉一個滑桿要往下捲，而捲下去圖就出畫面了
+    —— 那正好毀掉即時預覽存在的理由。**設定捲動，圖不動。**"""
+    from PySide6.QtWidgets import QScrollArea
+
+    from d4t.ui.chart_settings import _sample_frame
+
+    dlg = ChartSettingsDialog("", list(uc.CHARTS), frame=_sample_frame())
+    dlg.show()
+    qapp.processEvents()
+    view = dlg.views[uc.CHART_BOX]
+    parent = view.parent()
+    while parent is not None:
+        assert not isinstance(parent, QScrollArea), "預覽掉進捲動區裡了"
+        parent = parent.parent()
+
+
+def test_the_settings_column_is_never_squeezed_sideways(qapp):
+    """最右邊那顆回到 auto 的 `×` 被切掉的話，就沒有路回到「跟著區域色走」
+    （`ColourButton` 的說明）。寬度不夠讓對話框長，不要切內容。"""
+    from PySide6.QtWidgets import QScrollArea
+
+    from d4t.ui.chart_settings import _sample_frame
+
+    dlg = ChartSettingsDialog("", list(uc.CHARTS), frame=_sample_frame())
+    dlg.resize(1180, 940)
+    dlg.show()
+    qapp.processEvents()
+    scroll = dlg.findChild(QScrollArea)
+    assert not scroll.horizontalScrollBar().isVisible()
+    assert scroll.width() >= scroll.widget().sizeHint().width()

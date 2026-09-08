@@ -73,9 +73,15 @@ MARK_HELP: Dict[str, str] = {
 }
 
 #: 每一種記號畫面上叫什麼（`MARK_LINE` 這個鍵不是給人看的字）。
+#:
+#: ⚠ **盒鬚那一顆叫 `Box plot`，不叫 `Boxes`。** 這個工具裡「box」已經有一個
+#: 意思了 —— **一格量測框**（長表上那一欄就叫 `box`）。同一排選單裡出現
+#: `box`（第幾個框）跟 `Boxes`（一種圖）的話，會混淆的是**人**，而那正是
+#: CLAUDE.md 花一整段講的 `bundle`。`Box plot` 順帶跟四張預設圖之一同名，
+#: 而它們畫的本來就是同一種東西。
 MARK_LABELS: Dict[str, str] = {
     MARK_POINT: "Dots", MARK_LINE: "Line", MARK_BAR: "Bars",
-    MARK_BOX: "Boxes", MARK_CELL: "Cells",
+    MARK_BOX: "Box plot", MARK_CELL: "Cells",
 }
 
 #: 角色。順序就是編輯器上由上而下的順序。

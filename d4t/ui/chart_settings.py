@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox, QColorDialog, QDialog, QDialogButtonBox, QDoubleSpinBox,
@@ -416,6 +416,8 @@ class ChartSettingsDialog(QDialog):
 
     #: 每一張預覽至少多高（再矮就只剩一團色塊）。
     PREVIEW_H = 210
+    #: 預覽的長寬比（寬 ÷ 高）—— 見 `ChartView.ASPECT`。
+    PREVIEW_ASPECT = 4.0 / 3.0
 
     def __init__(self, look: str = "", kinds: Optional[Sequence[str]] = None,
                  parent: Optional[QWidget] = None,
@@ -450,7 +452,10 @@ class ChartSettingsDialog(QDialog):
         self._live = True
         self.setWindowTitle("Chart settings")
         self.setModal(True)
-        self.resize(1020, 680)
+        # ⚠ **高度要裝得下左半那三塊**（量出來 809）。以前是 680，於是對話框
+        # 一打開就有捲軸，而捲軸底下正好是那幾格膠囊 —— 使用者要先發現有東西
+        # 在下面才找得到它們。
+        self.resize(1180, 940)
 
         self._kinds: List[str] = [k for k in (kinds if kinds is not None
                                               else uc.CHARTS) if k in uc.CHARTS]
@@ -490,24 +495,40 @@ class ChartSettingsDialog(QDialog):
         inner = QHBoxLayout(body)
         inner.setContentsMargins(0, 0, 0, 0)
         inner.setSpacing(12)
-        left = QVBoxLayout()
+
+        # ⚠ **只有左半捲。** 以前整個 body 在一個 `QScrollArea` 裡，於是拉一
+        # 個滑桿要往下捲，而捲下去圖就出畫面了 —— 那正好毀掉即時預覽存在的
+        # 理由（使用者 2026-09-08 回報的第二件）。設定捲動，圖不動。
+        panel = QWidget(body)
+        left = QVBoxLayout(panel)
+        left.setContentsMargins(0, 0, 0, 0)
         left.setSpacing(12)
-        left.addWidget(self._look_group(body))
-        left.addWidget(self._numbers_group(body))
-        left.addWidget(self._scale_group(body))
+        left.addWidget(self._look_group(panel))
+        left.addWidget(self._numbers_group(panel))
+        left.addWidget(self._scale_group(panel))
         left.addStretch(1)
-        inner.addLayout(left, 3)
+        scroll = QScrollArea(body)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(panel)
+        # ⚠ **左半不准橫著捲。** 一列一個設定的欄位被擠窄的話，最右邊那顆
+        # 回到 auto 的 `×` 就切掉了 —— 而那是唯一一條回到「跟著區域色走」的
+        # 路（`ColourButton` 的說明）。寬度不夠就讓對話框長，不要切內容。
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setMinimumWidth(panel.sizeHint().width()
+                               + scroll.verticalScrollBar().sizeHint().width()
+                               + 4)
+        # ⚠ **右半要比左半寬。** 左半是「一列一個設定」，寬度由標籤與數字框
+        # 決定，多給它的空間全是空白；右半那一格是**圖**，而圖是這個對話框
+        # 真正要看的東西。第一版反過來（3:2），於是預覽只有 394 px 寬。
+        inner.addWidget(scroll, 2)
         right = self._per_chart_group(body)
         # 分頁列擠到要出捲動箭頭的話，第四張圖（Heat map）就藏起來了 ——
         # 一張看不到的分頁等於那張圖的標題改不了。
         right.setMinimumWidth(430)
-        inner.addWidget(right, 2)
+        inner.addWidget(right, 3)
 
-        scroll = QScrollArea(self)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setWidget(body)
-        root.addWidget(scroll, 1)
+        root.addWidget(body, 1)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)
@@ -801,10 +822,15 @@ class ChartSettingsDialog(QDialog):
             # 即時 preview（在編輯器內就可以預覽）」）。放在**這一張圖自己的
             # 分頁裡**：你在改 Box plot 的標題，那張 Box plot 就在正下方。
             # 全域那幾格（字級、顏色、線寬）也會當場反映在這一張上。
-            view = ChartView(kind, page)
+            # ⚠ **釘住長寬比**（`ChartView.ASPECT`）。以前這裡只給了一個
+            # 最小高度再 `setRowStretch(..., 1)`，於是它吃掉分頁裡所有垂直
+            # 空間，被拉成 390 寬 × 655 高的直條 —— 而 SVG 是照那個尺寸產的，
+            # 盒鬚圖因此變成一根直條，第二個盒子掉到摺線下面。
+            view = ChartView(kind, page, aspect=self.PREVIEW_ASPECT)
             view.setMinimumHeight(self.PREVIEW_H)
             grid.addWidget(view, len(keys), 0, 1, 2)
-            grid.setRowStretch(len(keys), 1)
+            # **不給 stretch** —— 高度由寬度決定（`heightForWidth`）。
+            grid.setRowStretch(len(keys) + 1, 1)
             self.views[kind] = view
             self.per[kind] = fields
             tabs.addTab(page, uc.CHART_LABELS.get(kind, kind))

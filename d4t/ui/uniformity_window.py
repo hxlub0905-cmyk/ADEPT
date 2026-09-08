@@ -84,7 +84,18 @@ class ChartView(QWidget):
 
     MIN_W, MIN_H = 260, 200
 
-    def __init__(self, kind: str, parent: Optional[QWidget] = None):
+    #: 圖區的**長寬比**（寬 ÷ 高）。`None` = 不管，把給到的空間吃滿。
+    #:
+    #: ⚠ 為什麼要有它（使用者 2026-09-08：「Chart setting 預覽圖每次都會太
+    #: 小」）：那一格塞在一個直的版面裡時會被拉成 390 寬 × 655 高，而 SVG 是
+    #: **照那個尺寸產的** —— 於是盒鬚圖被畫成一根直條，第二個盒子掉到摺線
+    #: 下面。問題不是「太小」，是**長寬比是反的**：圖表要的是寬 > 高。
+    #:
+    #: 4:3 是量出來的：兩群 × 3 欄的樣本在那個比例下 X 軸的字剛好不重疊。
+    ASPECT: Optional[float] = None
+
+    def __init__(self, kind: str, parent: Optional[QWidget] = None,
+                 aspect: Optional[float] = None):
         super().__init__(parent)
         self.kind = str(kind)
         self._series: Dict[str, Any] = {}
@@ -94,7 +105,20 @@ class ChartView(QWidget):
         self._frame: Any = None
         self._spec: str = ""
         self.setMinimumSize(self.MIN_W, self.MIN_H)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        if aspect is not None:
+            self.ASPECT = float(aspect)
+        policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # `heightForWidth` 只有在 size policy 說了才會被版面問（Qt 的規矩）。
+        policy.setHeightForWidth(self.ASPECT is not None)
+        self.setSizePolicy(policy)
+
+    def hasHeightForWidth(self) -> bool:      # noqa: D102, N802
+        return self.ASPECT is not None
+
+    def heightForWidth(self, width: int) -> int:      # noqa: D102, N802
+        if self.ASPECT is None:
+            return -1
+        return max(self.MIN_H, int(round(float(width) / self.ASPECT)))
 
     def set_data(self, series: Dict[str, Any],
                  style: Optional[Dict[str, Any]] = None,
