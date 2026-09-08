@@ -190,6 +190,39 @@ Path 行都建在它上面。
 
 ---
 
+## 什麼時候可以開一個新視窗（U15，2026-09-08）
+
+在這一條寫下來之前，`d4t/ui` 有**十一個頂層視窗**，而沒有任何一條規則說什麼
+時候該開一個。寫下來的當天就少了一個：畫布的彈出視窗（U5）—— 它問的一直是
+「讓我看全貌」，而那件事不需要第二個視窗，只需要換一個版面。結果是「要不要開新視窗」變成逐次的手感，而使用者付的錢是：
+工作列上多一個看不出屬於誰的東西、Alt-Tab 之後找不到路回來、以及**主視窗被
+蓋住而使用者以為程式當了**。
+
+**規則：只有「要跟主視窗並排對照」的才開頂層視窗，其餘一律主視窗裡的 modal
+對話框或一頁。**
+
+判準是一句話：**使用者需不需要一邊看著它、一邊動主視窗？**
+
+| 開頂層視窗 | 為什麼 |
+|---|---|
+| `StudioWindow` | 主視窗本人 |
+| `ResultsWindow` | 一邊看結果表、一邊在畫布上改參數 —— 那正是調 recipe 的迴圈 |
+| `RegionCheckWindow` | 一邊看區域畫在很多顆上、一邊改那張 Region 卡 |
+| `GcGeneratorWindow` | 產模擬資料是一件**跟主視窗無關**的事（它自己是一個小工具，不吃目前的 recipe）|
+
+其餘一律 modal（`WelcomeDialog`、`TemplateDialog`、`ChartSettingsDialog`、
+`GraphBuilderDialog`、`CurveDialog`、`StatusHistoryDialog`、
+`RecipeLibraryDialog`）—— 它們都是「進去做完一件事再出來」，而在那段時間裡
+主視窗沒有東西可看。
+
+⚠ **`UniformityWindow` 不在上面兩張表裡**，因為它不是頂層視窗 —— 它是
+`inspectors` 那顆 `Preview charts…` 開出來的一塊。這條規則問的是
+「`QMainWindow` 或無父視窗的 `QDialog`」，不是「畫面上有沒有一塊新東西」。
+
+**加第十二個之前先回答那句話。** `tests/test_ui_window_policy.py` 把這兩張表
+釘住：新增一個頂層視窗類別而沒有列進去的話，那支測試會叫 —— 它擋不住你做出
+錯的決定，但它擋得住**沒有人做過那個決定**。
+
 ## 目錄結構
 
 ⚠ **這一段有測試守著**（`tests/test_doc_file_tree.py`）：下面每一個條目要真的存在，
@@ -265,6 +298,9 @@ d4t/
 │   │   ├── decide_tree.py    #   判定樹怎麼走 —— 引擎與 UI 共用同一支
 │   │   ├── verdict_features.py verdict_trace.py  #   判定問了哪幾個數字／重放一顆的判定（F45）
 │   │   ├── engine.py batch.py cache.py  #   單顆執行／ProcessPool 批次／影像段 checkpoint 快取
+│   │   ├── sampling.py      #   試跑抽哪幾顆（F98 X3）：first / random / strata。
+│   │   │                    #     「前 N 顆」在 wafer 上是統計陷阱 —— KLARF 照掃描
+│   │   │                    #     順序排，前 200 顆常擠在少數幾個 die。種子進 run 紀錄
 │   │   ├── channels.py       #   這一顆的第幾張圖 → 叫什麼流名
 │   │   ├── cellrois.py       #   標在 Golden Cell 上的具名區域（一個名字、好幾個矩形）
 │   │   ├── curve.py          #   tone curve 控制點的字串編碼（parse／format）
@@ -305,6 +341,11 @@ d4t/
 └── ui/                       # PySide6 Studio（**唯一允許 Qt 的地方**）
     ├── scope.py              #   產品範圍開關：支援哪些輸入、哪些卡片收起來、入口長什麼樣
     ├── viewmodel.py          #   RecipeModel（Qt-free、可 headless 測；含 edges）
+    ├── edit_plan.py          #   接線／換線／剪線的**決定**（F93 U6；同樣 Qt-free）：
+    │                         #     「這條線落在哪一格、要不要擠掉別條、擠掉哪幾條」
+    │                         #     ⚠ 只回答「應該發生什麼」；真的動 model 的仍然是
+    │                         #     studio.py —— 那一段的**順序**有意義（add_edge 會
+    │                         #     因為成環而失敗，而失敗的那條線不該留下痕跡）
     ├── studio.py app.py      #   主視窗（**只做接線**）＋ 進入點
     ├── canvas.py             #   節點畫布（n8n 式；純 UI，引擎零改動）
     ├── cell_canvas.py        #   一格 cell 鋪成一片，區域的框畫在上面、拖得動
@@ -336,13 +377,50 @@ d4t/
     │                         #     `tools/make_lot_from_gc.py`
     ├── welcome.py            #   首啟導覽 ＋ 範例 recipe 庫對話框（兩個入口目前收起來）
     ├── workers.py            #   載入／預覽（請求合併）／試跑／寫出 背景執行緒
-    ├── theme.py widgets.py branding.py region_words.py  #   主題 token／資料驅動元件／圖示字標／
-    │                         #   區域那三個埠的白話字
+    ├── theme.py branding.py region_words.py  #   主題 token／圖示字標／區域那三個埠的白話字
+    ├── widgets.py            #   **那道門**（F91 U7）：曾經是 7,140 行、24 個不相干
+    │                         #     的類別，現在只剩 123 行的轉出口 —— 四十幾個模組
+    │                         #     寫的 `from .widgets import X` 一個字都沒改，而每
+    │                         #     一塊搬去了它該在的地方（底下八支）。新程式碼請直
+    │                         #     接 import 那幾支；這裡不准再有 class / def
+    ├── buttons.py            #   最底層：`small_button`、`FilterChip`、停放不銷毀
+    │                         #     ⚠ 它只 import Qt 與 theme —— 加東西之前先問
+    │                         #     「它會不會需要 import 另一個 UI 模組」
+    ├── icons.py              #   **按鈕上**那些自繪的圖（膠囊上的在 glyphs.py）
+    ├── image_view.py         #   ImageView ＋ 記號的角色→顏色（MARK_ROLE_TOKENS）
+    ├── fields.py             #   參數表單上一列一列的編輯器（含各種專用格）
+    ├── param_form.py         #   ParamForm —— 把 `Step.describe()` 排成一張表
+    │                         #     （「加一張卡，UI 零修改」的執行機構）
+    ├── chips.py              #   設定區的膠囊：統計量、`chip_choice` 那一排
+    ├── library.py            #   三段式卡片庫
+    ├── histogram.py          #   分數分佈 ＋ 可拖曳的門檻線（秒回是它的立身條件）
+    ├── feature_text.py       #   特徵名怎麼變成人看得懂的字 ＋ VerdictChip
     ├── wiring_slot.py        #   設定區的一格接線：符號＋現在接的是什麼＋一顆「換」
     │                         #     （F68；挑了走的是跟畫布拉線同一條路）
     ├── glyphs.py             #   設定區膠囊上的那些小圖（F68 第二輪，六十幾張）
     │                         #     一套共通文法：淡的是原本就在那裡的東西、
     │                         #     實心的才是這個選項在講的那件事
+    ├── problems_bar.py       #   常駐的「為什麼還不能跑」（F91 U2）：一個計數 ＋
+    │                         #     一份點得開的清單，點一項就選中那張卡。
+    │                         #     ⚠ 不自己算 lint —— 跟畫布的警示點吃同一次
+    │                         #     `validate()`（兩邊各算一次＝畫布是紅的而清單說沒事）
+    ├── status_action.py      #   那一句話旁邊的「下一步」（F95 X5＋X6）：跑完開報表
+    │                         #     資料夾、剪錯線就地復原。**下一句話一定把它收起來**
+    ├── strings.py locales/zh_TW.json  #  使用者面的字只有一個進出口（F98 U14）。鍵就是英文
+    │                         #     原句，所以翻譯層擺在共用的那幾支就涵蓋幾百句
+    │                         #     ⚠ 卡片名與階段名**不翻**（recipe JSON 的鄰居）
+    ├── status_log.py         #   狀態列說過的話（F91 U2 後半）—— 下一句就把上一句
+    │                         #     蓋掉，而那一句常常是唯一講出「沒成功」的地方
+    ├── baseline.py           #   跟上一次比差多少（F91 X1）：把一次跑壓成一小塊、
+    │                         #     兩塊相減成一行字、釘住的那一塊存進 QSettings
+    ├── truth_marks.py        #   在結果表上標真缺陷／誤報（F91 X2）→ 寫回
+    │                         #     `ground_truth.json`（格式與自動撿的那份逐字相同）
+    ├── autosave.py           #   草稿與救回（F91 U4）：關窗有網，當機沒有
+    ├── crashlog.py           #   未預期錯誤的 traceback 落地（F91 U3）——
+    │                         #     打包成 exe 之後沒有 console
+    ├── fit_screen.py         #   視窗裝得進螢幕（F91 U1）。**不要寫死 resize**；
+    │                         #     內容比螢幕高的用 `scroll_host` / `scrolled`，
+    │                         #     而且只能在**建構時**用（事後搬版面是 segfault）
     ├── numbers.py            #   一個特徵值印成字 —— **全 UI 只有這一支**（F52）
     ├── focus_visible.py      #   焦點環只在鍵盤導覽時出現（F80）—— Qt 沒有
     │                         #     `:focus-visible`，這支把 QFocusEvent.reason()

@@ -280,6 +280,7 @@ python tools/make_text_bundle.py --out bundle/d4t.py --split 400
 | `run_tests.py` | **兩台都可以** | ❌ | **每個測試檔各自一個行程**跑完全套，外加逐檔計時、「最慢的幾個」、失敗全部收集到最後一起印。`--fast` 略過 UI。stdlib-only，所以**Windows 上也跑得動** —— 那正是它存在的理由：`CLAUDE.md` 以前教的 `for f in …; do …; done` 是 bash，而家用機是 Windows |
 | `freeze_golden.py` | **家用機** | ❌ | 把現在算出來的 feature 表凍成黃金值（重構的安全網，見 `docs/history/plans/F9-dag-streams.md`）|
 | `bench.py` | **家用機** | ❌ | 把**時間與大小**凍成一份基準（`--check` 比對）—— `freeze_golden.py` 凍的是算出什麼，這一支凍的是花了多久、多大。刻意不進 CI（時間欄會漂）。⚠ 基準帶著它是在哪台機器上量的，**換一台要重凍一次**；決定性的那幾欄（每顆的結果 payload、快取存下幾份）跨機器照樣要對得上 |
+| `i18n_todo.py` | **家用機** | ❌ | 使用者面的字**還有哪些沒翻**（照出現次數排 —— 使用者看到最多次的那句先翻）。⚠ 它是**真的開一次 Studio 收集**出來的，不是掃原始碼：翻譯層擺在共用的那幾支（`_tool_button`、`small_button`、每一句 `ParamSpec.help`、狀態列），所以大部分句子在原始碼裡看起來不像要翻的東西。要 Qt，所以不是公司機那一組 |
 | `check_files.py` | **公司機** | ❌ | 哪幾個檔案跟 GitHub 上不一樣（要先複製 `FILELIST.txt`）|
 | `install_offline.py` | **公司機** | ❌ | 用 `wheels\` 裝相依套件 |
 | `doctor.py` | **公司機** | ❌ | 環境自檢 |

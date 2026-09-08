@@ -127,7 +127,7 @@ d4t 是 **public**。
 | [`d4t/core/ingest/klarf_core.py`](../d4t/core/ingest/klarf_core.py) | **KLIP（整檔搬）** —— 見 §2 |
 | [`d4t/core/ingest/tiff_index.py`](../d4t/core/ingest/tiff_index.py) | KLIP（`klarf_tif_probe`） |
 | [`d4t/ui/theme.py`](../d4t/ui/theme.py) | CPE（GLAS 暖色 token） |
-| [`d4t/ui/widgets.py`](../d4t/ui/widgets.py) | PEAR（`ImageView` 的 zoom/pan 骨架） |
+| [`d4t/ui/image_view.py`](../d4t/ui/image_view.py) | PEAR（`ImageView` 的 zoom/pan 骨架）<br>⚠ 2026-09-08（U7）從 `widgets.py` 搬過來 —— **出處跟著程式碼走**，而這一列是靠 `test_licensing_doc.py` 雙向守著的（那兩條當場紅，所以它沒有漂） |
 
 ---
 

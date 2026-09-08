@@ -25,6 +25,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from dataclasses import replace as _replace
 
 from ..ingest import pair_source
+from . import sampling
 from .cache import StageCache, dataset_token
 from .context import BatchContext, Context
 from .expression import parse_expression
@@ -311,7 +312,8 @@ def run_batch(recipe: Recipe, dataset: Any, *,
               cache_dir: Optional[str] = None,
               progress: Optional[Callable[[int, int, Dict[str, Any]], Any]] = None,
               abort_check: Optional[Callable[[], Any]] = None,
-              limit: Optional[int] = None) -> List[Dict[str, Any]]:
+              limit: Optional[int] = None,
+              sample: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """平行（或循序）跑整個 dataset，回傳 JSON-safe result dict 清單。
 
     - ``workers``：None → ``os.cpu_count()``；``<= 1`` → 同進程循序（無 pool）。
@@ -319,7 +321,11 @@ def run_batch(recipe: Recipe, dataset: Any, *,
     - ``progress(done_count, total, result_dict)``：每顆完成呼叫一次
       （done_count 從 1 起算；平行模式為完成順序，非 item 順序）。
     - ``abort_check()`` 回 truthy → 取消尚未開跑的顆、回傳已完成的部分結果。
-    - ``limit``：只跑前 N 顆。
+    - ``limit``：只跑 N 顆。
+    - ``sample``：**哪 N 顆**（X3）。``{"mode", "seed", "column"}``，
+      預設 ``mode="first"`` —— 也就是這個參數不給的時候行為**一個位元都不變**
+      （``items[:limit]``）。挑法與理由見 `pipeline/sampling.py`。
+      挑完的紀錄（含種子）由呼叫端負責寫進 run 紀錄 —— 這裡不寫檔。
     - 回傳順序 = 原始 item 順序（被 abort 略過的顆不在清單裡）。
     - 單顆失敗（含 worker 層意外）→ 該顆 ``ok=False`` dict，不殺整批。
     """
@@ -335,7 +341,14 @@ def run_batch(recipe: Recipe, dataset: Any, *,
     # 怎麼只跑了 3 顆」。他要的是「符合的前 N 顆」。
     items = select_items(recipe, dataset, items)
     if limit is not None:
-        items = items[:int(limit)]
+        # ⚠ **抽樣在篩選之後**，同 `limit` 的理由：使用者要的是「符合的那 N
+        # 顆」，不是「前 N 顆裡符合的那幾顆」。
+        spec = dict(sample or {})
+        items, _note = sampling.pick(
+            items, int(limit),
+            mode=str(spec.get("mode", sampling.DEFAULT_MODE)),
+            seed=spec.get("seed"),
+            column=str(spec.get("column", "CLASSNUMBER") or "CLASSNUMBER"))
     n = len(items)
     kind = str(getattr(dataset, "kind", ""))
     # ---- 分流（F23）：route_by 的那一欄要在每一顆的 `fields` 裡 ----

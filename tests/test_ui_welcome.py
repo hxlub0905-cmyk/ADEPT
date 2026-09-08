@@ -226,19 +226,36 @@ def test_library_lists_every_supported_recipe_file(qapp, library_dir):
         dlg.close()
 
 
-def test_the_shipped_library_is_empty_but_the_dialog_still_opens(qapp):
-    """範例 recipe 全部拿掉之後，庫是空的 —— 而空的不等於壞的。
+def test_the_shipped_library_is_not_empty_any_more(qapp):
+    """**2026-09-08（F91 X4）：這條測試翻面了。**
 
-    這個對話框在 Studio 上的入口已經收起來了（``scope.SHOW_SAMPLE_ENTRIES``），
-    但它仍然開得起來、仍然說得出為什麼是空的。範例回來的那一天，
-    這條測試就是「放回去真的會被看到」的另一半證據。
+    它以前叫「庫是空的，而空的不等於壞的」—— 那時候 `RECIPES_DIR` 指著
+    ``examples/recipes``，一個 2026-08-16 就刪掉的路徑。現在它指著 `recipes/`，
+    而那裡有出貨的 recipe（`tests/test_shipped_recipes.py` 逐份跑過）。
+
+    留著它是因為當初那句話：「範例回來的那一天，這條測試就是『放回去真的會
+    被看到』的另一半證據」。這就是那一天。
     """
     dlg = welcome_mod.RecipeLibraryDialog()
+    try:
+        assert dlg.count() >= 1, "範本庫又空了 —— recipes/ 還在嗎？"
+        assert dlg.btn_load.isEnabled() is True
+    finally:
+        dlg.close()
+
+
+def test_an_empty_library_still_says_where_it_looked(qapp, tmp_path):
+    """空的不等於壞的 —— 而且它要**講出找過哪裡**。
+
+    一句「沒有範本」答不出使用者的下一個問題：*那我要把檔案放哪*。
+    """
+    dlg = welcome_mod.RecipeLibraryDialog(directory=str(tmp_path))
     try:
         assert dlg.count() == 0
         assert dlg.load_selected() is None
         assert dlg.btn_load.isEnabled() is False
         assert "No recipe JSON" in dlg.detail.text()
+        assert str(tmp_path) in dlg.detail.text(), dlg.detail.text()
     finally:
         dlg.close()
 
@@ -348,34 +365,46 @@ def test_toolbar_has_help_and_examples_entries(window):
 
 
 # --------------------------------------------------------------------------- #
-# 範例入口收起來了（scope.SHOW_SAMPLE_ENTRIES）——「收起來」不是「刪掉」
+# 兩個入口，兩個旗標（F91 X4 拆開）——「收起來」不是「刪掉」
 # --------------------------------------------------------------------------- #
-def test_the_sample_entries_are_hidden_while_there_are_no_recipes(window):
-    """範例 recipe 全部拿掉之後，兩個入口都不該出現在畫面上。
+def test_the_sample_data_entry_is_hidden_and_the_library_is_not(window):
+    """**兩顆鈕的死法不一樣，所以它們不是同一個決定。**
+
+    範本庫 2026-09-08 回來了（`recipes/` 有東西了）；「用範例資料試一次」
+    仍然收著 —— 它產得出資料，但 `load_template` 指著一份不存在的
+    ``ebi_patch`` recipe，所以按完是一批資料配一張空白畫布。
 
     為什麼需要這條：那兩顆鈕**按下去仍然會做事**（訊號還在、方法還在），
     所以「壞了沒有」從程式碼看不出來 —— 壞的是使用者按了之後撞牆。
 
-    問 ``isHidden()`` 而不是 ``isVisible()``：視窗還沒 ``show()`` 之前
-    所有 widget 的 ``isVisible()`` 都是 False（docs/PITFALLS.md），那樣問的話
-    這條測試會**永遠是綠的**，包括開關打開的時候。
+    ⚠ **工具列上那顆要 `show()` 過再問。** ``QToolBar.addWidget`` 把 widget
+    包進一個 QWidgetAction，而 Qt 在工具列真的顯示之前把它們**全部**藏著
+    —— 於是 `btn_examples.isHidden()` 在開關打開的時候照樣答 True
+    （`studio._build_toolbar` 那段分隔線的註解記著同一件事）。
+    不在工具列上的那顆（`btn_empty_sample`）沒有這個問題。
     """
     from d4t.ui import scope
 
-    assert scope.SHOW_SAMPLE_ENTRIES is False, "這條測試描述的是收起來的狀態"
-    assert window.btn_examples.isHidden() is True, \
-        "範本庫是空的，Templates… 不該出現"
+    assert scope.SHOW_TEMPLATE_LIBRARY is True
+    assert scope.SHOW_SAMPLE_DATA is False
     assert window.btn_empty_sample.isHidden() is True, \
-        "沒有範本可載，「用範例資料試一次」不該出現"
+        "「用範例資料試一次」那條路還少一半，不該出現"
+
+    window.show()
+    QApplication.processEvents()
+    assert window.btn_examples.isVisible() is True, \
+        "範本庫有東西了，Templates… 要看得到"
 
     dlg = window.show_welcome(force=True)
     try:
-        assert dlg.btn_demo.isHidden() is True
-        assert dlg.btn_library.isHidden() is True
-        assert dlg.btn_open.isHidden() is False, "唯一剩下的路不能也被藏起來"
+        dlg.show()
+        QApplication.processEvents()
+        assert dlg.btn_demo.isVisible() is False
+        assert dlg.btn_library.isVisible() is True
+        assert dlg.btn_open.isVisible() is True, "唯一那條開自己資料的路不能被藏"
         # 藏起來的不算 —— 畫面上看得到的主要動作要正好一顆
         primaries = [b for b in (dlg.btn_demo, dlg.btn_open, dlg.btn_library)
-                     if not b.isHidden() and b.objectName() == "primary"]
+                     if b.isVisible() and b.objectName() == "primary"]
         assert len(primaries) == 1 and primaries[0] is dlg.btn_open
     finally:
         dlg.close()

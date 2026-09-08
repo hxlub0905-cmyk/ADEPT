@@ -186,7 +186,12 @@ def test_the_canvas_is_the_top_block_and_settings_get_the_rest(window, qapp):
     qapp.processEvents()
     col = window.canvas_column
     assert col.widget(0) is window.pipeline, "畫布要在中欄的上面"
-    assert col.widget(1) is window.stack, "設定在下面"
+    # ⚠ U8（2026-09-08）：下半從「就是 `stack`」變成「`stack` ＋ 這張卡的
+    # 儀表併排在同一個框裡」—— 調參數的迴圈是「改一個數字 → 看那個數字怎麼
+    # 變」，而那兩件事以前隔著整張影像。
+    assert col.widget(1) is window.params_row, "設定在下面"
+    assert window.params_row.widget(0) is window.stack
+    assert window.params_row.widget(1) is window.gauge_pane
 
     # **F13-1：設定區的高度跟著「有沒有東西可以設定」走。**
     # 沒選卡片時它裝的是一行「請去別的地方點一個東西」的灰字，而它同時把畫布
@@ -205,44 +210,46 @@ def test_the_canvas_is_the_top_block_and_settings_get_the_rest(window, qapp):
     window.set_params_open(True)
 
 
-def test_the_canvas_pops_out_into_its_own_window(window, qapp):
-    """zoom bar 上的彈出鈕：把 pipeline 開在自己的視窗（全尺寸）。
+def test_the_canvas_takes_the_column_in_build_mode(window, qapp):
+    """**「看全貌」不再是第二個視窗**（U5，2026-09-08）。
 
-    第二個視窗是另一份 PipelineCanvas 接**同一個 model**：節點一樣、
-    選取同步 —— 它不是截圖，是活的。
+    這一條以前叫 `test_the_canvas_pops_out_into_its_own_window`：zoom bar 上
+    那顆鈕會開一個 `QDialog`，裡面第二份 `PipelineCanvas` 接同一個 model。
+    那條路 work，但代價是**兩份畫布實體與兩份狀態** —— 每個訊號接兩次、每次
+    重畫記得兩邊都畫，而畫布明明是這個工具的賣點卻是螢幕上第三大的東西。
+
+    現在同一顆鈕換版面：Build = 畫布吃滿中欄。**切換不重建畫布** ——
+    node id 與選取狀態原封不動。
     """
     window.show()
     window.resize(1400, 900)
     qapp.processEvents()
-    assert window.canvas_popout_open() is False
-    before = list(window.canvas_column.sizes())
-    window.open_canvas_window()
-    assert window.canvas_popout_open() is True
-    # 畫布已經在別的視窗全尺寸攤開 —— 主視窗的設定往上補滿（flexible）
-    assert window.canvas_column.sizes()[0] == 0, \
-        "彈出時主視窗的畫布要把位子讓給設定"
-
-    view = window._popout_view
-    assert view.node_ids() == window.pipeline.node_ids(), "兩份畫布同一份 recipe"
+    assert window.layout_mode() == "tune"
+    assert len(window._canvases()) == 1, "只該有一份畫布"
 
     nid = window.pipeline.node_ids()[1]
     window.select_node(nid)
-    assert view.selected() == nid, "選取要跨視窗同步"
+    before_ids = window.pipeline.node_ids()
 
-    # 加一張卡，兩邊都要長出來
+    window.set_layout_mode("build")
+    qapp.processEvents()
+    assert window.layout_mode() == "build"
+    assert window.canvas_column.sizes()[1] == 0, "Build 模式畫布吃滿整欄"
+    assert len(window._canvases()) == 1, "換模式不該多出一份畫布"
+    assert window.pipeline.node_ids() == before_ids, "切模式不重建畫布"
+    assert window.pipeline.selected() == nid, "選取狀態要留著"
+
+    # 加一張卡照樣長出來（同一份畫布，不必再同步第二份）
     n2 = wire_up(window.model, window.model.add_step("denoise"))
     qapp.processEvents()
-    assert n2 in view.node_ids(), "model 動了，彈出視窗要跟著動"
+    assert n2 in window.pipeline.node_ids()
 
-    window._canvas_popout.close()
+    window.set_layout_mode("tune")
     qapp.processEvents()
-    assert window.canvas_popout_open() is False
-    assert window.canvas_column.sizes()[0] > 0, "關窗要把畫布的位子還回來"
+    assert window.canvas_column.sizes()[0] > 0, "切回來畫布不該佔整欄"
     assert sum(window.canvas_column.sizes()) > 0
-    got = window.canvas_column.sizes()
-    assert abs(got[0] - before[0]) <= 2, "還原的是彈出前的比例：%s vs %s" % (got, before)
 
-    # 關掉之後再動 model 不可以炸（懸空參照）
+    # 切回來之後再動 model 不可以炸
     wire_up(window.model, window.model.add_step("tone"))
     qapp.processEvents()
 

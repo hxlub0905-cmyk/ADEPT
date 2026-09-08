@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
 from d4t.core.pipeline import get_step
 from d4t.core.pipeline.engine import run_defect
 
+from . import fit_screen
 from .gallery import make_thumb, thumb_placement
 from .theme import TOKENS, region_hex
 from .widgets import _qimage_from_uint8, apply_button_cursors
@@ -280,7 +281,7 @@ class RegionCheckWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Check region across defects")
         self.setModal(False)
-        self.resize(880, 620)
+        fit_screen.fit(self, 880, 620)
         self._results: List[Dict[str, Any]] = []
         self._cells: List[RegionThumb] = []
 

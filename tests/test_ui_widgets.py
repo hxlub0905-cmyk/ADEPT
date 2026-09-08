@@ -28,6 +28,9 @@ from tests.region_cards import (  # noqa: E402
     add_region_step, region_card,
 )
 
+# 段落的順序、標題、副標只有一個家（U9）—— 這裡不 import Qt，所以放模組層。
+from d4t.core.pipeline.step import GROUPS as STAGE_GROUPS  # noqa: E402
+
 
 def _load_qt() -> None:
     """把 Qt 與待測模組 import 進來，注入本模組的 globals（只在 fixture 裡呼叫）。"""
@@ -636,11 +639,11 @@ def test_library_panel_groups_and_double_click(qapp):
     steps = _steps()
     panel.set_steps(steps)
 
-    # 標題與順序的**唯一出處**是 LibraryPanel.GROUPS（它自己再對齊
-    # step.GROUP_ORDER，由 tests/test_ui_f16_stages.py 鎖住）。這裡以前抄了
-    # 第四份，於是 F16 加兩段時它是「忘了改」的那一份。
+    # 標題與順序的**唯一出處**是 `step.GROUPS`（U9 之後 `GROUP_ORDER` 也是從
+    # 它推出來的）。這裡以前抄了第四份，於是 F16 加兩段時它是「忘了改」的
+    # 那一份。
     assert panel.section_titles() == [
-        t for _gid, t, _sub in widgets_mod.LibraryPanel.GROUPS]
+        t for _gid, t, _sub in STAGE_GROUPS]
     assert set(panel.step_keys()) == {s["key"] for s in steps}
 
     # 每張卡都被歸進宣告的那一段
@@ -657,7 +660,7 @@ def test_library_panel_groups_and_double_click(qapp):
     empties = [lbl for lbl in panel.findChildren(QLabel)
                if lbl.objectName() == "libEmpty"]
     assert len(empties) == sum(
-        1 for g, _t, _s in panel.GROUPS if not by_group.get(g))
+        1 for g, _t, _s in STAGE_GROUPS if not by_group.get(g))
 
     got = []
     panel.add_requested.connect(got.append)
@@ -748,8 +751,8 @@ def test_group_icons_are_painted_not_files(qapp):
     # 每個階段有兩個 icon：rail 上的大顆 + 展開區的小標題；
     # 再加 rail 底部的搜尋鈕（它不是流程階段，所以不在 stage_buttons 裡）
     icons = panel.findChildren(widgets_mod.GroupIcon)
-    assert len(icons) == 2 * len(panel.GROUPS) + 1
-    assert len(panel.stage_buttons) == len(panel.GROUPS)
+    assert len(icons) == 2 * len(STAGE_GROUPS) + 1
+    assert len(panel.stage_buttons) == len(STAGE_GROUPS)
     assert panel.search_button.group == "search"
     assert all(i.width() > 0 and i.height() > 0 for i in icons)
 
@@ -781,7 +784,7 @@ def test_every_stage_icon_is_a_different_shape(qapp):
 
     size = 15
     ink = {}
-    for gid, _t, _s in widgets_mod.LibraryPanel.GROUPS:
+    for gid, _t, _s in STAGE_GROUPS:
         pm = QPixmap(size, size)
         pm.fill(QColor("#ffffff"))
         p = QPainter(pm)
@@ -1193,11 +1196,15 @@ def test_verdict_chip(qapp):
     assert chip.tone() == "bad"
     assert theme_mod.TOKENS["chip_bad_bg"] in chip.styleSheet()
 
-    # is_real_style：bin 1 = 抓到真缺陷 = 壞消息（紅），bin 0 = 乾淨（綠）
+    # is_real_style：bin 1 = 抓到真缺陷 = 壞消息（紅），bin 0 = 乾淨（綠）。
+    # ⚠ **字也要跟著翻面**（U13，2026-09-08）。這幾行以前斷言的是
+    # 「文字兩種模式都一樣，只有顏色換邊」—— 而那正是那一輪要修掉的 bug：
+    # 同一個綠色 chip 在兩份 recipe 裡意思相反，畫面上沒有東西講得出是哪一種。
+    # 完整的一組在 tests/test_ui_verdict_wording.py。
     chip.set_verdict(1, is_real_style=True)
-    assert chip.text() == "bin 1 · ≥ threshold" and chip.tone() == "bad"
+    assert chip.text() == "real · bin 1" and chip.tone() == "bad"
     chip.set_verdict(0, is_real_style=True)
-    assert chip.text() == "bin 0 · < threshold" and chip.tone() == "good"
+    assert chip.text() == "nuisance · bin 0" and chip.tone() == "good"
 
     chip.set_verdict(None)
     assert chip.text() == "—" and chip.verdict() is None
@@ -1235,9 +1242,9 @@ def test_stage_rail_drills_down_one_stage_at_a_time(qapp):
     panel = widgets_mod.LibraryPanel()
     panel.set_steps(_steps())
 
-    assert len(panel.stage_buttons) == len(panel.GROUPS)
+    assert len(panel.stage_buttons) == len(STAGE_GROUPS)
     # 每顆按鈕標出該段有幾張卡
-    for gid, _t, _s in panel.GROUPS:
+    for gid, _t, _s in STAGE_GROUPS:
         n = sum(1 for d in _steps() if d["group"] == gid)
         assert panel.stage_buttons[gid].count.text() == ("" if n == 0 else str(n))
 
@@ -1279,7 +1286,7 @@ def test_every_stage_opens_at_the_same_height(qapp):
 
     tops = {}
     panel.toggle_group(None)
-    for gid, _t, _s in panel.GROUPS:
+    for gid, _t, _s in STAGE_GROUPS:
         panel.toggle_group(gid)
         qapp.processEvents()
         head = panel._headers[gid]
@@ -1993,3 +2000,110 @@ def test_a_metric_chip_row_can_show_every_id_a_card_offers(qapp):
                 assert {t.strip() for t in row.text().split(",") if t.strip()} \
                     == want, "%s.%s 的預設值勾不回來" % (key, spec.name)
             row.deleteLater()
+
+
+# --------------------------------------------------------------------------- #
+# U7：拆開之後，一個名字都不能少
+# --------------------------------------------------------------------------- #
+#: 拆之前 `widgets.py` 上的每一個模組層名字（2026-09-08，U7 前的那一版）。
+#:
+#: 為什麼把清單寫死在這裡，而不是每次去 git 撈：這條測試要在**沒有 git 的
+#: 機器上**也答得出來（公司機解壓縮就跑，`docs/NO-GIT-SETUP.md`），而且
+#: 「拆之前有哪些」是一個**歷史事實**，不該隨著 HEAD 移動。
+_NAMES_BEFORE_THE_SPLIT = (
+    "CARD_MIME", "CellRoisField", "ChannelMapField", "ChartSpecField",
+    "ChartStyleField", "ChoiceChips", "CurveDialog", "CurveEditor",
+    "CurveField", "FEATURE_ABSOLUTE", "FEATURE_LABEL_SEP", "FEATURE_RELATIVE",
+    "FEATURE_SUB", "FEATURE_SUP", "FilterChip", "GLYPH_ICONS", "GroupIcon",
+    "HistogramWidget", "IconButton", "ImageView", "LibraryPanel",
+    "MARK_ROLE_TOKENS", "MARK_ROLE_WEIGHTS", "METRIC_GLYPHS",
+    "METRIC_GROUPS", "METRIC_GROUP_ORDER", "MetricChips", "MetricPick",
+    "MultiChoicePicker", "ParamForm", "ProfilePanel", "StageButton",
+    "StreamPicker", "TemplateField", "VARIANT_GLOSS", "VerdictChip",
+    "_BLOCK_EDITORS", "_ChipBase", "_ChipFlow", "_ChoiceChip", "_GlyphMixin",
+    "_HintLabel", "_LibraryItem", "_MetricChip", "_ParamRow",
+    "_SLIDER_MAX_INT_SPAN", "_SLIDER_TICKS", "_blob_outline", "_card_says",
+    "_dist_curve", "_draw_profile_glyph", "_escape", "_extreme_pair",
+    "_float_decimals", "_fmt_number", "_focus_set", "_make_slider",
+    "_paint_glyph", "_poly_area", "_qimage_from_uint8", "_safe_float",
+    "_safe_int", "_spell", "_with_variant", "_wiring_display",
+    "apply_button_cursors", "clear_layout_parked", "column_header",
+    "draw_glyph_icon", "draw_group_icon", "draw_metric_glyph", "feature_gloss",
+    "feature_html", "feature_unit", "glyph_icon", "metric_face",
+    "region_dot_icon", "restyle", "small_button", "split_labelled", "to_uint8",
+    # ⚠ 底下這幾個不是這支檔案 `class`/`def` 出來的，是它 **import 進來**的
+    # —— 而屬性存取讀得到它們。第一版的清單只數了上面那 81 個，於是
+    # `TOKENS`（`test_ui_f8_ruler` 用 `widgets_mod.TOKENS` 讀走的那一個）
+    # 安靜地漏掉，直到那支測試自己壞掉才看得見。
+    "TOKENS", "algo_glv", "fit_screen", "format_feature_value",
+    "format_feature_value_short", "glyphs", "region_hex", "region_words",
+    "theme", "uc_heat_hex",
+)
+
+#: 拆之前讀得到、而拆之後**刻意**讀不到的：stdlib 與 Qt 自己的名字。
+#:
+#: `widgets.QColor` 從來不是這道門要給的東西 —— 轉出它等於說「從這裡拿 Qt
+#: 也可以」。這張表配著底下那支反向的測試：表上的名字哪天真的被人透過
+#: `widgets` 讀走了，那就是一個要處理的呼叫端，不是一個可以加進上面清單的字。
+_NOT_A_FRONT_DOOR_FOR = (
+    "Any", "Dict", "List", "Optional", "Sequence", "Tuple",
+    "QApplication", "QBrush", "QCheckBox", "QColor", "QComboBox", "QDialog",
+    "QDialogButtonBox", "QDoubleSpinBox", "QDrag", "QEvent", "QFont",
+    "QFontMetricsF", "QFrame", "QGridLayout", "QHBoxLayout", "QIcon",
+    "QImage", "QInputDialog", "QLabel", "QLineEdit", "QLinearGradient",
+    "QMimeData", "QPainter", "QPainterPath", "QPen", "QPixmap", "QPointF",
+    "QPolygonF", "QPushButton", "QRectF", "QScrollArea", "QSize",
+    "QSizePolicy", "QSlider", "QSpinBox", "QVBoxLayout", "QWidget", "Qt",
+    "Signal", "math", "np", "re",
+)
+
+
+def test_the_split_did_not_drop_a_single_name(qapp):
+    """**拆之前 `widgets` 上有的，拆之後還要拿得到。**
+
+    U7 把 7,140 行拆成八支，而驗收條件是「純搬移，不改行為」—— 那句話的
+    執行機構就是這一條：四十幾個模組與上百條測試寫的是
+    ``from .widgets import X``，一個都不該改。
+
+    ⚠ **會漏的是屬性存取那種。** 掃 import（grep 或 ast）看得到
+    ``from .widgets import ImageView``，看不到
+    ``widgets_mod.METRIC_GROUP_ORDER`` —— 而測試裡到處都是後者。
+    第一版的檢查就是這樣漏掉四個名字的，`METRIC_GROUP_ORDER` 那條測試當場紅。
+    所以這裡問的是**名字在不在模組上**，不是「誰 import 了它」。
+    """
+    missing = [n for n in _NAMES_BEFORE_THE_SPLIT
+               if not hasattr(widgets_mod, n)]
+    assert not missing, (
+        "拆完之後這幾個名字從 `widgets` 上不見了：\n  %s\n"
+        "  它們搬去哪一支了？把那一支加進 `widgets.py` 的轉出口 —— "
+        "呼叫端一個都不該改。" % "\n  ".join(missing))
+
+
+def test_the_door_does_not_hand_out_qt(qapp):
+    """反向的那一支：豁免表上的名字**還是**讀不到。
+
+    修好了卻沒從表上拿掉的話，這道門從此少一條防線而測試照樣綠
+    （`CLAUDE.md` §1 那條「任何例外清單都要有反向測試」）。
+    """
+    leaked = [n for n in _NOT_A_FRONT_DOOR_FOR if hasattr(widgets_mod, n)]
+    assert not leaked, (
+        "`widgets` 又轉出 stdlib／Qt 的名字了：%s\n"
+        "  需要它的人請直接 import 來源 —— 這道門給的是 d4t 自己的元件。"
+        % leaked)
+
+
+def test_the_front_door_stayed_a_front_door(qapp):
+    """`widgets.py` 是一道門，不是一個房間 —— **它不該自己長出東西**。
+
+    沒有這一條的話，下一個人會照著「這裡本來就什麼都有」的印象往裡面加，
+    而三個月後它又是一支 7,000 行的檔案（F90 那把尺量到的那種漂移）。
+    """
+    import ast
+    import pathlib
+
+    src = pathlib.Path(widgets_mod.__file__).read_text(encoding="utf-8")
+    defined = [n.name for n in ast.parse(src).body
+               if isinstance(n, (ast.ClassDef, ast.FunctionDef))]
+    assert not defined, (
+        "`widgets.py` 裡又長出東西了：%s\n"
+        "  新的元件請開新模組（`CLAUDE.md` §4），再從這裡轉出去。" % defined)

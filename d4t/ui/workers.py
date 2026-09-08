@@ -386,14 +386,19 @@ class TrialWorker(_ThreadedWorker):
     # ---- 對外 -------------------------------------------------------------
     def start(self, recipe: Recipe, dataset: Any, n: int,
               workers: Optional[int] = None,
-              cache_dir: Optional[str] = None) -> bool:
-        """開背景執行緒試跑前 ``n`` 顆；已有工作在跑時回傳 False。"""
+              cache_dir: Optional[str] = None,
+              sample: Optional[Dict[str, Any]] = None) -> bool:
+        """開背景執行緒試跑 ``n`` 顆；已有工作在跑時回傳 False。
+
+        ``sample``（X3）：**哪 N 顆**。不給就是老行為（KLARF 順序的前 N 顆）。
+        """
         if self.is_running():
             return False
         self._abort.clear()
         limit = int(n)
         w = None if workers is None else int(workers)
         cdir = None if cache_dir is None else str(cache_dir)
+        spec = dict(sample or {})
 
         def progress_cb(done_count: int, total: int,
                         _result: Dict[str, Any]) -> None:
@@ -403,7 +408,8 @@ class TrialWorker(_ThreadedWorker):
             try:
                 out = run_batch(recipe, dataset, workers=w, cache_dir=cdir,
                                 limit=limit, progress=progress_cb,
-                                abort_check=self._abort.is_set)
+                                abort_check=self._abort.is_set,
+                                sample=spec)
             except Exception as e:          # noqa: BLE001 — 整批爆掉才會走到這
                 self.failed.emit(f"{type(e).__name__}: {e}")
             else:
@@ -423,11 +429,13 @@ class TrialWorker(_ThreadedWorker):
 
     @staticmethod
     def run_sync(recipe: Recipe, dataset: Any, n: int, workers: int = 1,
-                 cache_dir: Optional[str] = None) -> List[Dict[str, Any]]:
+                 cache_dir: Optional[str] = None,
+                 sample: Optional[Dict[str, Any]] = None
+                 ) -> List[Dict[str, Any]]:
         """同步試跑（不開執行緒），回傳 result dict 清單。"""
         return run_batch(recipe, dataset, workers=int(workers),
                          cache_dir=None if cache_dir is None else str(cache_dir),
-                         limit=int(n))
+                         limit=int(n), sample=dict(sample or {}))
 
     # ---- 內部 -------------------------------------------------------------
     def _before_stop(self) -> None:

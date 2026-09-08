@@ -73,21 +73,106 @@ SCOPE = ("d4t", "tools", "fab_probe")
 #: —— 前四支是接線層與遷移層（成長跟功能不成比例），`canvas.py` 則單純是
 #: 超過下面那個一般上限而且不該再漂。其他 138 支走 :data:`GENERAL_CEILING`。
 FILE_CEILINGS = {
-    # 自繪圖示、按鈕、控制項全部在一支。真正的解法是把那幾群圖示切出去
-    # （`CLAUDE.md` §4 已經寫著「切 widgets.py 那幾群自繪圖示最好拆、風險最低」），
-    # 而那件事的前置是黃金值三份全綠 —— 已經成立了。
-    "d4t/ui/widgets.py": 7139,
+    # **2026-09-08（U7）：7,140 → 123。那件事做完了。**
+    #
+    # 這一格的註解以前寫的是「真正的解法是把那幾群圖示切出去，而那件事的前置
+    # 是黃金值三份全綠 —— 已經成立了」。U7 就是那一刀：24 個不相干的類別拆成
+    # 八支（`buttons` / `icons` / `image_view` / `fields` / `param_form` /
+    # `chips` / `library` / `histogram` / `feature_text`），而 `widgets.py`
+    # 只剩一層轉出口 —— 四十幾個模組與上百條測試一個字都沒有改。
+    #
+    # ⚠ **這一格現在守的是「它不要再長回來」**，而那正是這把尺設計時就寫著的
+    # 那件事（反向測試那一段：「`studio.py` 真的拆掉 2,000 行之後，上限如果還
+    # 留在 6,942，它就可以在沒有人注意的情況下再長回來」）。123 行是那道門
+    # 本身；`test_ui_widgets.py::test_the_front_door_stayed_a_front_door`
+    # 從另一邊問同一句話（那支檔案裡不准再有 class / def）。
+    #
+    # 123 → 137（同日，U7 的收尾）：轉出口漏了十個**它 import 進來**的名字
+    # （`TOKENS` 那一批），而 `test_ui_f8_ruler` 是用 `widgets_mod.TOKENS`
+    # 讀走的 —— 補回去要十四行 import。
+    "d4t/ui/widgets.py": 137,
     # 接線層（建 widget、接訊號、轉呼叫）。`CLAUDE.md` §4：新的面板一律開新
     # 模組，不要塞進這裡。這一格就是那句話的執行機構。
-    "d4t/ui/studio.py": 6942,
+    #
+    # 2026-09-08（P0 那一批 ＋ X4/U11）：6,942 → 7,198（+256）。
+    # **七個新模組，而這裡只加接線** —— 每一項的內容都在自己的檔案裡：
+    #   `baseline.py`（X1）、`truth_marks.py`（X2）、`fit_screen.py`（U1）、
+    #   `crashlog.py`（U3）、`autosave.py`（U4）、`problems_bar.py` ＋
+    #   `status_log.py`（U2 的前後兩半）。
+    # P0 那一批的 166 行：三支新方法（`_publish_run_snapshot` /
+    # `_on_truth_marked` / `_on_problem_activated`）、Problems 列／狀態列歷史／
+    # 草稿的建構與掛勾、以及 `_refresh_pipeline` 改成只跑一次 lint。
+    # X4 的 0 行（只換了旗標的名字）＋ U11 的 90 行：把 Results 那個
+    # `WhyPanel` **同一個 widget** 掛進單顆預覽這一欄，加上讓路徑那一行變成
+    # 連結（三支：`_decide_path_markup` / `_fill_preview_why` /
+    # `toggle_preview_why`）。
+    #
+    # 2026-09-08（U6）：7,198 → 7,037（−161）。接線／換線／剪線的**決定**搬進
+    # `ui/edit_plan.py`（純函式、不碰 Qt），這裡只剩「照計畫動 model」——
+    # 那一段留著是因為它的**順序**有意義（`add_edge` 會因為成環而失敗，而失敗
+    # 的那條線不該留下任何痕跡）。降下來的這一格就是把那件事鎖住。
+    #
+    # 2026-09-08（U13/X7 ＋ X5/X6 ＋ U21 ＋ U17）：7,037 → 7,170（+133）。
+    # **四件事，而內容全在別的地方**：那顆「下一步」鈕住在 `ui/status_action.py`
+    # （X5 開資料夾 ＋ X6 就地反悔共用同一個機制）、「這份 recipe 升級了什麼」
+    # 算在 `recipe.describe_migration` 上。這裡加的是接線與四支小方法
+    # （`_status_next_step` / `_open_output_folder` / `_refresh_results_button`
+    # / `_describe_upgrade` ＋ `_show_upgrade_detail`）。
+    #
+    # 2026-09-08（U18 ＋ X3）：7,170 → 7,279（+109）。抽樣的**挑法**住在
+    # `core/pipeline/sampling.py`（純資料、不 import Qt），這裡加的是工具列
+    # 那顆下拉、換模式時把字換掉、以及把設定送進 `run_batch`。U18 的兩支則
+    # 是把快捷鍵表上那兩格接到畫布已經有的實作上。
+    #
+    # 2026-09-08（U5 ＋ U8）：7,279 → 7,390（+111）。**這一格本來會下降** ——
+    # U5 刪掉了整個彈出視窗（`open_canvas_window` / `_on_canvas_popout_closed`
+    # / `canvas_popout_open`，約 55 行）—— 而換上來的兩種模式要記兩份比例、
+    # 要把「模式」跟「設定區攤開沒有」講清楚（第一版把它們合成一個狀態，
+    # 而那是錯的：模式是使用者選的，攤開是選到卡片時的自動行為）。
+    # U8 的 `_build_params_row` 是新的一支，加上儀表從右欄搬過來的接線。
+    #
+    # 2026-09-08（U14）：7,390 → 7,404（+14）。翻譯層只包了兩個**繞過
+    # `_tool_button` 的地方**（`_refresh_results_button` 與 `_sync_layout_button`
+    # 自己改寫 text/tooltip）—— 整條工具列與狀態列各只加一行，因為那兩支本來
+    # 就是共用的入口。那正是 U14 的整個賣點：翻譯不必改 38 個檔案。
+    #
+    # 2026-09-08（X3 收尾）：7,404 → 7,427（+23）。`_sample_line` ——
+    # 抽樣的種子以前只存在 `sample_note` 這個欄位上，**使用者看不到**，而
+    # Studio 不寫 runs.db（只有 CLI 寫）。一次跑出漂亮結果而重現不了的隨機
+    # 抽樣等於沒有跑過，所以跑完那句話後面要帶著種子。
+    #
+    # 2026-09-08（刪死碼）：7,427 → 7,429（**+2，而它刪掉了三行程式**）。
+    # `_bound_param` 寫了三次、一次都沒有被讀過 —— F9-5b 的真相搬到邊上
+    # （`add_edge(dst_in=…)`）之後它就只是一個會讓人以為「有人在用它」的欄位。
+    # 換上來的是五行說明：**為什麼那件事不在這一支做、以及它以前在哪裡**。
+    # 解釋比程式碼貴，而那是對的價錢 —— 沒有它，下一個人會把它加回來。
+    #
+    # 2026-09-08（工具列裝不下的那個 regression）：7,429 → 7,444（+15）。
+    # U5／X3 各在工具列上加了一顆鈕，加起來 132 px，而那台 1366×768 的機器只
+    # 剩 76 px 的餘裕（`test_ui_small_screen` 抓到）。兩顆都搬走了：版面切換
+    # 進畫布的縮放列（它控制的就是那塊畫布）、抽樣併進那個會變的字本身。
+    # 加的行是**為什麼**（下一個人加鈕之前會讀到）。
+    "d4t/ui/studio.py": 7444,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
-    "d4t/core/pipeline/recipe.py": 3732,
+    #
+    # 2026-09-08（U17）：3,732 → 3,830（+98）。`describe_migration` ——
+    # 「這份舊 recipe 開起來被升級了什麼」講成人話。它**比對前後**而不是讓
+    # 19 道 `_migrate_*` 各自回報：那會是 19 個要維護的字串，而第 20 道一定
+    # 會忘（`ALLOWED_ERRORS` 學到的同一課）。
+    "d4t/core/pipeline/recipe.py": 3830,
     # 逐卡儀表板。這一支變長**通常是健康的**（加一張卡就多一個面板），所以
     # 這一格比其他四格更常需要調高 —— 那沒關係，重點是調高時有人看見。
     "d4t/ui/inspectors.py": 3622,
     # 節點畫布。沒有被點名，只是它超過一般上限，凍住免得它安靜地漂。
-    "d4t/ui/canvas.py": 2705,
+    #
+    # 2026-09-08（U18/U19/U20）：2,705 → 2,887（+182）。三件都長在畫布上，
+    # 而它們**本來就該長在這裡**：Tab／Esc／Delete 要知道選著什麼、第一次
+    # 接線的提示要畫在那顆埠旁邊、區域線的顏色是線自己的事。
+    #
+    # 2026-09-08：2,887 → 2,900（+13）。`zoom_buttons()` ＋ 那顆「看全貌」鈕
+    # 現在切換版面而不是開視窗的說明。
+    "d4t/ui/canvas.py": 2900,
 }
 
 #: 沒被列名的檔案共用的上限。
@@ -215,12 +300,58 @@ COUNT_CEILINGS = {
     ),
     # god object 的兩個投影。261 → 268（六天）。
     "studio_window_methods": (
-        268,
+        287,
+        # 2026-09-08（X3 收尾）：286 → 287。`_sample_line`（見上）。
+        # 2026-09-08（U5 ＋ U8）：284 → 286。**淨值 +2，而它換掉了三支**：
+        # 走的是 `open_canvas_window` / `_on_canvas_popout_closed` /
+        # `canvas_popout_open`，來的是 `layout_mode` / `set_layout_mode` /
+        # `toggle_layout_mode` / `_sync_layout_button` / `_build_params_row`。
+        # 2026-09-08（U18 ＋ X3）：280 → 284。四支：`_delete_selected_on_canvas`
+        # 與 `_clear_canvas_selection`（快捷鍵表上那兩格 → 畫布已經有的實作，
+        # 刪除仍然只有一份）、`set_sample_mode`（換模式**並且**把工具列的字
+        # 換掉 —— 跑的東西變了而畫面沒變是最危險的失敗方式）、`sample_spec`。
+        # 2026-09-08（那四件事）：275 → 280。五支，每一支都是接線：
+        # `_status_next_step`（一句話 ＋ 它旁邊那顆鈕）、`_open_output_folder`
+        # （X5，開不起來要說出來）、`_refresh_results_button`（U21）、
+        # `_describe_upgrade` / `_show_upgrade_detail`（U17 的兩半：算出來、
+        # 講出來）。四件事的**內容**分別在 `status_action.py` 與 `recipe.py`。
+        # 2026-09-08（U6）：274 → 275。**搬走了一堆行，方法卻多一支** —— 那不是
+        # 帳算錯了：`_drop_conflicting_edges` 裡「算出誰要被剪」與「真的剪掉並
+        # 講一句話」本來黏在一起，前者進了 `edit_plan.conflicting_edges`，後者
+        # 留下來變成 `_drop_edges`（`_connect` 與 `_connect_region` 都要用它）。
+        # 這一格量的是**這個類別有幾件事要做**，而它確實多了一件；`studio.py`
+        # 那一格量的行數少了 161，兩個數字講的是同一次搬家的兩面。
+        #
+        # 2026-09-08（X4/U11）：271 → 274。U11 的三支：`_decide_path_markup`
+        # （把路徑跳脫成連結）、`_fill_preview_why`（餵目前這一顆）、
+        # `toggle_preview_why`（那一行點下去）。
+        #
+        # 之前那一批 268 → 271。三支，每一支都是**接線**：
+        # `_publish_run_snapshot`（X1 把一批壓成一塊交給 Results）、
+        # `_on_truth_marked`（X2 寫答案卷 —— 只有主視窗知道資料在哪）、
+        # `_on_problem_activated`（U2 點清單 → 選中那張卡）。
+        # 三件事的**內容**都在各自的新模組裡。
         "StudioWindow 的方法數（2026-09-02 是 261）",
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[0],
     ),
     "studio_window_attributes": (
-        393,
+        418,
+        # 2026-09-08：420 → 418。`btn_layout` / `btn_sample` 兩顆工具列的鈕
+        # 搬走了（見 `d4t/ui/studio.py` 那一格）。
+        # 2026-09-08（X3 收尾）：419 → 420。
+        # 2026-09-08（U5 ＋ U8）：415 → 419。`_layout_mode` / `btn_layout` /
+        # `params_row` / `gauge_pane` 進來，`_canvas_popout` / `_popout_view`
+        # / `_pre_popout_sizes` 走掉。
+        # 2026-09-08：406 → 415。`sample_mode` / `sample_note` / `btn_sample`
+        # / `_sample_actions`（X3）加上它們用到的既有名字。
+        # 2026-09-08：400 → 406。`status_action`（那顆鈕）加上它與 U21／U17
+        # 用到的既有名字。
+        # 2026-09-08（U6）：403 → 400。`REGION_TYPES` 那一組判斷跟著
+        # `edit_plan.is_region_param` 走了，連帶三個只有它在讀的名字。
+        #
+        # 之前那一批 393 → 403。`autosave`（草稿）、`problems`（Problems 列）、
+        # `status_history`（狀態列說過的話）、`why_preview`（單顆回溯面板）與
+        # `_preview_trace`（那一顆的判定重放），加上它們用到的既有名字。
         "StudioWindow 的 self.* 名字數（2026-09-02 是 386）",
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[1],
     ),

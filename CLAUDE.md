@@ -247,6 +247,18 @@ param 相依 I/O（例如輸出流名稱由參數決定）覆寫 `resolve_reads/
 > 任何一條測試問過「使用者看到的第一張是哪一張」。現在有了：
 > `tests/test_card_library_order.py`。
 
+> **使用者面的字走 `ui/strings.py`，卡片名與階段名不走**（F98 U14，
+> 2026-09-08）。翻譯層擺在**共用的那幾支** —— `_tool_button`、`small_button`、
+> `_HintLabel.set_full_text`（每一句 `ParamSpec.help`）、狀態列 —— 所以加一張
+> 卡、加一句 help 都**不必做任何事**，它自動就在待翻清單上。鍵就是英文原句，
+> 缺翻譯就回原句。
+>
+> ⚠ **`Step.label` 與 `step.GROUPS` 的標題不准進 catalog**：它們是 recipe JSON
+> 的鄰居與廠內的共同語彙，翻掉的話同一份 recipe 在兩台機器上講的是兩個名字。
+> 三條測試守著，其中一條直接檢查出貨的 `zh_TW.json` 裡沒有任何卡片名。
+> 還缺哪些句子跑 `python tools/i18n_todo.py`（**不是掃原始碼** —— 大部分句子
+> 在原始碼裡看起來不像要翻的東西）。
+
 > **一格選項＝一排膠囊（圖 + 字），不是下拉**（F68 第二輪，2026-09-01，
 > 使用者：「我認為設定區都要變成這樣 icon 膠囊 + 文字，並且視覺模型可能要
 > 接近會比較好」）。型別是 `chip_choice`：`choices` 每一個值配一個
@@ -367,8 +379,18 @@ git add -A && python tools/release.py && git add -A
 
 ### 新的 UI 面板一律開新模組（不要塞進 `studio.py`）
 
-`StudioWindow` 現在是 **6,761 行、261 個方法、386 個 `self.*` 名字**的一個類別
-（2026-09-02 量的。寫下這一段時是 5,244 行 / 229 個方法，三天後 6,017 —— **一週多長了 1,517 行，而中間沒有任何一輪是在動它**。F76 那一輪從它手上拿走了兩支方法（`_feature_sections` / `_feature_specs`），而它同一輪又多了判定那一塊的三支 —— 淨值仍然是往上。）
+`StudioWindow` 是這個 repo 裡唯一一個**自己會長大**的類別。寫下這一段時它是
+5,244 行 / 229 個方法，三天後 6,017，再三天 6,761 —— **一週多長了 1,517 行，
+而中間沒有任何一輪是在動它**。F76 那一輪從它手上拿走了兩支方法
+（`_feature_sections` / `_feature_specs`），而它同一輪又多了判定那一塊的三支
+—— 淨值仍然是往上。
+
+⚠ **它現在有幾行、幾個方法、幾個 `self.*`，去 `tests/test_size_ceilings.py`
+看，這裡不抄第二份。** 那是 F90 那把尺自己的第四條設計規則（「一張表、一個
+家」），而它防的正是 2026-08 那次 `tools/doctor.py` 對每台機器給出錯診斷的
+病根 —— 抄出來的那一份一定會漂。上面那幾個數字留著是因為它們講的是**一段
+歷史**（漂移長什麼樣），不是「現在多大」。
+
 它還沒到「非拆不可」，但**拆分壓力已經在影響新功能該放哪裡**了 —— F22 的 commit
 訊息裡就寫著「不塞進已經 5000 多行的 `studio.py`」，那是一個人在替一個結構問題
 繞路。
@@ -377,7 +399,12 @@ git add -A && python tools/release.py && git add -A
 `ui/decide_panel.py`、F24 的 `ui/tree_panel.py`／`ui/tree_scene.py`、F25 的
 `ui/route_badge.py`、F27 的 `ui/verdict_band.py`／`ui/results_table.py`、
 F44 的 `ui/region_words.py` 已經都是這樣做的 —— 這一段只是把它從「這次剛好這樣
-做」變成「本來就這樣做」。
+做」變成「本來就這樣做」。**F91 的七支一起走同一條**：`ui/baseline.py`（跟上
+一次比差多少）、`ui/truth_marks.py`（在表上標真缺陷／誤報）、
+`ui/fit_screen.py`（視窗裝得進螢幕）、`ui/crashlog.py`（未預期錯誤的 log）、
+`ui/autosave.py`（草稿與救回）、`ui/problems_bar.py`（常駐的「為什麼還不能跑」）
+與 `ui/status_log.py`（狀態列說過的話）—— 六件事、七支模組，而 `studio.py`
+只多了接線。
 
 > ⚠ 這張清單上以前還有 **F30 的 `ui/output_band.py`**，而它 2026-08-28 被
 > **刪掉**了（F50）。規矩沒有變 —— 變的是那一塊該不該存在：那個框畫的是
@@ -386,6 +413,29 @@ F44 的 `ui/region_words.py` 已經都是這樣做的 —— 這一段只是把�
 > **一塊新元件開一個新模組是對的；先問那一塊該不該是一塊。**`studio.py` 留給**接線**（建 widget、接訊號、轉呼叫），
 不留給內容。
 
+### 視窗、當機、草稿：三件會安靜做錯的事（F91，2026-09-08）
+
+* **不要寫死視窗尺寸。** `widget.resize(1440, 900)` 在開發機（1920×1080）上
+  看不出問題，在機台旁那台 1366×768 的 PC 上是「底部那排鈕在螢幕外面」——
+  而 Qt 不會自己捲。改用 `fit_screen.fit(widget, w, h)`，它會先把
+  **最小尺寸**降下來（不做這一步的話 `resize` 根本沒有效果）再取小的那個。
+  有一條測試擋著 `d4t/ui` 裡再出現寫死的 `resize(w, h)`，另一條把每個頂層
+  視窗真的開起來量 geometry。
+  ⚠ **內容本身比螢幕高**的那種（`gc_generator` 量出來 1,144 px）縮視窗沒有
+  用，要在**建構時**掛到 `fit_screen.scroll_host` / `scrolled` 上 ——
+  事後把既有版面搬進捲軸在 PySide6 上是 **segfault**，不是例外。
+
+* **測試不准寫進使用者真正的那幾個檔案。** `crashlog`（`~/.d4t/log`）、
+  `autosave`（`~/.d4t/autosave.json`）、baseline（QSettings）三個都會寫磁碟，
+  而測試寫進真的那一份的話，開發者下次開 Studio 會被問要不要救回一條測試造出
+  來的 pipeline。三個都有具名的覆寫點（`crashlog.LOG_DIR` / `autosave.DIR` /
+  `BaselineStore(settings)`），而 `StudioWindow` 在 `_running_under_pytest()`
+  時預設把草稿關掉。**加第四個會寫磁碟的東西時，先把那個覆寫點做出來。**
+
+* **會跳 modal 對話框的新東西要有一個關得掉的旗標。** `crashlog.SHOW_DIALOG`
+  與 `autosave.ASK_ON_START` 跟 `studio.PROMPT_ON_CLOSE` 是同一件事：一個
+  modal 對話框在 headless 測試裡不會讓測試失敗，它會讓測試**永遠停在那裡**。
+
 ⚠ **現在不要動 `studio.py` 本身**，但**理由已經換了一個**。
 以前寫的是「那把尺（黃金值）是壞的」—— 那是真的，從 F19（08-21）到 08-23 兩天
 沒有在守，而 **2026-08-23 已經重凍、三份全綠**（`docs/history/plans/F21-algo-and-roi.md`
@@ -393,9 +443,27 @@ F44 的 `ui/region_words.py` 已經都是這樣做的 —— 這一段只是把�
 使用者定的是「先把引擎做對，再回頭產品化」。
 
 所以真的要動的那一天，前置條件是**做得到而不是等得到**：先
-`python tools/freeze_golden.py --check` 三份全綠（那就是「改了但數字沒變」的
-唯一證據，而這個 repo 踩過六次「跑得完、有數字、而且是錯的」），再切
-`widgets.py` 那幾群自繪圖示（最好拆、風險最低）。
+`python tools/freeze_golden.py --check` 三份全綠 —— 那就是「改了但數字沒變」的
+唯一證據，而這個 repo 踩過六次「跑得完、有數字、而且是錯的」。
+
+### `widgets.py` 那一刀做完了（F93 U7，2026-09-08）
+
+這一段以前的收尾是「再切 `widgets.py` 那幾群自繪圖示（最好拆、風險最低）」。
+**那件事做完了**：7,140 行、24 個不相干的類別 → 八支，而 `widgets.py` 只剩
+**123 行的轉出口**。`from .widgets import X` 那四十幾個呼叫端**一個字都沒有
+改** —— 驗收是黃金值三份逐項相同 ＋ 既有 UI 測試全綠。
+
+新的元件請直接 import 拆出來的那幾支（`ui/fields.py`、`ui/chips.py`、
+`ui/icons.py`、`ui/library.py`、`ui/histogram.py`、`ui/image_view.py`、
+`ui/param_form.py`、`ui/buttons.py`、`ui/feature_text.py`），意思比較準。
+**`widgets.py` 裡不准再有 class / def** —— 有一條測試問這句話
+（`test_the_front_door_stayed_a_front_door`），因為沒有它的話三個月後那支
+檔案會再長回來，而那正是 F90 那把尺量到的漂移。
+
+⚠ 那一刀學到的一件事，下一次搬家會再用到：**「誰在用這個名字」不能只掃
+import**。測試大量用屬性存取（`widgets_mod.METRIC_GROUP_ORDER`），而 grep 與
+`ast` 的 import 掃描都看不到它 —— 第一版因此漏了 10 個名字。判準要是
+「拆之前模組上有的每一個名字，拆之後 `hasattr` 還答得出來」。
 
 ---
 
@@ -436,7 +504,16 @@ F44 的 `ui/region_words.py` 已經都是這樣做的 —— 這一段只是把�
 影像（鐵則 9）。
 
 `d4t/ui/scope.py` 仍然是這類「暫時不給看」的**唯一**去處，
-**而「入口長什麼樣」也住在同一份**（F11 Input-5）：
+**而「入口長什麼樣」也住在同一份**（F11 Input-5）。
+
+**2026-09-08（F96 U10）起那幾個旗標由 profile 一次設好**：`fab`（預設，廠內
+那台）／`dev`（收起來的全部打開）／`demo`。啟動時看 `D4T_PROFILE` ——
+廠內那台是點捷徑開的，捷徑改得動環境變數、改不動命令列。
+
+⚠ **旗標要透過模組讀**（`scope.SHOW_ROUTE_BY`），不准
+`from .scope import SHOW_…` —— 那拿到的是一份**當時的複本**，換了 profile 而那
+個模組停在舊值，症狀是「設定說關著、畫面上還在」。`welcome.py` 本來就是那樣寫
+的，`tests/test_ui_scope_profiles.py` 現在擋著。
 
 ```python
 SUPPORTED_KINDS = ("ebi_patch", "tiff_stack", "rsem", "folder")
@@ -445,7 +522,8 @@ HIDDEN_STEPS = ("align",)        # 收起來（引擎照認、舊 recipe 照跑�
                                  # **刪掉**了（功能進了 `decide.let`）——
                                  # 先收起來、使用者確定之後再刪，那張對照表
                                  # 第一次跑完全程
-SHOW_SAMPLE_ENTRIES = False      # 範例入口（見下）
+SHOW_TEMPLATE_LIBRARY = True     # 工具列的 Templates…（F91 X4 打開）
+SHOW_SAMPLE_DATA = False         # 「用範例資料試一次」（仍是死路，見下）
 INPUT_SOURCES = (...)            # 三顆 Open 的字、圖示、一句白話說明
 ATTACHMENTS = (...)              # 掛在已載入 lot 上的附加檔（GLAS 匯出）
 ```
@@ -455,10 +533,20 @@ ATTACHMENTS = (...)              # 掛在已載入 lot 上的附加檔（GLAS �
 各自寫死的文字，於是工具列有三顆 Open、空白狀態卻只講 KLARF —— 帶著一個資料夾
 的圖片進來的人，在整個畫面最大的那一塊上找不到自己那條路。
 
-`SHOW_SAMPLE_ENTRIES`（2026-08-16）管兩個入口：導覽與空白狀態上的
-**「用範例資料試一次」**、工具列的 **「Templates…」**。範例 recipe 全部拿掉之後
-它們都是死路（庫是空的、demo 產得出資料卻載不到 pipeline），而**按了撞牆的鈕
-比沒有那顆鈕更糟**（推廣鐵則）。`run_demo` / `RecipeLibraryDialog` 一行都沒動。
+`SHOW_TEMPLATE_LIBRARY` / `SHOW_SAMPLE_DATA`（F91 X4，2026-09-08 從一個叫
+`SHOW_SAMPLE_ENTRIES` 的旗標拆開）管兩個入口。**拆開是因為它們的死法不一樣**，
+而一個共用旗標會讓打開其中一個順手把另一個也放回畫面上：
+
+* **`Templates…`（`SHOW_TEMPLATE_LIBRARY = True`）** —— 2026-08-16 收起來的
+  理由是「庫是空的」，而那是真的有機制：`welcome.RECIPES_DIR` 指的是
+  ``examples/recipes``，一個同一天刪掉的路徑。現在它指 `recipes/`，那裡有出貨
+  的 recipe 而且 `test_shipped_recipes.py` 逐份跑過 —— 理由到期，入口回來。
+* **「用範例資料試一次」（`SHOW_SAMPLE_DATA = False`）** —— 仍然是死路，
+  而且**修不掉旗標**：`run_demo` 產的是合成的 `ebi_patch` lot，而
+  `TEMPLATE_RECIPE` 指的那份不存在、出貨的兩份是 `rsem` 與 `folder` route。
+  要打開它得先有一份出貨的 ebi_patch recipe。有一支反向測試守著這句話。
+
+`run_demo` / `RecipeLibraryDialog` 一行都沒動 —— 收起來的是入口不是能力。
 
 `tests/test_ui_input_kinds.py`（原 `test_ui_patch_only.py`）鎖住四種都進得來、
 沒有 KLARF 的兩種會講出來、而**「暫時收起來」的機制還在**。

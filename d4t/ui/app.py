@@ -12,7 +12,7 @@ from typing import List, Optional, Sequence
 
 from PySide6.QtWidgets import QApplication
 
-from . import theme
+from . import crashlog, fit_screen, scope, theme
 from .branding import app_icon
 from .studio import StudioWindow
 from .welcome import saved_theme
@@ -26,6 +26,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not args:
         args = ["d4t-studio"]
 
+    # ⚠ **第一件事**，在建 QApplication 之前：一個在啟動階段炸掉的 d4t 是
+    # 最沒有線索的那一種（畫面上什麼都還沒有出現過），而它正是最需要一份
+    # traceback 的那一種（U3）。
+    crashlog.install()
+
+    # 產品範圍（U10）：一個字串決定一組開關。**在建任何視窗之前** ——
+    # `HIDDEN_STEPS` 是卡片庫建構時就讀掉的，晚一步設等於沒設。
+    scope.use_profile(scope.profile_from_env())
+
     app = QApplication.instance()
     if app is None:
         app = QApplication(args)
@@ -35,8 +44,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     theme.apply_theme(app, saved_theme(theme.DEFAULT_THEME))
 
     win = StudioWindow()
-    win.resize(1440, 900)
+    # **要多大取小的那一個**（U1）：1440×900 是開發機的尺寸，而目標機器是
+    # 機台旁那台 1366×768 的 PC。放不下的下場不是「小一點」，是底部那排鈕
+    # 在螢幕外面。
+    fit_screen.fit(win, 1440, 900)
     win.show()
+    fit_screen.keep_on_screen(win)
     return int(app.exec())
 
 
