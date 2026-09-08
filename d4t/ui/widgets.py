@@ -29,15 +29,22 @@ U7 那一刀把它拆成八支，一支一個主題：
 所以搬家的成本留在這裡：一層轉出口。新的程式碼請直接 import 上面那幾支
 （意思比較準），而舊的一個字都不用改。
 
-⚠ **拆之前這裡有 81 個公開名字，拆之後一個都不能少。** 那不是靠人記得 ——
+⚠ **拆之前這裡有 141 個頂層名字，拆之後一個都不能少。** 那不是靠人記得 ——
 `tests/test_ui_widgets.py::test_the_split_did_not_drop_a_single_name` 拿 git
 裡拆之前的那一份當清單問一次。會漏的正是**屬性存取**那種
 （``widgets_mod.METRIC_GROUP_ORDER``），掃 import 看不到它。
+
+而**「頂層名字」包含它 import 進來的東西** —— 那一條是踩出來的：第一版的清單
+只數了這裡 `class` 與 `def` 出來的 81 個，於是 `TOKENS`（從 `ui/theme` import
+進來、再被 `test_ui_f8_ruler` 用 `widgets_mod.TOKENS` 讀走的那一個）安靜地漏掉
+了，測試照樣綠 —— 直到那支測試自己壞掉才看得見。
+
+只有一類刻意不轉出：**stdlib 與 Qt 自己的名字**（`math` / `re` / `np` /
+`QColor` / `Qt` …）。`widgets.QColor` 從來不是這道門要給的東西，而轉出它等於
+說「從這裡拿 Qt 也可以」。那張豁免表寫在那支測試裡，配著一支反向的 —— 表上列
+著的名字要是哪天真的被人透過這裡讀了，測試會叫。
 """
 from __future__ import annotations
-
-
-
 
 # ⚠ **這一段是轉出口，不是「這裡用得到」**（U7，2026-09-08）。
 #
@@ -82,6 +89,18 @@ from .image_view import (     # noqa: F401
     MARK_ROLE_TOKENS, MARK_ROLE_WEIGHTS, ImageView, _focus_set,
     _qimage_from_uint8, to_uint8,
 )
+from ..core.algo import glv as algo_glv          # noqa: F401
+from ..core.export.uniformity_charts import heat_hex as uc_heat_hex  # noqa: F401
+from . import fit_screen                         # noqa: F401
+from . import glyphs                             # noqa: F401
+from . import region_words                       # noqa: F401
+from . import theme                              # noqa: F401
+from .numbers import (       # noqa: F401
+    format_feature_value, format_feature_value_short,
+)
+from .theme import (         # noqa: F401
+    TOKENS, region_hex,
+)
 from .icons import (          # noqa: F401
     GLYPH_ICONS, METRIC_GLYPHS, IconButton, _GlyphMixin, _blob_outline,
     _dist_curve, _draw_profile_glyph, _extreme_pair, _paint_glyph, _poly_area,
@@ -94,7 +113,7 @@ __all__ = [
     "ParamForm",
     "LibraryPanel",
     "HistogramWidget",
-        "feature_html",
+    "feature_html",
     "VerdictChip",
     "TemplateField",
     "to_uint8",
@@ -112,12 +131,7 @@ __all__ = [
     "metric_face",
     "feature_unit",
     "VARIANT_GLOSS",
+    "TOKENS",
 ]
-
-
-
-
-# --------------------------------------------------------------------------- #
-# 2. ParamForm
 
 

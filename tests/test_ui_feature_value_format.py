@@ -129,7 +129,9 @@ def test_they_delegate_rather_than_agree_by_luck(qapp, name):
 #: 配一支反向測試（`test_the_allowlist_does_not_rot`）—— 這個 repo 的
 #: `ALLOWED_ERRORS` 學到的那一課：**任何例外清單都要有那支反向的測試**，
 #: 不然它就是一張只會變長的紙。
-_AXIS_LABEL_ALLOWLIST = {"widgets": 2}      # 直方圖 x 軸的 lo / hi
+#: （U7，2026-09-08：`widgets.py` 拆開之後直方圖搬進 `ui/histogram.py`，
+#: 這一列跟著它走 —— 表上的名字是**那段程式碼現在住哪**，不是它以前住哪。）
+_AXIS_LABEL_ALLOWLIST = {"histogram": 2}    # 直方圖 x 軸的 lo / hi
 
 
 def _precision_picks(mod: str) -> int:
@@ -140,7 +142,12 @@ def _precision_picks(mod: str) -> int:
 
 
 @pytest.mark.parametrize("mod", ["gallery", "widgets", "inspectors",
-                                 "why_panel", "results_table"])
+                                 "why_panel", "results_table",
+                                 # U7 把 widgets.py 拆掉的那八支 —— 規則
+                                 # 跟著程式碼走，不然拆一次就少一條防線。
+                                 "buttons", "icons", "image_view",
+                                 "fields", "param_form", "chips",
+                                 "library", "histogram", "feature_text"])
 def test_the_shared_one_is_the_only_place_that_picks_a_precision(qapp, mod):
     """挑有效位數這件事只有一個家（座標軸刻度除外，見上）。"""
     allowed = _AXIS_LABEL_ALLOWLIST.get(mod, 0)
@@ -196,7 +203,8 @@ def test_the_short_one_never_prints_a_small_number_as_zero(qapp):
 #: 一個 6,700 行的檔案通過一次審查，不代表它以後每一行都通過。
 _SHORT_OK = {
     "inspectors.py": {"_short_number"},          # 影像上那些標記的別名
-    "widgets.py": {"_paint_heat_bar"},           # 熱圖色條 —— 畫在影像上
+    "image_view.py": {"_paint_heat_bar"},        # 熱圖色條 —— 畫在影像上
+                                                 # （U7 從 widgets.py 搬來）
 }
 
 

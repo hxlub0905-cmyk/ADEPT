@@ -305,6 +305,11 @@ d4t/
 └── ui/                       # PySide6 Studio（**唯一允許 Qt 的地方**）
     ├── scope.py              #   產品範圍開關：支援哪些輸入、哪些卡片收起來、入口長什麼樣
     ├── viewmodel.py          #   RecipeModel（Qt-free、可 headless 測；含 edges）
+    ├── edit_plan.py          #   接線／換線／剪線的**決定**（F93 U6；同樣 Qt-free）：
+    │                         #     「這條線落在哪一格、要不要擠掉別條、擠掉哪幾條」
+    │                         #     ⚠ 只回答「應該發生什麼」；真的動 model 的仍然是
+    │                         #     studio.py —— 那一段的**順序**有意義（add_edge 會
+    │                         #     因為成環而失敗，而失敗的那條線不該留下痕跡）
     ├── studio.py app.py      #   主視窗（**只做接線**）＋ 進入點
     ├── canvas.py             #   節點畫布（n8n 式；純 UI，引擎零改動）
     ├── cell_canvas.py        #   一格 cell 鋪成一片，區域的框畫在上面、拖得動

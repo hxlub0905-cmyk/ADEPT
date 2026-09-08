@@ -86,7 +86,11 @@ FILE_CEILINGS = {
     # 留在 6,942，它就可以在沒有人注意的情況下再長回來」）。123 行是那道門
     # 本身；`test_ui_widgets.py::test_the_front_door_stayed_a_front_door`
     # 從另一邊問同一句話（那支檔案裡不准再有 class / def）。
-    "d4t/ui/widgets.py": 123,
+    #
+    # 123 → 137（同日，U7 的收尾）：轉出口漏了十個**它 import 進來**的名字
+    # （`TOKENS` 那一批），而 `test_ui_f8_ruler` 是用 `widgets_mod.TOKENS`
+    # 讀走的 —— 補回去要十四行 import。
+    "d4t/ui/widgets.py": 137,
     # 接線層（建 widget、接訊號、轉呼叫）。`CLAUDE.md` §4：新的面板一律開新
     # 模組，不要塞進這裡。這一格就是那句話的執行機構。
     #
@@ -102,7 +106,12 @@ FILE_CEILINGS = {
     # `WhyPanel` **同一個 widget** 掛進單顆預覽這一欄，加上讓路徑那一行變成
     # 連結（三支：`_decide_path_markup` / `_fill_preview_why` /
     # `toggle_preview_why`）。
-    "d4t/ui/studio.py": 7198,
+    #
+    # 2026-09-08（U6）：7,198 → 7,037（−161）。接線／換線／剪線的**決定**搬進
+    # `ui/edit_plan.py`（純函式、不碰 Qt），這裡只剩「照計畫動 model」——
+    # 那一段留著是因為它的**順序**有意義（`add_edge` 會因為成環而失敗，而失敗
+    # 的那條線不該留下任何痕跡）。降下來的這一格就是把那件事鎖住。
+    "d4t/ui/studio.py": 7037,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     "d4t/core/pipeline/recipe.py": 3732,
@@ -238,7 +247,14 @@ COUNT_CEILINGS = {
     ),
     # god object 的兩個投影。261 → 268（六天）。
     "studio_window_methods": (
-        274,
+        275,
+        # 2026-09-08（U6）：274 → 275。**搬走了一堆行，方法卻多一支** —— 那不是
+        # 帳算錯了：`_drop_conflicting_edges` 裡「算出誰要被剪」與「真的剪掉並
+        # 講一句話」本來黏在一起，前者進了 `edit_plan.conflicting_edges`，後者
+        # 留下來變成 `_drop_edges`（`_connect` 與 `_connect_region` 都要用它）。
+        # 這一格量的是**這個類別有幾件事要做**，而它確實多了一件；`studio.py`
+        # 那一格量的行數少了 161，兩個數字講的是同一次搬家的兩面。
+        #
         # 2026-09-08（X4/U11）：271 → 274。U11 的三支：`_decide_path_markup`
         # （把路徑跳脫成連結）、`_fill_preview_why`（餵目前這一顆）、
         # `toggle_preview_why`（那一行點下去）。
@@ -252,8 +268,11 @@ COUNT_CEILINGS = {
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[0],
     ),
     "studio_window_attributes": (
-        403,
-        # 2026-09-08：393 → 403。`autosave`（草稿）、`problems`（Problems 列）、
+        400,
+        # 2026-09-08（U6）：403 → 400。`REGION_TYPES` 那一組判斷跟著
+        # `edit_plan.is_region_param` 走了，連帶三個只有它在讀的名字。
+        #
+        # 之前那一批 393 → 403。`autosave`（草稿）、`problems`（Problems 列）、
         # `status_history`（狀態列說過的話）、`why_preview`（單顆回溯面板）與
         # `_preview_trace`（那一顆的判定重放），加上它們用到的既有名字。
         "StudioWindow 的 self.* 名字數（2026-09-02 是 386）",

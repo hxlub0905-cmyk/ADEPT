@@ -2024,6 +2024,30 @@ _NAMES_BEFORE_THE_SPLIT = (
     "draw_glyph_icon", "draw_group_icon", "draw_metric_glyph", "feature_gloss",
     "feature_html", "feature_unit", "glyph_icon", "metric_face",
     "region_dot_icon", "restyle", "small_button", "split_labelled", "to_uint8",
+    # ⚠ 底下這幾個不是這支檔案 `class`/`def` 出來的，是它 **import 進來**的
+    # —— 而屬性存取讀得到它們。第一版的清單只數了上面那 81 個，於是
+    # `TOKENS`（`test_ui_f8_ruler` 用 `widgets_mod.TOKENS` 讀走的那一個）
+    # 安靜地漏掉，直到那支測試自己壞掉才看得見。
+    "TOKENS", "algo_glv", "fit_screen", "format_feature_value",
+    "format_feature_value_short", "glyphs", "region_hex", "region_words",
+    "theme", "uc_heat_hex",
+)
+
+#: 拆之前讀得到、而拆之後**刻意**讀不到的：stdlib 與 Qt 自己的名字。
+#:
+#: `widgets.QColor` 從來不是這道門要給的東西 —— 轉出它等於說「從這裡拿 Qt
+#: 也可以」。這張表配著底下那支反向的測試：表上的名字哪天真的被人透過
+#: `widgets` 讀走了，那就是一個要處理的呼叫端，不是一個可以加進上面清單的字。
+_NOT_A_FRONT_DOOR_FOR = (
+    "Any", "Dict", "List", "Optional", "Sequence", "Tuple",
+    "QApplication", "QBrush", "QCheckBox", "QColor", "QComboBox", "QDialog",
+    "QDialogButtonBox", "QDoubleSpinBox", "QDrag", "QEvent", "QFont",
+    "QFontMetricsF", "QFrame", "QGridLayout", "QHBoxLayout", "QIcon",
+    "QImage", "QInputDialog", "QLabel", "QLineEdit", "QLinearGradient",
+    "QMimeData", "QPainter", "QPainterPath", "QPen", "QPixmap", "QPointF",
+    "QPolygonF", "QPushButton", "QRectF", "QScrollArea", "QSize",
+    "QSizePolicy", "QSlider", "QSpinBox", "QVBoxLayout", "QWidget", "Qt",
+    "Signal", "math", "np", "re",
 )
 
 
@@ -2046,6 +2070,19 @@ def test_the_split_did_not_drop_a_single_name(qapp):
         "拆完之後這幾個名字從 `widgets` 上不見了：\n  %s\n"
         "  它們搬去哪一支了？把那一支加進 `widgets.py` 的轉出口 —— "
         "呼叫端一個都不該改。" % "\n  ".join(missing))
+
+
+def test_the_door_does_not_hand_out_qt(qapp):
+    """反向的那一支：豁免表上的名字**還是**讀不到。
+
+    修好了卻沒從表上拿掉的話，這道門從此少一條防線而測試照樣綠
+    （`CLAUDE.md` §1 那條「任何例外清單都要有反向測試」）。
+    """
+    leaked = [n for n in _NOT_A_FRONT_DOOR_FOR if hasattr(widgets_mod, n)]
+    assert not leaked, (
+        "`widgets` 又轉出 stdlib／Qt 的名字了：%s\n"
+        "  需要它的人請直接 import 來源 —— 這道門給的是 d4t 自己的元件。"
+        % leaked)
 
 
 def test_the_front_door_stayed_a_front_door(qapp):

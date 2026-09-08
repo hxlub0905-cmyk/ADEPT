@@ -22,6 +22,71 @@
 
 ---
 
+## F94：U6 —— 接線的**決定**搬出視窗，於是它 0.3 秒就答得出來（2026-09-08）
+
+外部檢視清單 U6：「抽出圖編輯語意」，驗收條件是**「接線／換線／剪線的既有
+不變量改由不需要 `QApplication` 的測試覆蓋」**。
+
+### 為什麼是這幾支
+
+`_connect` / `_connect_region` / `_drop_conflicting_edges` / `_unpoint_stream`
+/ `_unmet_needs` / `_producers_of` 是**引擎正確性的一半** —— F9／F10／F42 那
+三輪踩過的七個「跑得完、有數字、而且是錯的」全部發生在這幾支裡（一個輸入埠
+兩條線、剪一條連旁邊那條一起剪、區域線被當成影像流…）。
+
+而它們住在 `studio.py` 上，所以**每一條相關的測試都得先開一個視窗**。代價
+不是等待本身，是那個等待改變了人的行為：驗一條新的不變量要付 30 秒，於是
+它就不會被驗。
+
+### 做了什麼
+
+`d4t/ui/edit_plan.py`（新，**不 import Qt**）：吃 `RecipeModel`，回一個
+`ConnectPlan` / `UnpointPlan` —— 「這條線該落在哪一格、要不要擠掉別條、擠掉
+哪幾條、還是根本要拒絕（連下一步該怎麼辦一起講）」。
+
+⚠ **它只回答「應該發生什麼」，不動 model。** 真的動的仍然是 `StudioWindow`，
+因為那一段的**順序**有意義：`add_edge` 會因為成環而失敗，而失敗的那條線不該
+留下任何痕跡 —— 先算好計畫、`add_edge` 成功了才照計畫剪掉舊線，是唯一不會
+在失敗路徑上弄髒 model 的寫法。
+
+`tests/test_edit_plan.py`（新，18 條）跑在**核心那一批**裡：**0.27 秒**。
+
+### 帳
+
+| | 前 | 後 |
+|---|---|---|
+| `studio.py` | 7,198 行 | **7,037**（−161）|
+| `StudioWindow` 的 `self.*` | 403 | 400 |
+| `StudioWindow` 的方法 | 274 | **275**（+1）|
+
+方法**多**一支不是帳算錯：`_drop_conflicting_edges` 裡「算出誰要被剪」與
+「真的剪掉並講一句話」本來黏在一起，前者進了 `edit_plan.conflicting_edges`，
+後者留下來變成 `_drop_edges`（`_connect` 與 `_connect_region` 都要用它）。
+
+順手統一了一件事：`_on_slot_wire` 的區域那一支以前直接叫 `_connect_region`，
+**繞過了 `_connect` 的守門**。現在兩條路都先過 `plan_connect`。
+
+### U7 的兩個尾巴（同日補完）
+
+U7 的驗收跑完之後有兩支紅的，兩支都是**同一類**問題 —— 一張表寫著模組的
+名字，而那個模組搬家了：
+
+* `test_ui_feature_value_format` 的兩張例外表（`_AXIS_LABEL_ALLOWLIST` 的
+  「直方圖 x 軸刻度」、`_SHORT_OK` 的 `_paint_heat_bar`）指著 `widgets`，
+  而它們現在住在 `histogram.py` 與 `image_view.py`。順便把拆出來的那八支
+  **全部加進**「只有一個地方可以挑有效位數」那條的參數列 —— 不然拆一次就
+  少一條防線。
+* `test_ui_f8_ruler` 讀 `widgets_mod.TOKENS`，而那道門沒有把它轉出去。
+
+第二個值得記下來：U7 的「一個名字都不能少」那條測試，清單只數了拆之前
+`widgets.py` 自己 `class`/`def` 出來的 **81 個**，漏掉它 **import 進來的**
+那些（`TOKENS` / `theme` / `format_feature_value` / `region_hex`…）——
+而屬性存取讀得到它們。所以那條測試**自己是綠的**，紅的是別人。清單補到
+141 個，並且加一張刻意不轉出的豁免表（stdlib 與 Qt 自己的名字：`widgets.QColor`
+從來不是這道門要給的東西）＋ 一支反向測試守著它。
+
+---
+
 ## F93：U7 —— `widgets.py` 7,140 行拆成八支，而一個呼叫端都沒有改（2026-09-08）
 
 `CLAUDE.md` §4 早就指名了這一刀：「切 `widgets.py` 那幾群自繪圖示最好拆、
