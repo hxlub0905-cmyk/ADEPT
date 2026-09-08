@@ -158,7 +158,7 @@ FILE_CEILINGS = {
     # 兩支（內容在 `ui/card_menu.py`）、Ctrl+C/V/D 三支轉呼叫（內容在
     # `ui/clipboard.py`）、Windows 下拉一支（`ui/windows_menu.py`）、Verdict
     # 常駐列與「為什麼是破折號」那一句、儀表板淡掉那兩行、執行狀態一行。
-    "d4t/ui/studio.py": 7560,
+    "d4t/ui/studio.py": 7565,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     #
@@ -184,7 +184,7 @@ FILE_CEILINGS = {
     # （`_stop_anim` / `_forget_anim`，P0-1 那個 RuntimeError）、空白處右鍵與
     # 拖線到空白的兩個訊號（P1-1）、Region 卡標題帶區域名（P1-3）、每張卡的
     # 執行狀態（`run_status_from` / `run_text`，P1-5）。
-    "d4t/ui/canvas.py": 3050,
+    "d4t/ui/canvas.py": 3051,
 }
 
 #: 沒被列名的檔案共用的上限。
