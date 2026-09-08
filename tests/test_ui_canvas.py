@@ -436,12 +436,16 @@ def test_dragged_positions_survive_edits_and_popout(window, qapp):
     assert (round(moved.x()), round(moved.y())) == (333, 444), \
         "重建畫布把手動位置整理掉了：%s" % moved
 
-    window.open_canvas_window()
+    # U5（2026-09-08）：這裡以前開一個彈出視窗，問「第二份畫布有沒有沿用
+    # 主視窗拖過的位置」。彈出視窗退場之後那個問題不存在了 —— 只有一份畫布，
+    # 位置**不可能**不一致。取而代之要問的是：換版面不會把位置洗掉
+    # （Build 模式會重新 fit，而 fit 是縮放，不是重新排版）。
+    window.set_layout_mode("build")
     qapp.processEvents()
-    twin = window._popout_view.node_item(nid).pos()
+    twin = window.pipeline.node_item(nid).pos()
     assert (round(twin.x()), round(twin.y())) == (333, 444), \
-        "彈出視窗沒有沿用主視窗的位置"
-    window._canvas_popout.close()
+        "換版面把手動位置整理掉了：%s" % twin
+    window.set_layout_mode("tune")
     qapp.processEvents()
 
     # tidy 仍然是明確的「排回去」

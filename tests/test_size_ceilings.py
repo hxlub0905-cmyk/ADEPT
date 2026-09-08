@@ -123,7 +123,14 @@ FILE_CEILINGS = {
     # `core/pipeline/sampling.py`（純資料、不 import Qt），這裡加的是工具列
     # 那顆下拉、換模式時把字換掉、以及把設定送進 `run_batch`。U18 的兩支則
     # 是把快捷鍵表上那兩格接到畫布已經有的實作上。
-    "d4t/ui/studio.py": 7279,
+    #
+    # 2026-09-08（U5 ＋ U8）：7,279 → 7,390（+111）。**這一格本來會下降** ——
+    # U5 刪掉了整個彈出視窗（`open_canvas_window` / `_on_canvas_popout_closed`
+    # / `canvas_popout_open`，約 55 行）—— 而換上來的兩種模式要記兩份比例、
+    # 要把「模式」跟「設定區攤開沒有」講清楚（第一版把它們合成一個狀態，
+    # 而那是錯的：模式是使用者選的，攤開是選到卡片時的自動行為）。
+    # U8 的 `_build_params_row` 是新的一支，加上儀表從右欄搬過來的接線。
+    "d4t/ui/studio.py": 7390,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     #
@@ -268,7 +275,11 @@ COUNT_CEILINGS = {
     ),
     # god object 的兩個投影。261 → 268（六天）。
     "studio_window_methods": (
-        284,
+        286,
+        # 2026-09-08（U5 ＋ U8）：284 → 286。**淨值 +2，而它換掉了三支**：
+        # 走的是 `open_canvas_window` / `_on_canvas_popout_closed` /
+        # `canvas_popout_open`，來的是 `layout_mode` / `set_layout_mode` /
+        # `toggle_layout_mode` / `_sync_layout_button` / `_build_params_row`。
         # 2026-09-08（U18 ＋ X3）：280 → 284。四支：`_delete_selected_on_canvas`
         # 與 `_clear_canvas_selection`（快捷鍵表上那兩格 → 畫布已經有的實作，
         # 刪除仍然只有一份）、`set_sample_mode`（換模式**並且**把工具列的字
@@ -298,7 +309,10 @@ COUNT_CEILINGS = {
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[0],
     ),
     "studio_window_attributes": (
-        415,
+        419,
+        # 2026-09-08（U5 ＋ U8）：415 → 419。`_layout_mode` / `btn_layout` /
+        # `params_row` / `gauge_pane` 進來，`_canvas_popout` / `_popout_view`
+        # / `_pre_popout_sizes` 走掉。
         # 2026-09-08：406 → 415。`sample_mode` / `sample_note` / `btn_sample`
         # / `_sample_actions`（X3）加上它們用到的既有名字。
         # 2026-09-08：400 → 406。`status_action`（那顆鈕）加上它與 U21／U17
