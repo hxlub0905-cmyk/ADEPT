@@ -592,7 +592,7 @@ def test_every_card_can_be_asked_for_heat_without_blowing_up():
 def test_the_card_can_write_one_row_per_box(tmp_path):
     """`defects.csv` 是**一顆 defect 一列**，看不到一張影像裡的那些格。
 
-    計畫書 `docs/plans/F88-graph-builder.md` §2：長表就算之後不做 graph
+    計畫書 `docs/history/plans/F88-graph-builder.md` §2：長表就算之後不做 graph
     builder 也值得，因為這張 CSV 現在完全沒有。
     """
     from d4t.core.pipeline import get_step

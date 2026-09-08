@@ -2,7 +2,7 @@
 """鎖的都是不變量：一列一格框、**列與欄整張表一起分**、算不出來的留白、
 欄序固定、對不上的整條跳過。
 
-計畫書：`docs/plans/F88-graph-builder.md` §2。
+計畫書：`docs/history/plans/F88-graph-builder.md` §2。
 """
 from __future__ import annotations
 

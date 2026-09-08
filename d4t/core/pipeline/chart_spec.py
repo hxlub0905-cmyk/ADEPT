@@ -2,7 +2,7 @@
 # d4t chart spec — authored 2026-09-07 (F88 第二刀).
 """**一張圖 = 哪一欄放到哪一個角色上，加一種記號。**
 
-計畫書 `docs/plans/F88-graph-builder.md` §3。
+計畫書 `docs/history/plans/F88-graph-builder.md` §3。
 
     {"mark": "point", "x": "glv_mean", "y": "glv_std", "color": "region"}
 

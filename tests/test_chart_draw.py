@@ -2,7 +2,7 @@
 """鎖的都是不變量：畫不出來要說出原因、算不出來的那一格不畫、類別色**不
 循環**、大小跟著**面積**走、兩群以上一定有圖例。
 
-計畫書：`docs/plans/F88-graph-builder.md` §4。
+計畫書：`docs/history/plans/F88-graph-builder.md` §4。
 """
 from __future__ import annotations
 

@@ -4,7 +4,7 @@
 > Output 段的 `Write charts`（`output_uniformity`）
 > 這一份是**給使用者的操作手冊**：每一格是什麼、那幾張圖各回答哪一句話、
 > 出事了照什麼順序查。設計上的來龍去脈在
-> [`docs/plans/F85-uniformity.md`](plans/F85-uniformity.md)，那一份不必讀。
+> [`docs/history/history/plans/F85-uniformity.md`](history/plans/F85-uniformity.md)，那一份不必讀。
 
 ---
 

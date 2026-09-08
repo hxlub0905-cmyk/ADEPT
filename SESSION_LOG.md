@@ -22,11 +22,25 @@
 
 ---
 
+## 收尾：F85 / F88 / F89 的計畫書封存，合併回 main（2026-09-08）
+
+三份做完不再改的計畫書搬進 [`docs/history/plans/`](docs/history/plans/)
+（CLAUDE.md §4 的規矩），連帶更新十個檔案裡指過去的路徑 ——
+`tests/test_docs_links.py` 守的正是那件事。
+
+順手刪掉一個一小時前自己加的死方法：`Frame.label()` 零個呼叫者（挑選器讀的
+是 `frame.labels` 那個 dict）。`docs/plans/` 現在只剩真的還在動的那幾份。
+
+**這條分支到此併回 `main`** —— F85 均勻度、F86 使用者回報的四件、F87 圖表
+設定十刀、F88 graph builder 六刀、F89 給工程師用的五件。
+
+---
+
 ## F89：讓圖表這一塊真的能給工程師用（2026-09-08）
 
 起點是使用者拿去用之後的三句話：「1. 工程師會不會看不懂? 2. Chart setting
 預覽圖每次都會太小（不會跟著視窗走）3. Your own charts 可以設計的東西還是
-太少」，以及一句「全部一起做」。計畫書 `docs/plans/F89-readable-charts.md`。
+太少」，以及一句「全部一起做」。計畫書 `docs/history/plans/F89-readable-charts.md`。
 
 **1. 預覽：問題不是「太小」，是長寬比是反的。** 量到 390 寬 × 655 高的直條
 —— 它會跟著視窗長，但長錯方向。釘住 4:3（`ChartView.ASPECT` 走
@@ -86,7 +100,7 @@ map**。住在 `Write report`（勾 `lotchart`）。由此掉出來的：`Frame.
 手冊最上面加了一行「這張卡以前叫什麼、鍵沒有變」—— 使用者手上可能有寫著舊
 名字的筆記。
 
-**沒有動的兩種**：`SESSION_LOG.md` 與 `docs/plans/F85-uniformity.md`（那是
+**沒有動的兩種**：`SESSION_LOG.md` 與 `docs/history/history/plans/F85-uniformity.md`（那是
 歷史紀錄，當時就叫那個名字，改掉等於竄改），以及兩處**引用使用者原話**的
 註解（「右側 Uniformity folder 直接把預覽的圖放上來好像也很奇怪」）。
 
@@ -254,7 +268,7 @@ XY 散佈圖 —— 使用者點名要的那一張，也是四張老圖唯一缺
 ## F88 第一刀：一列一格框的長表（2026-09-07）
 
 使用者定調方向：「希望他最終能像 JMP 內的 Graph builder 一樣」→「我還是傾向做
-graph builder like 的模式」。計畫書 `docs/plans/F88-graph-builder.md`。
+graph builder like 的模式」。計畫書 `docs/history/plans/F88-graph-builder.md`。
 
 **這份計畫書的根據是一個觀察**：現在那四張圖已經是那個文法了，只是被寫死成
 四個組合 —— 而**熱圖跟散佈圖只差在「顏色綁的是區域還是統計量」**。所以使用者

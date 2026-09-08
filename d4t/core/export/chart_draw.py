@@ -2,7 +2,7 @@
 # d4t chart draw — authored 2026-09-07 (F88 第二刀).
 """**一張長表 ＋ 一份 spec → 一張 SVG。**
 
-計畫書 `docs/plans/F88-graph-builder.md` §4。
+計畫書 `docs/history/plans/F88-graph-builder.md` §4。
 
 裡面只有兩件事一般化：
 
