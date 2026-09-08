@@ -135,7 +135,12 @@ FILE_CEILINGS = {
     # `_tool_button` 的地方**（`_refresh_results_button` 與 `_sync_layout_button`
     # 自己改寫 text/tooltip）—— 整條工具列與狀態列各只加一行，因為那兩支本來
     # 就是共用的入口。那正是 U14 的整個賣點：翻譯不必改 38 個檔案。
-    "d4t/ui/studio.py": 7404,
+    #
+    # 2026-09-08（X3 收尾）：7,404 → 7,427（+23）。`_sample_line` ——
+    # 抽樣的種子以前只存在 `sample_note` 這個欄位上，**使用者看不到**，而
+    # Studio 不寫 runs.db（只有 CLI 寫）。一次跑出漂亮結果而重現不了的隨機
+    # 抽樣等於沒有跑過，所以跑完那句話後面要帶著種子。
+    "d4t/ui/studio.py": 7427,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     #
@@ -280,7 +285,8 @@ COUNT_CEILINGS = {
     ),
     # god object 的兩個投影。261 → 268（六天）。
     "studio_window_methods": (
-        286,
+        287,
+        # 2026-09-08（X3 收尾）：286 → 287。`_sample_line`（見上）。
         # 2026-09-08（U5 ＋ U8）：284 → 286。**淨值 +2，而它換掉了三支**：
         # 走的是 `open_canvas_window` / `_on_canvas_popout_closed` /
         # `canvas_popout_open`，來的是 `layout_mode` / `set_layout_mode` /
@@ -314,7 +320,8 @@ COUNT_CEILINGS = {
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[0],
     ),
     "studio_window_attributes": (
-        419,
+        420,
+        # 2026-09-08（X3 收尾）：419 → 420。
         # 2026-09-08（U5 ＋ U8）：415 → 419。`_layout_mode` / `btn_layout` /
         # `params_row` / `gauge_pane` 進來，`_canvas_popout` / `_popout_view`
         # / `_pre_popout_sizes` 走掉。
