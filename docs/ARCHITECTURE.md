@@ -343,6 +343,22 @@ d4t/
     ├── glyphs.py             #   設定區膠囊上的那些小圖（F68 第二輪，六十幾張）
     │                         #     一套共通文法：淡的是原本就在那裡的東西、
     │                         #     實心的才是這個選項在講的那件事
+    ├── problems_bar.py       #   常駐的「為什麼還不能跑」（F91 U2）：一個計數 ＋
+    │                         #     一份點得開的清單，點一項就選中那張卡。
+    │                         #     ⚠ 不自己算 lint —— 跟畫布的警示點吃同一次
+    │                         #     `validate()`（兩邊各算一次＝畫布是紅的而清單說沒事）
+    ├── status_log.py         #   狀態列說過的話（F91 U2 後半）—— 下一句就把上一句
+    │                         #     蓋掉，而那一句常常是唯一講出「沒成功」的地方
+    ├── baseline.py           #   跟上一次比差多少（F91 X1）：把一次跑壓成一小塊、
+    │                         #     兩塊相減成一行字、釘住的那一塊存進 QSettings
+    ├── truth_marks.py        #   在結果表上標真缺陷／誤報（F91 X2）→ 寫回
+    │                         #     `ground_truth.json`（格式與自動撿的那份逐字相同）
+    ├── autosave.py           #   草稿與救回（F91 U4）：關窗有網，當機沒有
+    ├── crashlog.py           #   未預期錯誤的 traceback 落地（F91 U3）——
+    │                         #     打包成 exe 之後沒有 console
+    ├── fit_screen.py         #   視窗裝得進螢幕（F91 U1）。**不要寫死 resize**；
+    │                         #     內容比螢幕高的用 `scroll_host` / `scrolled`，
+    │                         #     而且只能在**建構時**用（事後搬版面是 segfault）
     ├── numbers.py            #   一個特徵值印成字 —— **全 UI 只有這一支**（F52）
     ├── focus_visible.py      #   焦點環只在鍵盤導覽時出現（F80）—— Qt 沒有
     │                         #     `:focus-visible`，這支把 QFocusEvent.reason()

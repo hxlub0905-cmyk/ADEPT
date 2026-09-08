@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
 from ..core.export import uniformity_charts as uc
 from ..core.pipeline import chart_spec as cspec
 from ..core.pipeline import chart_style as cs
+from . import fit_screen
 from .uniformity_window import ChartView, chart_style_for
 from .theme import TOKENS
 from .widgets import ChoiceChips, apply_button_cursors, small_button
@@ -498,7 +499,7 @@ class ChartSettingsDialog(QDialog):
         # ⚠ **高度要裝得下左半那三塊**（量出來 809）。以前是 680，於是對話框
         # 一打開就有捲軸，而捲軸底下正好是那幾格膠囊 —— 使用者要先發現有東西
         # 在下面才找得到它們。
-        self.resize(1180, 940)
+        fit_screen.fit(self, 1180, 940)
 
         self._kinds: List[str] = [k for k in (kinds if kinds is not None
                                               else uc.CHARTS) if k in uc.CHARTS]

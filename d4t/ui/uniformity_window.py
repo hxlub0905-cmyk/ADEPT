@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.export import uniformity_charts as uc
+from . import fit_screen
 from .theme import TOKENS
 from .widgets import small_button
 
@@ -187,7 +188,7 @@ class UniformityWindow(QWidget):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent, Qt.Window)
         self.setWindowTitle("Uniformity charts")
-        self.resize(940, 700)
+        fit_screen.fit(self, 940, 700)
         self._series: Dict[str, Any] = {}
         self._look = ""
         self._axis = uc.AXIS_X

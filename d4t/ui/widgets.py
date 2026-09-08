@@ -69,6 +69,7 @@ from PySide6.QtWidgets import (
 
 from ..core.algo import glv as algo_glv
 from ..core.export.uniformity_charts import heat_hex as uc_heat_hex
+from . import fit_screen
 from . import glyphs
 from . import region_words
 from . import theme
@@ -5672,7 +5673,7 @@ class CurveDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Tone curve")
         self.setModal(False)
-        self.resize(420, 460)
+        fit_screen.fit(self, 420, 460)
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(12, 12, 12, 12)

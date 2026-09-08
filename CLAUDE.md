@@ -377,7 +377,12 @@ git add -A && python tools/release.py && git add -A
 `ui/decide_panel.py`、F24 的 `ui/tree_panel.py`／`ui/tree_scene.py`、F25 的
 `ui/route_badge.py`、F27 的 `ui/verdict_band.py`／`ui/results_table.py`、
 F44 的 `ui/region_words.py` 已經都是這樣做的 —— 這一段只是把它從「這次剛好這樣
-做」變成「本來就這樣做」。
+做」變成「本來就這樣做」。**F91 的七支一起走同一條**：`ui/baseline.py`（跟上
+一次比差多少）、`ui/truth_marks.py`（在表上標真缺陷／誤報）、
+`ui/fit_screen.py`（視窗裝得進螢幕）、`ui/crashlog.py`（未預期錯誤的 log）、
+`ui/autosave.py`（草稿與救回）、`ui/problems_bar.py`（常駐的「為什麼還不能跑」）
+與 `ui/status_log.py`（狀態列說過的話）—— 六件事、七支模組，而 `studio.py`
+只多了接線。
 
 > ⚠ 這張清單上以前還有 **F30 的 `ui/output_band.py`**，而它 2026-08-28 被
 > **刪掉**了（F50）。規矩沒有變 —— 變的是那一塊該不該存在：那個框畫的是
@@ -385,6 +390,29 @@ F44 的 `ui/region_words.py` 已經都是這樣做的 —— 這一段只是把�
 > 「跑的時間不一樣」**。編碼錯了，所以那件事現在是卡片自己的一條腳帶。
 > **一塊新元件開一個新模組是對的；先問那一塊該不該是一塊。**`studio.py` 留給**接線**（建 widget、接訊號、轉呼叫），
 不留給內容。
+
+### 視窗、當機、草稿：三件會安靜做錯的事（F91，2026-09-08）
+
+* **不要寫死視窗尺寸。** `widget.resize(1440, 900)` 在開發機（1920×1080）上
+  看不出問題，在機台旁那台 1366×768 的 PC 上是「底部那排鈕在螢幕外面」——
+  而 Qt 不會自己捲。改用 `fit_screen.fit(widget, w, h)`，它會先把
+  **最小尺寸**降下來（不做這一步的話 `resize` 根本沒有效果）再取小的那個。
+  有一條測試擋著 `d4t/ui` 裡再出現寫死的 `resize(w, h)`，另一條把每個頂層
+  視窗真的開起來量 geometry。
+  ⚠ **內容本身比螢幕高**的那種（`gc_generator` 量出來 1,144 px）縮視窗沒有
+  用，要在**建構時**掛到 `fit_screen.scroll_host` / `scrolled` 上 ——
+  事後把既有版面搬進捲軸在 PySide6 上是 **segfault**，不是例外。
+
+* **測試不准寫進使用者真正的那幾個檔案。** `crashlog`（`~/.d4t/log`）、
+  `autosave`（`~/.d4t/autosave.json`）、baseline（QSettings）三個都會寫磁碟，
+  而測試寫進真的那一份的話，開發者下次開 Studio 會被問要不要救回一條測試造出
+  來的 pipeline。三個都有具名的覆寫點（`crashlog.LOG_DIR` / `autosave.DIR` /
+  `BaselineStore(settings)`），而 `StudioWindow` 在 `_running_under_pytest()`
+  時預設把草稿關掉。**加第四個會寫磁碟的東西時，先把那個覆寫點做出來。**
+
+* **會跳 modal 對話框的新東西要有一個關得掉的旗標。** `crashlog.SHOW_DIALOG`
+  與 `autosave.ASK_ON_START` 跟 `studio.PROMPT_ON_CLOSE` 是同一件事：一個
+  modal 對話框在 headless 測試裡不會讓測試失敗，它會讓測試**永遠停在那裡**。
 
 ⚠ **現在不要動 `studio.py` 本身**，但**理由已經換了一個**。
 以前寫的是「那把尺（黃金值）是壞的」—— 那是真的，從 F19（08-21）到 08-23 兩天

@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
     QSpinBox, QVBoxLayout, QWidget,
 )
 
+from . import fit_screen
 from . import theme
 from .gc_paint import (
     MODE_BRUSH, MODE_ERASE, MODE_RECT, GcPaintView,
@@ -139,8 +140,11 @@ class GcGeneratorWindow(QMainWindow):
         self._worker: Optional[_GenWorker] = None
         self._backend = None
 
-        root = QWidget(self)
-        self.setCentralWidget(root)
+        # ⚠ **這一頁的內容比 768 高的螢幕還高**（量出來 1,144 px：左欄四塊
+        # 疊下來 ＋ 右邊那張預覽）。縮視窗沒有用 —— 撐著的是內容自己的
+        # minimumSizeHint，所以它要住在一個捲軸裡（U1）。
+        area, root = fit_screen.scrolled(self)
+        self.setCentralWidget(area)
         grid = QGridLayout(root)
         grid.setContentsMargins(12, 12, 12, 12)
         grid.setSpacing(10)
@@ -153,7 +157,7 @@ class GcGeneratorWindow(QMainWindow):
         grid.addWidget(self._run_box(), 3, 1)
         grid.setColumnStretch(1, 1)
         grid.setRowStretch(0, 1)
-        self.resize(1060, 900)
+        fit_screen.fit(self, 1060, 900)
         self._sync()
 
     # -- 版面 ---------------------------------------------------------------
