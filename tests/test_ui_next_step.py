@@ -144,15 +144,21 @@ def test_nothing_to_say_means_no_button(qapp):
 
 
 def test_the_results_button_says_how_many_are_in_there(qapp):
-    """U21：關掉那個視窗之後，鈕上的數字是唯一的線索。"""
+    """U21：關掉那個視窗之後，鈕上的數字是唯一的線索。
+
+    ⚠ **它不會被 disable。** U21 原本寫的是「沒跑過就 disabled」，而那跟使用者
+    2026-08-28 自己講的話衝突（「加一個按鈕獨立呼叫一個視窗」—— 那顆鈕存在的
+    唯一理由就是隨時叫得出那個視窗）。U21 真正的抱怨是「鈕上沒有東西說明裡面
+    有沒有結果」，而那件事由計數與 tooltip 回答。
+    """
     win = _studio(qapp)
     try:
-        assert not win.btn_results.isEnabled()
-        assert "run" in win.btn_results.toolTip().lower(), \
-            "沒跑過的時候 tooltip 要講**下一步**，不是「還沒有結果」"
+        assert win.btn_results.isEnabled(), \
+            "隨時叫得出那個視窗是它存在的理由（使用者 2026-08-28）"
+        assert "empty" in win.btn_results.toolTip().lower(), \
+            "沒跑過的時候 tooltip 要說「裡面是空的」"
         win.trial_results = [{"ok": True}, {"ok": False}, {"ok": True}]
         win._refresh_results_button()
-        assert win.btn_results.isEnabled()
         assert win.btn_results.text() == "Results · 3", win.btn_results.text()
     finally:
         win.close()
@@ -175,11 +181,11 @@ def test_a_new_dataset_empties_the_count(qapp):
     try:
         win.trial_results = [{"ok": True}]
         win._refresh_results_button()
-        assert win.btn_results.isEnabled()
+        assert win.btn_results.text() == "Results · 1"
         win.trial_results = []
         win._refresh_results_button()
-        assert not win.btn_results.isEnabled()
         assert win.btn_results.text() == "Results"
+        assert win.btn_results.isEnabled(), "清空不該把它鎖起來"
     finally:
         win.close()
 

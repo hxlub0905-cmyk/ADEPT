@@ -1673,9 +1673,14 @@ class PipelineCanvas(QGraphicsView):
                  # 所以放同一排，而不是放到會改檔案的工具列上。
                  ("tidy", "Tidy up — put the cards back on the grid", self.tidy)]
         if self._popout_button:
-            # 「彈出視窗」也是「怎麼看」的一種 —— 主視窗的畫布只佔中上一塊
-            # （D 案），要看全貌就到自己的視窗看。
-            specs.append(("popout", "Open the pipeline in its own window",
+            # 「看全貌」也是「怎麼看」的一種，所以它排在這裡。
+            #
+            # ⚠ U5（2026-09-08）之後它**不再開第二個視窗**，它換版面
+            # （Build ⇄ Tune）。而它留在**畫布上**而不是搬到工具列，是這一輪
+            # 量出來的：工具列在 1366×768 上只剩 1,229 px，多一顆鈕就會把尾巴
+            # 幾顆推進 » 溢位選單（`test_ui_small_screen`）。
+            # 更何況它控制的就是這塊畫布 —— 控制項長在它控制的東西上。
+            specs.append(("popout", "Show the whole pipeline (Ctrl+B)",
                           self.popout_requested.emit))
         self._zoom_buttons = []
         for icon, tip, slot in specs:
@@ -2698,6 +2703,14 @@ class PipelineCanvas(QGraphicsView):
         """
         self.set_selected(None)
         self._scene.clearSelection()
+
+    def zoom_buttons(self) -> List[Any]:
+        """縮放列上那一排鈕（測試與 `studio._sync_layout_button` 讀這個）。
+
+        最後一顆是「看全貌」（U5 之後它切換 Build ⇄ Tune），而它只在主畫布上
+        存在（`popout_button=False` 的那一份沒有）。
+        """
+        return list(getattr(self, "_zoom_buttons", []) or [])
 
     def region_index(self, name: str) -> int:
         """這個區域名在**整張畫布上**排第幾（沒有的話回 -1）。

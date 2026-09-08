@@ -751,10 +751,6 @@ class StudioWindow(QMainWindow):
         # 跑完才 show，關掉不丟結果 —— 機制是對的，但使用者的心智模型裡「關掉
         # 視窗」通常等於「丟掉」，而鈕上沒有任何東西反駁那個猜測。
         self._refresh_results_button()
-        # Build ⇄ Tune（U5）。它排在 Results 旁邊 —— 兩顆都是「不屬於流程、
-        # 但要隨時找得到」的那一段。
-        self.btn_layout = self._tool_button(
-            "Build", "Switch layout (Ctrl+B)", self.toggle_layout_mode)
         self.btn_help = self._tool_button(
             "Help", "Reopen the getting-started tour (includes “Try it with "
                     "sample data”)",
@@ -818,7 +814,6 @@ class StudioWindow(QMainWindow):
 
         # 右邊：不屬於流程、但要隨時找得到的那幾顆。
         bar.addWidget(self.btn_results)
-        bar.addWidget(self.btn_layout)
         bar.addWidget(self.btn_help)
         bar.addWidget(self.btn_theme)
         bar.addSeparator()
@@ -826,9 +821,15 @@ class StudioWindow(QMainWindow):
         # **工具列的字要跟著抽樣方式換**（X3）。以前這裡寫死是「First」，
         # 而如果換了抽樣方式畫面卻沒有變，就是這個功能最危險的失敗方式：
         # 跑的東西變了、看的人不知道。字從 `sampling.describe()` 來。
-        self.lbl_trial_n = QLabel(sampling.describe(sampling.DEFAULT_MODE)[0]
-                                  + " ", bar)
-        self.lbl_trial_n.setToolTip(sampling.describe(sampling.DEFAULT_MODE)[1])
+        #
+        # ⚠ **那個字自己就是那顆鈕。** 第一版是「一個 QLabel ＋ 旁邊一顆
+        # 『…』」，而那多花 56 px —— 工具列在 1366×768 上量出來 1,285 px，
+        # 超過那台機器的 1,229 px，尾巴幾顆會被收進 » 溢位選單
+        # （`test_ui_small_screen` 當場抓到）。合成一顆之後既省了寬度，
+        # 也比較誠實：會變的那個字就是可以點的那個東西。
+        self.lbl_trial_n = QToolButton(bar)
+        self.lbl_trial_n.setCursor(Qt.PointingHandCursor)
+        self.lbl_trial_n.setPopupMode(QToolButton.InstantPopup)
         bar.addWidget(self.lbl_trial_n)
         self.spin_trial_n = QSpinBox(bar)
         self.spin_trial_n.setRange(10, 5000)
@@ -839,14 +840,8 @@ class StudioWindow(QMainWindow):
             "How many defects a trial run covers (keep it small while tuning)")
         bar.addWidget(self.spin_trial_n)
 
-        # 抽樣方式（X3）。**一顆小鈕的下拉，不是三顆膠囊** —— 它平常不動，
-        # 而工具列上每一格寬度都是跟別人借的。
-        self.btn_sample = QToolButton(bar)
-        self.btn_sample.setText("…")
-        self.btn_sample.setCursor(Qt.PointingHandCursor)
-        self.btn_sample.setPopupMode(QToolButton.InstantPopup)
-        self.btn_sample.setToolTip("Which defects a trial run covers")
-        menu_s = QMenu(self.btn_sample)
+        # 抽樣方式（X3）：**一個下拉，掛在上面那個會變的字上**（見上）。
+        menu_s = QMenu(self.lbl_trial_n)
         self._sample_actions = {}
         for mode in sampling.MODES:
             word, why = sampling.describe(mode)
@@ -857,8 +852,8 @@ class StudioWindow(QMainWindow):
             act.triggered.connect(
                 lambda _c=False, m=mode: self.set_sample_mode(m))
             self._sample_actions[mode] = act
-        self.btn_sample.setMenu(menu_s)
-        bar.addWidget(self.btn_sample)
+        self.lbl_trial_n.setMenu(menu_s)
+        self.set_sample_mode(self.sample_mode, say=False)
 
         self.btn_trial = self._tool_button(
             "Run trial", "Run the current pipeline over the first N defects "
@@ -1688,10 +1683,12 @@ class StudioWindow(QMainWindow):
         view.tree_leaf_clicked.connect(self._on_tree_step_clicked)
         view.edge_added.connect(self._on_edge_added)
         view.edge_removed.connect(self._on_edge_removed)
-        # zoom bar 上那顆鈕以前開第二個視窗，現在換版面（U5）——
+        # zoom bar 上那顆鈕以前開第二個視窗，現在**切換版面**（U5）——
         # 它問的一直都是「讓我看全貌」，而那件事不需要第二個視窗。
-        view.popout_requested.connect(
-            lambda: self.set_layout_mode("build"))
+        #
+        # 切換而不是單向切到 Build：不然使用者按了之後沒有路回來，而那顆鈕
+        # 就在他眼前（Ctrl+B 是給記得的人用的，不是唯一的路）。
+        view.popout_requested.connect(self.toggle_layout_mode)
 
     def _wire_widgets(self) -> None:
         self.library.add_requested.connect(self._on_add_requested)
@@ -1797,7 +1794,7 @@ class StudioWindow(QMainWindow):
         # 正是唯一講出「那件事沒成功」的地方。
         self.status_history.add(str(msg), level)
 
-    def set_sample_mode(self, mode: str) -> None:
+    def set_sample_mode(self, mode: str, say: bool = True) -> None:
         """換抽樣方式，**並且把工具列上那個字換掉**（X3）。
 
         兩件事一定一起做：跑的東西變了而畫面沒變，是這個功能最危險的失敗方式
@@ -1808,11 +1805,15 @@ class StudioWindow(QMainWindow):
             return
         self.sample_mode = use
         word, why = sampling.describe(use)
-        self.lbl_trial_n.setText(word + " ")
+        self.lbl_trial_n.setText(word)
         self.lbl_trial_n.setToolTip(why)
         for name, act in (getattr(self, "_sample_actions", None) or {}).items():
             act.setChecked(name == use)
-        self._status("Trial runs now cover: %s — %s" % (word.lower(), why))
+        # 建構的時候不要講話：狀態列那句話是**使用者換了模式**的回應，而開窗
+        # 時沒有人換過任何東西（同 `_status` 的那條「不要對沒發生的事說話」）。
+        if say:
+            self._status("Trial runs now cover: %s — %s"
+                         % (word.lower(), why))
 
     def sample_spec(self) -> Dict[str, Any]:
         """這一次要送給 `run_batch` 的抽樣設定。
@@ -1860,7 +1861,15 @@ class StudioWindow(QMainWindow):
         就列著失敗的顆（鐵則 7：單顆出錯不殺整批，而那幾顆要看得到）。
         """
         n = len(self.trial_results or [])
-        self.btn_results.setEnabled(n > 0)
+        # ⚠ **不 disable 它。** 外部檢視清單 U21 寫的是「沒跑過就 disabled」，
+        # 而那跟使用者 2026-08-28 自己講的話衝突：「可以改成加一個按鈕獨立
+        # 呼叫一個視窗嗎（目前是跑完才會出來）」—— 那顆鈕存在的**唯一理由**
+        # 就是「隨時叫得出那個視窗」。disable 掉等於把它變回原本的樣子。
+        #
+        # U21 真正的抱怨是「鈕上沒有東西說明裡面有沒有結果」，而那件事由
+        # 計數與 tooltip 回答，不需要動到它能不能按。
+        # （`tests/test_ui_results.py::test_results_has_a_button_of_its_own`
+        # 當場抓到這個衝突。）
         # ⚠ **這一支繞過 `_tool_button`，所以它要自己翻**（U14）。翻譯層擺在
         # 共用的那幾支換到的是「大部分地方不用管」，不是「沒有地方要管」——
         # 任何**後來**又改寫 text/tooltip 的地方都要自己包一次。
@@ -1871,7 +1880,8 @@ class StudioWindow(QMainWindow):
         self.btn_results.setToolTip(strings.tr(
             "Open the Results window - score distribution, thumbnails and the "
             "per-defect table (Ctrl+Shift+R)" if n else
-            "No results yet - run the pipeline first (Run trial)"))
+            "Open the Results window - it is empty until you run the pipeline "
+            "(Run trial)"))
 
     def _delete_selected_on_canvas(self) -> None:
         """畫布上選著的卡片與線 —— 刪掉。
@@ -3917,20 +3927,25 @@ class StudioWindow(QMainWindow):
         寫現在在哪裡的話，使用者要先讀懂「這是狀態不是動作」才知道按了會怎樣
         —— 而一顆工具列的鈕沒有那麼多解釋的空間。
         """
-        btn = getattr(self, "btn_layout", None)
+        # 這顆鈕住在**畫布的縮放列上**，不在工具列（見 `_wire_canvas`）——
+        # 工具列在 1366×768 上沒有位子了，而它控制的就是這塊畫布。
+        btn = (self.pipeline.zoom_buttons() or [None])[-1] \
+            if hasattr(self.pipeline, "zoom_buttons") else None
         if btn is None:
             return
         going = "Tune" if self._layout_mode == "build" else "Build"
         # 同 `_refresh_results_button`：它繞過 `_tool_button`，要自己翻。
         # **模式的名字（Build / Tune）不翻** —— 它們是 `Ctrl+B` 的兩個檔位，
         # 跟卡片名同一類：使用者跟同事講的是那兩個字。
-        btn.setText(going)
+        # ⚠ 它是一顆**只有圖示**的鈕（縮放列上那一排），所以話只能講在
+        # tooltip 上 —— 那也是它 accessible name 的來源。
         why = strings.tr(
             "canvas fills the column, for wiring and seeing the whole thing"
             if going == "Build" else
             "canvas on top, settings below, for tuning parameters")
-        btn.setToolTip(strings.tr("Switch to %s layout (Ctrl+B) — %s")
-                       % (going, why))
+        tip = strings.tr("Switch to %s layout (Ctrl+B) — %s") % (going, why)
+        btn.setToolTip(tip)
+        btn.setAccessibleName(tip)
 
 
     def _canvases(self) -> List[PipelineCanvas]:
