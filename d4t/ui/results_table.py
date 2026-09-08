@@ -107,6 +107,14 @@ from .feature_tree import (            # noqa: E402 — 位置沿用被搬走那
 #: 引擎判的那個值仍然原封不動留在 ``bin``，兩個都要留得住才講得出「從 5 改成 3」。
 OVERRIDE_KEY = "bin_override"
 
+#: 「這顆真的是不是缺陷」那一欄（X2）。名字帶 ``?`` 所以撞不到任何特徵名，
+#: 也撞不到 CSV 的欄名 —— 它跟 ``class`` / ``!warn`` 一樣**只存在於畫面上**。
+#:
+#: ⚠ 這一欄**只在宿主餵了答案卷的時候才出現**（`set_results` 的 ``truth``
+#: 給了 dict，空的也算）。不餵＝以前的行為逐字不變，那是舊測試與別的宿主
+#: （Gallery 那條路）踩著的性質。
+TRUTH_COLUMN = "?truth"
+
 _fixed_columns = fixed_columns
 _stat_label = stat_label
 
@@ -254,14 +262,23 @@ class ResultsTableModel(QAbstractTableModel):
         self._diagnostics: List[str] = []
         self._alarms: Dict[str, bool] = {}
         self._spec_of: Dict[str, Any] = {}
+        #: ``defect_id`` → 答案卷那一筆（``None`` = 宿主沒有給答案卷這回事，
+        #: 那一欄整個不出現）。
+        self._truth: Optional[Dict[str, Any]] = None
 
     # ---- 資料 --------------------------------------------------------------
     def set_results(self, results: Sequence[Dict[str, Any]],
                     class_names: Optional[Dict[str, str]] = None,
                     layout: Optional[Dict[str, Any]] = None,
-                    alarms: Optional[Dict[str, bool]] = None) -> None:
+                    alarms: Optional[Dict[str, bool]] = None,
+                    truth: Optional[Dict[str, Any]] = None) -> None:
         """``layout`` 來自 :func:`column_tree`；不給＝平鋪（每一欄都是判定層，
-        沒有摺疊區）。``alarms`` 來自 `verdict_features.diagnostic_alarm_map`。"""
+        沒有摺疊區）。``alarms`` 來自 `verdict_features.diagnostic_alarm_map`。
+
+        ``truth`` 是答案卷（X2）。給了 dict（**空的也算**）就多一欄
+        :data:`TRUTH_COLUMN`，使用者標過的那幾顆看得見自己標了什麼；不給就是
+        以前的行為，一欄不多。
+        """
         names = dict(class_names or {})
         self.beginResetModel()
         if layout is None:
@@ -274,6 +291,16 @@ class ResultsTableModel(QAbstractTableModel):
             self._verdict_columns = list(layout.get("verdict_columns") or [])
             self._diagnostics = list(layout.get("diagnostics") or [])
             self._spec_of = dict(layout.get("spec_of") or {})
+        self._truth = None if truth is None else dict(truth)
+        if self._truth is not None:
+            # 緊接在 ``class`` 後面 —— 「引擎說是什麼」與「我說是什麼」要並排，
+            # 中間隔著十幾欄量測值的話，標注這件事就變成一場捲軸比對。
+            for cols in (self._columns, self._verdict_columns):
+                if TRUTH_COLUMN in cols:
+                    continue
+                at = (cols.index(CLASS_COLUMN) + 1) if CLASS_COLUMN in cols \
+                    else len(cols)
+                cols.insert(at, TRUTH_COLUMN)
         self._alarms = dict(alarms or {})
         self._rows = []
         for r in results or []:
@@ -284,6 +311,39 @@ class ResultsTableModel(QAbstractTableModel):
 
     def columns(self) -> List[str]:
         return list(self._columns)
+
+    # ---- 答案卷（X2）------------------------------------------------------
+    #: 那一欄格子裡寫的字。**寫詞不寫顏色**（U13 同一個根）：``real`` /
+    #: ``nuisance`` 是廠內講的話，而一個只有顏色的記號在黑白列印與色覺缺陷
+    #: 的眼裡是空的。
+    TRUTH_WORDS = {True: "real", False: "nuisance"}
+
+    def set_truth(self, truth: Optional[Dict[str, Any]]) -> None:
+        """換一份答案卷（標完之後宿主餵回來）—— 只重畫那一欄，不重排。"""
+        self._truth = None if truth is None else dict(truth)
+        if TRUTH_COLUMN not in self._columns or not self._rows:
+            return
+        col = self._columns.index(TRUTH_COLUMN)
+        self.dataChanged.emit(self.index(0, col),
+                              self.index(len(self._rows) - 1, col))
+
+    def _truth_flag(self, row: Dict[str, Any]) -> Optional[bool]:
+        """一列（row dict）標的是什麼 —— **查的是 ``defect_id``，不是位置**。
+
+        排序會把 ``self._rows`` 就地重排，所以任何「第幾列」的寫法在排序當下
+        都是錯的。
+        """
+        if self._truth is None:
+            return None
+        from .truth_marks import is_real_of
+        did = str(row.get("defect_id", ""))
+        return is_real_of(self._truth.get(did)) if did in self._truth else None
+
+    def truth_of(self, row: int) -> Optional[bool]:
+        """這一列標的是什麼（``None`` = 還沒標，或看不懂那一筆）。"""
+        if not (0 <= row < len(self._rows)):
+            return None
+        return self._truth_flag(self._rows[row])
 
     def verdict_columns(self) -> List[str]:
         return list(self._verdict_columns)
@@ -362,9 +422,20 @@ class ResultsTableModel(QAbstractTableModel):
             # 徽章欄的表頭留白 —— ``!warn`` 是程式的哨兵，不是給人看的字。
             if name == BADGE_COLUMN:
                 return ""
+            # 同理：``?truth`` 是哨兵，表頭上寫的是使用者的話（X2）。
+            if name == TRUTH_COLUMN:
+                return "truth"
             # 有身分的欄顯示統計量短標籤（區域在上層表頭）；沒有的照舊
             # 顯示欄名 —— 不猜。
             return _stat_label(bound) if bound is not None else name
+        if role == Qt.ToolTipRole and name == TRUTH_COLUMN:
+            # **這一欄的用法要寫在它自己身上。** 沒有別的地方講得到「按 R」——
+            # 一個只有右鍵選單發現得到的功能，等於只有讀過原始碼的人會用。
+            return ("What this defect really is, as you judged it.\n"
+                    "Select rows and press R (real) or N (nuisance); U takes "
+                    "the label off again.\n"
+                    "It is saved to ground_truth.json beside the data, and "
+                    "the accuracy line counts only what is labelled here.")
         if role == Qt.ToolTipRole and bound is not None:
             # 第一行**永遠是原始欄名** —— 它是分數表達式的變數名、CSV 的
             # 欄名，短標籤再漂亮也不能把它藏死。
@@ -391,6 +462,27 @@ class ResultsTableModel(QAbstractTableModel):
             if role == Qt.ForegroundRole and not row.get("ok", True):
                 return QColor(TOKENS.get("danger_text", "#a83f33"))
             return None
+        if column == TRUTH_COLUMN:
+            flag = self.truth_of(index.row())
+            if role == Qt.DisplayRole:
+                return self.TRUTH_WORDS.get(flag, "")
+            if role == Qt.EditRole:
+                # 排序把「標過的」聚在一起，而未標的照 `sort` 那條規矩排最後。
+                return None if flag is None else int(bool(flag))
+            if role == Qt.ToolTipRole:
+                return ("You marked this defect %s. It is written to %s beside "
+                        "the data, and the accuracy line counts it.\n"
+                        "Select rows and press R (real), N (nuisance) or U "
+                        "(not sure) to change it."
+                        % (self.TRUTH_WORDS[flag], "ground_truth.json")
+                        if flag is not None else
+                        "Not labelled. Select rows and press R (real) or N "
+                        "(nuisance) - the accuracy line only counts what you "
+                        "have labelled.")
+            if role == Qt.TextAlignmentRole:
+                return int(Qt.AlignLeft | Qt.AlignVCenter)
+            return None
+
         value = _cell(row, column)
 
         if column == "bin" and OVERRIDE_KEY in row:
@@ -486,7 +578,11 @@ class ResultsTableModel(QAbstractTableModel):
         rev = order == Qt.DescendingOrder
 
         def key(row: Dict[str, Any]):
-            v = _cell(row, name)
+            if name == TRUTH_COLUMN:
+                flag = self._truth_flag(row)
+                v = None if flag is None else int(bool(flag))
+            else:
+                v = _cell(row, name)
             if v is None or v == "":
                 return (1, 0.0, "")
             if isinstance(v, bool):
@@ -610,6 +706,14 @@ class ResultsTable(QTableView):
     #: 手動改過的 bin 變了（改了、改回去、或整批清掉）。帶的是**現在還有
     #: 幾顆是手動的** —— 宿主用它講那句「這只在畫面上」。
     bin_overrides_changed = Signal(int)
+    #: 使用者標了「這顆是真的 / 是誤報 / 我不確定」（X2）。帶的是
+    #: ``{defect_id: True|False|None}``。
+    #:
+    #: ⚠ **這個跟 `bin_overrides_changed` 是相反的兩件事**，而它們在同一張表
+    #: 上只差一個手勢：手動 bin 是「畫面上的一句備註」（匯出仍然是引擎判的），
+    #: 標記則**真的寫進磁碟**（``ground_truth.json``）並且改變正確率。所以這
+    #: 條訊號由宿主寫檔，這裡不碰檔案。
+    truth_marked = Signal(dict)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -642,12 +746,43 @@ class ResultsTable(QTableView):
         self.doubleClicked.connect(self._on_double_click)
         self.clicked.connect(self._on_click)
 
+    #: 標記的三個鍵（X2）。**R / N 是廠內講的那兩個字的字首**
+    #: （real / nuisance），第三個是「我看過但說不準」—— 那不是 nuisance，
+    #: 而混為一談會讓正確率的分母裝進一批沒有人真的判斷過的顆粒。
+    TRUTH_KEYS = {Qt.Key_R: True, Qt.Key_N: False, Qt.Key_U: None}
+
+    def keyPressEvent(self, event) -> None:               # noqa: N802 — Qt
+        """R / N / U ＝ 標這幾列（沒有選任何一列就照常交給 Qt）。"""
+        key = event.key()
+        if key in self.TRUTH_KEYS and not event.modifiers():
+            if self.mark_selected(self.TRUTH_KEYS[key]):
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
+    def mark_selected(self, value: Optional[bool]) -> bool:
+        """把選著的那幾列標成 ``value``（``None`` = 拿掉標記）。"""
+        ids = [d for d in self.selected_ids() if d]
+        if not ids:
+            return False
+        from .truth_marks import marks_from_rows
+        self.truth_marked.emit(marks_from_rows(ids, value))
+        return True
+
+    def set_truth(self, truth: Optional[Dict[str, Any]]) -> None:
+        """換一份答案卷（宿主寫完檔餵回來）。"""
+        self._model.set_truth(truth)
+
+    def truth_of(self, row: int) -> Optional[bool]:
+        return self._model.truth_of(row)
+
     # ---- 外部 --------------------------------------------------------------
     def set_results(self, results: Sequence[Dict[str, Any]],
                     class_names: Optional[Dict[str, str]] = None,
                     layout: Optional[Dict[str, Any]] = None,
-                    alarms: Optional[Dict[str, bool]] = None) -> None:
-        self._model.set_results(results, class_names, layout, alarms)
+                    alarms: Optional[Dict[str, bool]] = None,
+                    truth: Optional[Dict[str, Any]] = None) -> None:
+        self._model.set_results(results, class_names, layout, alarms, truth)
         # 表頭可能在單層/雙層之間切換（有沒有欄帶區域）—— 高度要重新量。
         self.horizontalHeader().updateGeometry()
         self.resizeColumnsToContents()
@@ -723,6 +858,23 @@ class ResultsTable(QTableView):
         if not rows:
             return
         menu = QMenu(self)
+        # 標記排在最上面 —— **它才是複審時一直在做的那個動作**，而改 bin 是
+        # 偶爾為之的備註。右鍵選單的順序就是「這張表主要在做什麼」的宣告。
+        mark_acts = []
+        if self._model._truth is not None:
+            for value, text, tip in (
+                    (True, "Mark as real (R)", "Counts as a real defect in "
+                     "the accuracy line, and is written to ground_truth.json"),
+                    (False, "Mark as nuisance (N)", "Counts as a false alarm "
+                     "in the accuracy line, and is written to "
+                     "ground_truth.json"),
+                    (None, "Not sure - remove the label (U)",
+                     "Takes it out of the accuracy line entirely: “I have not "
+                     "looked” is not the same answer as “it is a nuisance”")):
+                act = menu.addAction(text)
+                act.setToolTip(tip)
+                mark_acts.append((act, value))
+            menu.addSeparator()
         act_set = menu.addAction("Set bin… (%d selected)" % len(rows)
                                  if len(rows) > 1 else "Set bin…")
         marked = [r for r in rows if OVERRIDE_KEY in self._model._rows[r]]
@@ -730,6 +882,12 @@ class ResultsTable(QTableView):
         act_clear.setEnabled(bool(marked))
         act_set.setToolTip("On screen only - exports keep the engine's bin")
         chosen = menu.exec(self.viewport().mapToGlobal(pos))
+        for act, value in mark_acts:
+            if chosen is act:
+                ids = [self._model.defect_id_at(r) for r in rows]
+                from .truth_marks import marks_from_rows
+                self.truth_marked.emit(marks_from_rows(ids, value))
+                return
         if chosen is act_set:
             first = self._model._rows[rows[0]]
             start = int(first.get(OVERRIDE_KEY, first.get("bin") or 0))
@@ -828,6 +986,7 @@ class ResultsTablePane(QWidget):
         self.defect_activated = self.table.defect_activated
         self.trace_requested = self.table.trace_requested
         self.bin_overrides_changed = self.table.bin_overrides_changed
+        self.truth_marked = self.table.truth_marked
 
         bar = QHBoxLayout()
         bar.setContentsMargins(0, 0, 0, 0)
@@ -850,8 +1009,9 @@ class ResultsTablePane(QWidget):
     def set_results(self, results: Sequence[Dict[str, Any]],
                     class_names: Optional[Dict[str, str]] = None,
                     layout: Optional[Dict[str, Any]] = None,
-                    alarms: Optional[Dict[str, bool]] = None) -> None:
-        self.table.set_results(results, class_names, layout, alarms)
+                    alarms: Optional[Dict[str, bool]] = None,
+                    truth: Optional[Dict[str, Any]] = None) -> None:
+        self.table.set_results(results, class_names, layout, alarms, truth)
         n = self.table._model.n_more()
         self.more.setText("All measurements (%d)" % n)
         # 沒有摺疊區（平鋪模式、或判定引用了每一欄）就不擺一顆沒事做的鈕。
@@ -861,6 +1021,15 @@ class ResultsTablePane(QWidget):
         self._clear_dims()
         self._rebuild_dim_menus()
         self._apply_visibility()
+
+    def set_truth(self, truth: Optional[Dict[str, Any]]) -> None:
+        self.table.set_truth(truth)
+
+    def truth_of(self, row: int) -> Optional[bool]:
+        return self.table.truth_of(row)
+
+    def mark_selected(self, value: Optional[bool]) -> bool:
+        return self.table.mark_selected(value)
 
     def columns(self) -> List[str]:
         return self.table.columns()

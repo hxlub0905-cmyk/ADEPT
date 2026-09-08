@@ -76,10 +76,21 @@ FILE_CEILINGS = {
     # 自繪圖示、按鈕、控制項全部在一支。真正的解法是把那幾群圖示切出去
     # （`CLAUDE.md` §4 已經寫著「切 widgets.py 那幾群自繪圖示最好拆、風險最低」），
     # 而那件事的前置是黃金值三份全綠 —— 已經成立了。
-    "d4t/ui/widgets.py": 7139,
+    # 2026-09-08（U1）：+1 —— `IconGrid` 那個小對話框的 `resize(420, 460)` 改
+    # 成 `fit_screen.fit(...)`，多一行 import。
+    "d4t/ui/widgets.py": 7140,
     # 接線層（建 widget、接訊號、轉呼叫）。`CLAUDE.md` §4：新的面板一律開新
     # 模組，不要塞進這裡。這一格就是那句話的執行機構。
-    "d4t/ui/studio.py": 6942,
+    #
+    # 2026-09-08（P0 那一批）：6,942 → 7,100（+158）。**七個新模組，
+    # 而這裡只加接線** —— 每一項的內容都在自己的檔案裡：
+    #   `baseline.py`（X1）、`truth_marks.py`（X2）、`fit_screen.py`（U1）、
+    #   `crashlog.py`（U3）、`autosave.py`（U4）、`problems_bar.py` ＋
+    #   `status_log.py`（U2 的前後兩半）。
+    # 這 158 行是：三支新方法（`_publish_run_snapshot` / `_on_truth_marked` /
+    # `_on_problem_activated`）、Problems 列／狀態列歷史／草稿的建構與掛勾、
+    # 以及 `_refresh_pipeline` 改成只跑一次 lint。
+    "d4t/ui/studio.py": 7100,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     "d4t/core/pipeline/recipe.py": 3732,
@@ -215,12 +226,20 @@ COUNT_CEILINGS = {
     ),
     # god object 的兩個投影。261 → 268（六天）。
     "studio_window_methods": (
-        268,
+        271,
+        # 2026-09-08：268 → 271。三支，每一支都是**接線**：
+        # `_publish_run_snapshot`（X1 把一批壓成一塊交給 Results）、
+        # `_on_truth_marked`（X2 寫答案卷 —— 只有主視窗知道資料在哪）、
+        # `_on_problem_activated`（U2 點清單 → 選中那張卡）。
+        # 三件事的**內容**都在各自的新模組裡。
         "StudioWindow 的方法數（2026-09-02 是 261）",
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[0],
     ),
     "studio_window_attributes": (
-        393,
+        398,
+        # 2026-09-08：393 → 398。`autosave`（草稿）、`problems`（Problems 列）、
+        # `status_history`（狀態列說過的話）三個新的元件，加上它們用到的
+        # 既有名字。
         "StudioWindow 的 self.* 名字數（2026-09-02 是 386）",
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[1],
     ),

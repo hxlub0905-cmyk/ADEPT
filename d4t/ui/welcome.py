@@ -52,6 +52,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import fit_screen
 from .scope import SHOW_SAMPLE_ENTRIES, recipe_is_supported
 from .theme import SEG_LABELS, TOKENS, seg_hex
 from .widgets import apply_button_cursors
@@ -476,6 +477,7 @@ class RecipeLibraryDialog(QDialog):
         self.setWindowTitle("Template library")
         self.setModal(False)
         self.setMinimumSize(720, 420)
+        fit_screen.relax_minimum(self)
         self.directory = Path(str(directory)) if directory is not None else RECIPES_DIR
 
         root = QVBoxLayout(self)

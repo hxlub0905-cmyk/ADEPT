@@ -33,6 +33,7 @@ from ..core.export import chart_draw
 from ..core.export.chart_frame import COLUMNS_FIXED, column_label
 from ..core.export import uniformity_charts as uc
 from ..core.pipeline import chart_spec as cspec
+from . import fit_screen
 from .uniformity_window import ChartView, chart_style_for
 from .widgets import ChoiceChips, small_button
 
@@ -314,7 +315,7 @@ class GraphBuilderDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Chart")
         self.setModal(True)
-        self.resize(720, 780)
+        fit_screen.fit(self, 720, 780)
         self._frame = frame
         self._look = str(look or "")
         self._metric = str(metric or "")

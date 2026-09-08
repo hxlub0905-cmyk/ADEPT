@@ -50,6 +50,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import fit_screen
+from .baseline import BaselineBar, default_store
 from .gallery import GalleryPanel
 from .results_table import ResultsTablePane
 from .verdict_band import VerdictBand, verdict_rows
@@ -80,12 +82,15 @@ class ResultsWindow(QMainWindow):
     trace_requested = Signal(str)
     #: 回溯面板點了一項：``(defect_id, 特徵名)``。跳去哪由 Studio 決定。
     why_item_activated = Signal(str, str)
+    #: 使用者在表上標了真缺陷／誤報（X2）：``{defect_id: True|False|None}``。
+    #: **寫檔的是 Studio**（它才知道資料在哪），這個視窗只轉手。
+    truth_marked = Signal(dict)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("d4t — Results")
         self.setWindowFlag(Qt.Window, True)
-        self.resize(980, 700)
+        fit_screen.fit(self, 980, 700)
 
         bar = QToolBar("Results", self)
         bar.setMovable(False)
@@ -132,6 +137,7 @@ class ResultsWindow(QMainWindow):
         self.gallery.defect_activated.connect(self.defect_activated)
         self.table.trace_requested.connect(self.trace_requested)
         self.table.bin_overrides_changed.connect(self._on_bin_overrides_changed)
+        self.table.truth_marked.connect(self.truth_marked)
         self.view_stack = QStackedWidget(self)
         self.view_stack.addWidget(self.gallery)
         self.view_stack.addWidget(self.table)
@@ -153,6 +159,15 @@ class ResultsWindow(QMainWindow):
         self.verdict = VerdictBand(self)
         self.verdict.class_selected.connect(self.class_selected)
 
+        # 「剛才那一下讓它變好還是變壞」（X1）—— 判定段的下面，因為它讀的是
+        # 同一批數字，只是換成**跟上一次比**。釘住的那一塊住在 QSettings，
+        # 所以關掉這個視窗（甚至關掉整個 Studio）再回來，基準還在。
+        self.baseline_store = default_store()
+        self.baseline_bar = BaselineBar(self)
+        self.baseline_bar.set_baseline(self.baseline_store.load())
+        self.baseline_bar.pin_requested.connect(self.pin_baseline)
+        self.baseline_bar.unpin_requested.connect(self.clear_baseline)
+
         split = QSplitter(Qt.Vertical, self)
         split.addWidget(self._build_view_switch())
         split.addWidget(spread)
@@ -166,6 +181,7 @@ class ResultsWindow(QMainWindow):
         hl.setContentsMargins(0, 0, 0, 0)
         hl.setSpacing(0)
         hl.addWidget(self.verdict)
+        hl.addWidget(self.baseline_bar)
         hl.addWidget(split, 1)
         self.setCentralWidget(host)
         self.setStatusBar(QStatusBar(self))
@@ -339,6 +355,31 @@ class ResultsWindow(QMainWindow):
     def selected_class(self) -> str:
         return self.verdict.selected()
 
+    # ---- baseline（X1）----------------------------------------------------
+    def set_run_snapshot(self, snap: Any) -> None:
+        """這一次跑壓成的那一塊（`baseline.snapshot`）—— Studio 跑完餵進來。"""
+        self.baseline_bar.set_run(snap)
+
+    def pin_baseline(self) -> bool:
+        """把現在這一次釘成基準（存進 QSettings，關窗重開還在）。"""
+        snap = self.baseline_bar.run()
+        if not snap:
+            return False
+        self.baseline_store.save(snap)
+        self.baseline_bar.set_baseline(snap)
+        self.status("Pinned as baseline - the next run says how much each "
+                    "change moved these numbers.")
+        return True
+
+    def clear_baseline(self) -> None:
+        self.baseline_store.clear()
+        self.baseline_bar.set_baseline(None)
+        self.status("Baseline cleared.")
+
+    def baseline_text(self) -> str:
+        """那一條橫條上現在寫的字（測試與宿主用）。"""
+        return self.baseline_bar.text()
+
     def show_why(self, defect_id: str, trace: Any) -> None:
         """開回溯面板（trace 由 Studio 用 `verdict_trace` 算好交進來）。"""
         self.why.set_trace(str(defect_id), trace)
@@ -347,8 +388,13 @@ class ResultsWindow(QMainWindow):
     def hide_why(self) -> None:
         self.why.hide()
 
+    def set_truth(self, truth: Any) -> None:
+        """換一份答案卷（Studio 寫完檔餵回來）—— 只重畫那一欄。"""
+        self.table.set_truth(truth)
+
     def set_table(self, results: Any, class_names: Any = None,
-                  layout: Any = None, alarms: Any = None) -> None:
+                  layout: Any = None, alarms: Any = None,
+                  truth: Any = None) -> None:
         """表格那一半（跟 Gallery 吃同一批結果）。
 
         ``layout``/``alarms`` 是分層與徽章的描述（`results_table.column_tree`
@@ -356,7 +402,7 @@ class ResultsWindow(QMainWindow):
         不給就是平鋪 —— 這裡只轉手，不算。
         """
         self.table.set_results(list(results or []), dict(class_names or {}),
-                               layout, alarms)
+                               layout, alarms, truth)
 
     def _on_bin_overrides_changed(self, n: int) -> None:
         """手動改過的 bin 變了 → 狀態列講清楚它會不會被寫出去（F48）。

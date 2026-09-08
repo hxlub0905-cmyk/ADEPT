@@ -90,6 +90,7 @@ from d4t.core.pipeline.cellrois import (
     regions_repeat_at,
 )
 
+from . import fit_screen
 from .cell_canvas import (
     TOOL_ARRAY, TOOL_CLICK, TOOL_CURSOR, TOOL_DRAG, TOOL_PAINT, CellCanvas,
     region_color,
@@ -143,7 +144,7 @@ class TemplateDialog(QDialog):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setWindowTitle("Template & regions")
-        self.resize(1320, 880)
+        fit_screen.fit(self, 1320, 880)
         self.cell: Optional[algo_template.GoldenCell] = None
         self._source_path = ""
         self._ready = False
@@ -171,7 +172,10 @@ class TemplateDialog(QDialog):
         self.canvas.selection_changed.connect(lambda *_a: self._refresh_tool_ui())
         self.canvas.array_anchors_changed.connect(self._on_anchors)
         self.canvas.regions_changed.connect(self._refresh_regions)
-        left_lay.addWidget(self._build_tool_row())
+        # ⚠ 這一列鈕**排不下的時候要橫向捲**（U1）。它的 minimumSizeHint 是
+        # 1,023 px，而那個數字會頂著整個對話框縮不進一台 1024×768 的螢幕 ——
+        # 一個在版面樹上完全看不出來的原因。
+        left_lay.addWidget(fit_screen.scroll_row(self._build_tool_row(), left))
         left_lay.addWidget(self.canvas, 1)
         split.addWidget(left)
         split.addWidget(self._build_side_panel())
@@ -368,7 +372,7 @@ class TemplateDialog(QDialog):
         # 它是畫在左上角的。**
         self._table_dialog = QDialog(self)
         self._table_dialog.setWindowTitle("Rectangles — whole cell pixels")
-        self._table_dialog.resize(380, 460)
+        fit_screen.fit(self._table_dialog, 380, 460)
         tlay = QVBoxLayout(self._table_dialog)
 
         self.box_units = QLabel("", self._table_dialog)
