@@ -421,9 +421,27 @@ F44 的 `ui/region_words.py` 已經都是這樣做的 —— 這一段只是把�
 使用者定的是「先把引擎做對，再回頭產品化」。
 
 所以真的要動的那一天，前置條件是**做得到而不是等得到**：先
-`python tools/freeze_golden.py --check` 三份全綠（那就是「改了但數字沒變」的
-唯一證據，而這個 repo 踩過六次「跑得完、有數字、而且是錯的」），再切
-`widgets.py` 那幾群自繪圖示（最好拆、風險最低）。
+`python tools/freeze_golden.py --check` 三份全綠 —— 那就是「改了但數字沒變」的
+唯一證據，而這個 repo 踩過六次「跑得完、有數字、而且是錯的」。
+
+### `widgets.py` 那一刀做完了（F93 U7，2026-09-08）
+
+這一段以前的收尾是「再切 `widgets.py` 那幾群自繪圖示（最好拆、風險最低）」。
+**那件事做完了**：7,140 行、24 個不相干的類別 → 八支，而 `widgets.py` 只剩
+**123 行的轉出口**。`from .widgets import X` 那四十幾個呼叫端**一個字都沒有
+改** —— 驗收是黃金值三份逐項相同 ＋ 既有 UI 測試全綠。
+
+新的元件請直接 import 拆出來的那幾支（`ui/fields.py`、`ui/chips.py`、
+`ui/icons.py`、`ui/library.py`、`ui/histogram.py`、`ui/image_view.py`、
+`ui/param_form.py`、`ui/buttons.py`、`ui/feature_text.py`），意思比較準。
+**`widgets.py` 裡不准再有 class / def** —— 有一條測試問這句話
+（`test_the_front_door_stayed_a_front_door`），因為沒有它的話三個月後那支
+檔案會再長回來，而那正是 F90 那把尺量到的漂移。
+
+⚠ 那一刀學到的一件事，下一次搬家會再用到：**「誰在用這個名字」不能只掃
+import**。測試大量用屬性存取（`widgets_mod.METRIC_GROUP_ORDER`），而 grep 與
+`ast` 的 import 掃描都看不到它 —— 第一版因此漏了 10 個名字。判準要是
+「拆之前模組上有的每一個名字，拆之後 `hasattr` 還答得出來」。
 
 ---
 

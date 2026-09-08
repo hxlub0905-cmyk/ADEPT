@@ -1993,3 +1993,73 @@ def test_a_metric_chip_row_can_show_every_id_a_card_offers(qapp):
                 assert {t.strip() for t in row.text().split(",") if t.strip()} \
                     == want, "%s.%s 的預設值勾不回來" % (key, spec.name)
             row.deleteLater()
+
+
+# --------------------------------------------------------------------------- #
+# U7：拆開之後，一個名字都不能少
+# --------------------------------------------------------------------------- #
+#: 拆之前 `widgets.py` 上的每一個模組層名字（2026-09-08，U7 前的那一版）。
+#:
+#: 為什麼把清單寫死在這裡，而不是每次去 git 撈：這條測試要在**沒有 git 的
+#: 機器上**也答得出來（公司機解壓縮就跑，`docs/NO-GIT-SETUP.md`），而且
+#: 「拆之前有哪些」是一個**歷史事實**，不該隨著 HEAD 移動。
+_NAMES_BEFORE_THE_SPLIT = (
+    "CARD_MIME", "CellRoisField", "ChannelMapField", "ChartSpecField",
+    "ChartStyleField", "ChoiceChips", "CurveDialog", "CurveEditor",
+    "CurveField", "FEATURE_ABSOLUTE", "FEATURE_LABEL_SEP", "FEATURE_RELATIVE",
+    "FEATURE_SUB", "FEATURE_SUP", "FilterChip", "GLYPH_ICONS", "GroupIcon",
+    "HistogramWidget", "IconButton", "ImageView", "LibraryPanel",
+    "MARK_ROLE_TOKENS", "MARK_ROLE_WEIGHTS", "METRIC_GLYPHS",
+    "METRIC_GROUPS", "METRIC_GROUP_ORDER", "MetricChips", "MetricPick",
+    "MultiChoicePicker", "ParamForm", "ProfilePanel", "StageButton",
+    "StreamPicker", "TemplateField", "VARIANT_GLOSS", "VerdictChip",
+    "_BLOCK_EDITORS", "_ChipBase", "_ChipFlow", "_ChoiceChip", "_GlyphMixin",
+    "_HintLabel", "_LibraryItem", "_MetricChip", "_ParamRow",
+    "_SLIDER_MAX_INT_SPAN", "_SLIDER_TICKS", "_blob_outline", "_card_says",
+    "_dist_curve", "_draw_profile_glyph", "_escape", "_extreme_pair",
+    "_float_decimals", "_fmt_number", "_focus_set", "_make_slider",
+    "_paint_glyph", "_poly_area", "_qimage_from_uint8", "_safe_float",
+    "_safe_int", "_spell", "_with_variant", "_wiring_display",
+    "apply_button_cursors", "clear_layout_parked", "column_header",
+    "draw_glyph_icon", "draw_group_icon", "draw_metric_glyph", "feature_gloss",
+    "feature_html", "feature_unit", "glyph_icon", "metric_face",
+    "region_dot_icon", "restyle", "small_button", "split_labelled", "to_uint8",
+)
+
+
+def test_the_split_did_not_drop_a_single_name(qapp):
+    """**拆之前 `widgets` 上有的，拆之後還要拿得到。**
+
+    U7 把 7,140 行拆成八支，而驗收條件是「純搬移，不改行為」—— 那句話的
+    執行機構就是這一條：四十幾個模組與上百條測試寫的是
+    ``from .widgets import X``，一個都不該改。
+
+    ⚠ **會漏的是屬性存取那種。** 掃 import（grep 或 ast）看得到
+    ``from .widgets import ImageView``，看不到
+    ``widgets_mod.METRIC_GROUP_ORDER`` —— 而測試裡到處都是後者。
+    第一版的檢查就是這樣漏掉四個名字的，`METRIC_GROUP_ORDER` 那條測試當場紅。
+    所以這裡問的是**名字在不在模組上**，不是「誰 import 了它」。
+    """
+    missing = [n for n in _NAMES_BEFORE_THE_SPLIT
+               if not hasattr(widgets_mod, n)]
+    assert not missing, (
+        "拆完之後這幾個名字從 `widgets` 上不見了：\n  %s\n"
+        "  它們搬去哪一支了？把那一支加進 `widgets.py` 的轉出口 —— "
+        "呼叫端一個都不該改。" % "\n  ".join(missing))
+
+
+def test_the_front_door_stayed_a_front_door(qapp):
+    """`widgets.py` 是一道門，不是一個房間 —— **它不該自己長出東西**。
+
+    沒有這一條的話，下一個人會照著「這裡本來就什麼都有」的印象往裡面加，
+    而三個月後它又是一支 7,000 行的檔案（F90 那把尺量到的那種漂移）。
+    """
+    import ast
+    import pathlib
+
+    src = pathlib.Path(widgets_mod.__file__).read_text(encoding="utf-8")
+    defined = [n.name for n in ast.parse(src).body
+               if isinstance(n, (ast.ClassDef, ast.FunctionDef))]
+    assert not defined, (
+        "`widgets.py` 裡又長出東西了：%s\n"
+        "  新的元件請開新模組（`CLAUDE.md` §4），再從這裡轉出去。" % defined)
