@@ -1,0 +1,232 @@
+# F100：畫布橫躺在上面、工作台在下面 — authored 2026-09-08.
+"""`docs/plans/F100-workbench-layout.md` 的驗收。
+
+兩層：`WorkbenchLayout` 本身（純幾何，拿真的 QSplitter 但不開 Studio，
+快）；以及**在 1366×768 上真的開一次 Studio、載 recipe、選一張卡、量幾何**
+—— 那是 F99 P0-3 的關門，也是這個 repo 第一條「畫面長什麼樣」的測試
+（F99 P2-7 的雛形）。
+
+⚠ 這裡量的是**幾何**不是像素：`minimumSizeHint`、splitter 的 sizes、widget
+的 geometry。像素會跟字型漂，幾何不會。
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "tools"))
+
+RECIPE = REPO / "recipes" / "rsem-worst-box.json"
+#: 廠內機台旁那台 PC 的螢幕（`docs/plans/F100-workbench-layout.md` §1）。
+SMALL = (1366, 768)
+
+
+@pytest.fixture(scope="module")
+def qapp():
+    from PySide6.QtWidgets import QApplication
+
+    from d4t.ui import theme
+    app = QApplication.instance() or QApplication([])
+    theme.apply_theme(app, "light")
+    yield app
+
+
+def _splitters(qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QSplitter, QWidget
+    host = QWidget()
+    host.resize(1000, 700)
+    column = QSplitter(Qt.Vertical, host)
+    canvas = QWidget(column)
+    workbench = QSplitter(Qt.Horizontal, column)
+    for _ in range(3):
+        workbench.addWidget(QWidget(workbench))
+    column.addWidget(canvas)
+    column.addWidget(workbench)
+    column.resize(1000, 700)
+    host.show()
+    qapp.processEvents()
+    return host, column, workbench, canvas
+
+
+# --------------------------------------------------------------------------- #
+# 1. WorkbenchLayout 本身
+# --------------------------------------------------------------------------- #
+def test_tune_opens_the_workbench_and_keeps_the_canvas_floor(qapp):
+    from d4t.ui import workbench as wb
+    host, column, bench, canvas = _splitters(qapp)
+    lay = wb.WorkbenchLayout(column, bench, canvas)
+    assert lay.mode == "tune" and lay.open is True
+    lay.apply("tune", remember=False)
+    qapp.processEvents()
+    top, bottom = column.sizes()
+    assert top >= wb.CANVAS_MIN_PX, "畫布低於保底：%s" % column.sizes()
+    assert bottom > 0, "Tune 模式工作台要開著（影像住在裡面）"
+    assert canvas.minimumHeight() == wb.CANVAS_MIN_PX
+    host.close()
+
+
+def test_build_collapses_the_workbench(qapp):
+    from d4t.ui import workbench as wb
+    host, column, bench, canvas = _splitters(qapp)
+    lay = wb.WorkbenchLayout(column, bench, canvas)
+    assert lay.apply("build") == "build"
+    qapp.processEvents()
+    assert column.sizes()[1] == 0
+    assert lay.open is False
+    assert lay.set_open(True) is False, "Build 模式下不准把工作台推回來"
+    assert lay.apply("nonsense") == "build", "不認得的名字什麼都不做"
+    host.close()
+
+
+def test_selection_reopens_a_closed_workbench_but_never_closes_it(qapp):
+    from d4t.ui import workbench as wb
+    host, column, bench, canvas = _splitters(qapp)
+    lay = wb.WorkbenchLayout(column, bench, canvas)
+    lay.apply("tune", remember=False)
+    lay.set_open(False)
+    assert column.sizes()[1] == 0
+    lay.on_selection(True)
+    assert lay.open is True and column.sizes()[1] > 0
+    lay.on_selection(False)
+    assert lay.open is True, "取消選取不收工作台 —— 影像住在裡面"
+    host.close()
+
+
+def test_only_tune_ratios_are_remembered(qapp):
+    """Build 的「畫布 100% / 工作台 0」不是使用者調出來的比例，不存。"""
+    from d4t.ui import workbench as wb
+    host, column, bench, canvas = _splitters(qapp)
+    saved = {}
+    lay = wb.WorkbenchLayout(column, bench, canvas,
+                             save=lambda k, v: saved.__setitem__(k, list(v)))
+    lay.apply("tune", remember=False)
+    qapp.processEvents()
+    column.setSizes([300, 400])
+    lay.apply("build")                  # remember=True：把 Tune 的存起來
+    assert wb.SPLIT_KEYS["tune"] in saved
+    saved.clear()
+    lay.apply("tune")                   # 從 Build 切回來：沒有東西好存
+    assert wb.SPLIT_KEYS["build"] not in saved
+    lay.remember()
+    assert wb.WORKBENCH_COLUMNS_KEY in saved
+    host.close()
+
+
+def test_a_saved_ratio_below_the_floor_is_ignored(qapp):
+    """舊那一格存的是「畫布 2 / 設定 3」—— 套上去畫布會低於保底，所以不吃。"""
+    from d4t.ui import workbench as wb
+    host, column, bench, canvas = _splitters(qapp)
+    lay = wb.WorkbenchLayout(column, bench, canvas,
+                             load=lambda k, n: [80, 620] if n == 2 else None)
+    lay.apply("tune", remember=False)
+    qapp.processEvents()
+    assert column.sizes()[0] >= wb.CANVAS_MIN_PX
+    host.close()
+
+
+def test_switching_from_build_to_tune_folds_the_library(qapp):
+    """從 Build 切回 Tune：卡片區收成 rail，那 200 px 給工作台。"""
+    from d4t.ui import workbench as wb
+
+    class Lib:
+        def __init__(self):
+            self.calls = []
+
+        def toggle_group(self, g):
+            self.calls.append(g)
+
+    host, column, bench, canvas = _splitters(qapp)
+    lib = Lib()
+    lay = wb.WorkbenchLayout(column, bench, canvas, lib)
+    lay.apply("tune", remember=False)
+    assert lib.calls == [], "開窗時不收 —— 空白狀態下卡片清單是第一眼要看的"
+    lay.apply("build")
+    lay.apply("tune")
+    assert lib.calls == [None]
+    host.close()
+
+
+# --------------------------------------------------------------------------- #
+# 2. 真的開一次 Studio，在 1366×768 上量
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def small_screen():
+    from PySide6.QtCore import QRect
+
+    from d4t.ui import fit_screen
+    fit_screen.FORCE_RECT = QRect(0, 0, *SMALL)
+    yield SMALL
+    fit_screen.FORCE_RECT = None
+
+
+@pytest.fixture
+def lot(tmp_path_factory):
+    from make_sample_rsem import generate
+    return generate(str(tmp_path_factory.mktemp("f100")), n=6, seed=3)
+
+
+def test_the_studio_fits_the_fab_pc_after_loading_and_picking_a_card(
+        qapp, small_screen, lot):
+    """F99 P0-3 的關門：以前載入之後 `minimumSizeHint` 變成 1,334、視窗被撐到
+    1,495 —— 而 U1 的 fit_screen 只守開窗那一刻。"""
+    from d4t.ui import fit_screen
+    from d4t.ui import workbench as wb
+    from d4t.ui.studio import StudioWindow
+    w, h = small_screen
+    win = StudioWindow(show_welcome_on_start=False)
+    win.PROMPT_ON_CLOSE = False          # 同 test_ui_f99_gestures：lazy import 來不及讓 conftest 關它
+    fit_screen.fit(win, w, h)
+    win.show()
+    qapp.processEvents()
+    assert win.load_recipe_path(str(RECIPE), sync=True) is True
+    assert win.load_dataset_path(lot["klarf"], sync=True) is True
+    qapp.processEvents()
+    assert win.select_node("glv") is True
+    qapp.processEvents()
+    try:
+        hint = win.minimumSizeHint()
+        assert hint.width() <= w, \
+            "載入之後最小寬度 %d 超過 %d" % (hint.width(), w)
+        assert win.width() <= w and win.height() <= h, win.size()
+        # 畫布吃滿卡片庫右邊的整個寬度（F100 §2）
+        assert win.pipeline.width() >= win.main_column.width() - 2
+        # 而且高度有保底（Tune 模式）
+        assert win.layout_mode() == "tune"
+        assert win.canvas_column.sizes()[0] >= wb.CANVAS_MIN_PX
+        # 三格並排：設定區、儀表、影像的垂直範圍重疊
+        a, b, c = (win.stack.geometry(), win.gauge_pane.geometry(),
+                   win.preview_pane.geometry())
+        assert all(r.width() > 0 for r in (a, b, c)), (a, b, c)
+        assert min(r.bottom() for r in (a, b, c)) > \
+            max(r.top() for r in (a, b, c)), "工作台三格沒有併排"
+        # Verdict 那一列常駐：Build 收掉工作台之後它還在
+        win.set_layout_mode("build")
+        qapp.processEvents()
+        assert win.canvas_column.sizes()[1] == 0
+        assert win.verdict_strip.isVisibleTo(win)
+    finally:
+        win.close()
+
+
+def test_the_verdict_strip_is_outside_the_splitter(qapp):
+    """Verdict 是一條常駐的結論列，不在任何一根 splitter 裡。"""
+    from PySide6.QtWidgets import QSplitter
+
+    from d4t.ui.studio import StudioWindow
+    win = StudioWindow(show_welcome_on_start=False)
+    win.PROMPT_ON_CLOSE = False
+    try:
+        # 主欄本身是 root splitter 的一格，那沒關係 —— 不准的是住在**畫布／
+        # 工作台那根**（Build 模式會把它收到 0）或工作台的某一格裡。
+        assert isinstance(win.canvas_column, QSplitter)
+        assert not win.canvas_column.isAncestorOf(win.verdict_strip), \
+            "Verdict 列被收進畫布／工作台那根 splitter 了"
+        assert not win.workbench.isAncestorOf(win.verdict_strip)
+        assert win.main_column.layout().indexOf(win.verdict_strip) >= 0
+    finally:
+        win.close()

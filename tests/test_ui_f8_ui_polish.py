@@ -193,18 +193,21 @@ def test_the_canvas_is_the_top_block_and_settings_get_the_rest(window, qapp):
     assert window.params_row.widget(0) is window.stack
     assert window.params_row.widget(1) is window.gauge_pane
 
-    # **F13-1：設定區的高度跟著「有沒有東西可以設定」走。**
-    # 沒選卡片時它裝的是一行「請去別的地方點一個東西」的灰字，而它同時把畫布
-    # 壓到讀不出副標的縮放 —— 那塊空白現在還給畫布。
-    assert window.params_open() is False, "沒選卡片時設定區要收起來"
-    assert col.sizes()[1] == 0
+    # F100（2026-09-08）：影像住進工作台的第三格，所以**工作台開窗就攤開**
+    # —— 收掉它等於把影像藏起來。F13-1 那條「沒選卡片時收起來」的理由（那塊
+    # 空白壓到畫布）在新版面上不成立：畫布現在吃滿寬度、高度有保底。
+    assert window.params_row.widget(2) is window.preview_pane
+    assert window.params_open() is True, "F100：工作台開窗就攤開（影像在裡面）"
+    top, bottom = col.sizes()
+    assert top > 0 and bottom > 0
 
-    # 選了卡片就攤開，而且**設定拿大頭**（D 案原本的比例，那一半沒有變）。
+    # 選了卡片：工作台仍然開著，而且**工作台拿大頭**（畫布保底 40%）。
     window.select_node(window.model.node_order[0])
     assert window.params_open() is True
     top, bottom = col.sizes()
-    assert bottom > top, "設定要拿大頭（畫布 2 / 設定 3）：%s" % col.sizes()
+    assert bottom > top, "工作台要拿大頭（畫布 40 / 工作台 60）：%s" % col.sizes()
 
+    # 使用者自己收起來（「現在只想看流程」）仍然做得到。
     window.set_params_open(False)
     assert window.canvas_column.sizes()[1] == 0, "收起來時畫布拿整欄"
     window.set_params_open(True)

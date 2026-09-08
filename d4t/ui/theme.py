@@ -276,8 +276,11 @@ _LIGHT: Dict[str, Any] = {
     "font_micro": "9px",     #: rail 上的階段名、卡片數 —— 排在直立的窄條裡
     "font_tiny": "10px",     #: 膠囊分組的那一行小標
     "font_small": "11px",    #: 一句補充說明（hint、summary、空狀態）
-    "font_body": "12px",     #: 面板上正常的一行字
-    "font_title": "15px",    #: 空白狀態與導覽的標題
+    #: ⚠ **12 → 13**（F99 P2-1）。這一格以前寫 12，而 QSS 的 ``* { font-size }``
+    #: 寫死 13 —— 名字叫 body 的 token 不是 body，任何吃 `font_body` 的東西都比
+    #: 鄰居小一號。現在 QSS 吃這一格（`$font_body`），數字對齊真相。
+    "font_body": "13px",     #: 面板上正常的一行字（``*`` 那條規則就是它）
+    "font_title": "15px",    #: 標題：設定區的卡名、空白狀態、導覽
     #: 一條線的粗細。`1px` 在 QSS 裡出現十幾次，而它跟字級是同一個問題：
     #: 螢幕變了要一起改，而「一起」的前提是只有一個地方。
     "hairline": "1px",
@@ -631,7 +634,7 @@ def seg_bg(category: str):
 _QSS = Template(r"""
 * {
     font-family: $font_stack;
-    font-size: 13px;
+    font-size: $font_body;
     color: $text_primary;
 }
 
@@ -641,7 +644,7 @@ QMainWindow, QWidget, QDialog { background: $bg_page; color: $text_primary; }
 QToolBar {
     background: $toolbar;
     border: 0;
-    border-bottom: 1px solid $border_default;
+    border-bottom: $hairline solid $border_default;
     spacing: 6px;
     padding: 4px 6px;
 }
@@ -657,7 +660,7 @@ QToolBar {
 QToolBar QToolButton {
     background: $bg_surface;
     color: $text_primary;
-    border: 1px solid $border_input;
+    border: $hairline solid $border_input;
     border-radius: $radius_md;
     padding: 5px 12px;
     min-height: 18px;
@@ -683,10 +686,10 @@ QToolBar::separator {
 /* The stretcher between the left and right halves must not look like a control. */
 QWidget#toolbarSpacer { background: transparent; border: 0; }
 QToolBar QToolButton:checked {
-    background: $accent_bg; color: $accent_active; border: 1px solid $accent_border;
+    background: $accent_bg; color: $accent_active; border: $hairline solid $accent_border;
 }
 QToolBar QToolButton#primary {
-    background: $accent; color: #ffffff; border: 1px solid $accent;
+    background: $accent; color: #ffffff; border: $hairline solid $accent;
     padding: 5px 16px; font-weight: 600;
 }
 /* Icon-only buttons carry no label, so the horizontal padding that sizes a
@@ -700,7 +703,7 @@ QToolBar QToolButton#primary[hasGlyph="true"][kbFocus="true"]:focus { padding-le
  * outline, not a fill - the fill belongs to Run trial. Two coloured buttons on
  * the whole bar, and they are the two the user actually came to press. */
 QToolBar QToolButton[variant="secondary"] {
-    background: $bg_surface; color: $accent_active; border: 1px solid $accent;
+    background: $bg_surface; color: $accent_active; border: $hairline solid $accent;
     font-weight: 600;
 }
 QToolBar QToolButton[variant="secondary"]:hover { background: $accent_bg; }
@@ -710,14 +713,14 @@ QToolBar QToolButton[variant="secondary"][kbFocus="true"]:focus {
     border: 2px solid $border_focus; padding: 4px 11px;
 }
 QToolBar QToolButton[variant="secondary"]:disabled {
-    background: $disabled_bg; color: $disabled_text; border: 1px solid $border_default;
+    background: $disabled_bg; color: $disabled_text; border: $hairline solid $border_default;
 }
 /* Tier three (F13-3/F13-2): icon-only tools that are always around but are not
  * a step in the flow - undo, redo, theme. No border until you point at them.
  * The "borderless text reads as a menu bar" rule above still stands: these
  * carry no text, so there is no row of words to be mistaken for one. */
 QToolBar QToolButton[variant="ghost"] {
-    background: transparent; border: 1px solid transparent;
+    background: transparent; border: $hairline solid transparent;
 }
 QToolBar QToolButton[variant="ghost"]:hover {
     background: $hover_warm; border-color: $border_default;
@@ -727,7 +730,7 @@ QToolBar QToolButton[variant="ghost"]:disabled { color: $text_disabled; }
 /* One landmark per column (F13-4). Deliberately faint and short: it says which
  * workspace you are looking at, it is not a title bar competing for the eye. */
 QLabel#columnHeader {
-    color: $text_hint; font-size: 10px; font-weight: 700;
+    color: $text_hint; font-size: $font_tiny; font-weight: 700;
     letter-spacing: 1px;
     padding: 0 0 2px 0;
     background: transparent;
@@ -735,7 +738,7 @@ QLabel#columnHeader {
 
 /* The verb the three source buttons share, lifted out in front of them. */
 QLabel#toolbarGroup {
-    color: $text_hint; font-size: 10px; font-weight: 600;
+    color: $text_hint; font-size: $font_tiny; font-weight: 600;
     padding: 0 6px 0 2px; text-transform: uppercase;
 }
 
@@ -754,7 +757,7 @@ QToolBar QToolButton#primary[seg="right"] {
 QToolBar QToolButton#primary[seg="right"][kbFocus="true"]:focus { padding-left: 6px; padding-right: 6px; }
 QWidget#toolbarGroup { background: transparent; border: 0; }
 /* The fill moves on hover/press, so the border has to move with it (F78).
- * `#primary` sets `border: 1px solid $accent` once and neither state rule
+ * `#primary` sets `border: $hairline solid $accent` once and neither state rule
  * restated it, so hovering left a border darker than its own fill - a ring
  * that reads as "pressed in", which is the opposite of what hover means - and
  * pressing left one lighter than the fill, which reads as a halo. A flat
@@ -772,12 +775,12 @@ QToolBar QToolButton#primary:pressed { background: $accent_active;
  * user needs one. Keeping the pale accent plate says "this is the main action,
  * it just isn't available yet"; the muted text still says "not now". */
 QToolBar QToolButton#primary:disabled {
-    background: $accent_bg; color: $text_disabled; border: 1px solid $accent_border;
+    background: $accent_bg; color: $text_disabled; border: $hairline solid $accent_border;
 }
 
 /* -- status bar ------------------------------------------------------- */
 QStatusBar { background: $statusbar; color: $text_secondary;
-             border-top: 1px solid $border_default; }
+             border-top: $hairline solid $border_default; }
 /* A refusal must not look like a confirmation (F7-15). The status bar is the
  * only place that says a trial was blocked by lint, or a card could not be
  * added - in the same grey as "Added denoise", that reads as nothing said. */
@@ -787,7 +790,7 @@ QStatusBar::item { border: 0; }
 /* -- group boxes (section cards) -------------------------------------- */
 QGroupBox {
     background: $bg_surface;
-    border: 1px solid $border_default;
+    border: $hairline solid $border_default;
     border-radius: $radius_md;
     margin-top: 16px;
     padding: 12px 10px 10px 10px;
@@ -801,7 +804,7 @@ QGroupBox::title {
     background: transparent;
     border: 0;
     color: $tier1_text;
-    font-size: 11px;
+    font-size: $font_small;
     font-weight: 700;
 }
 
@@ -809,7 +812,7 @@ QGroupBox::title {
 QPushButton {
     background: $bg_input;
     color: $text_primary;
-    border: 1px solid $border_input;
+    border: $hairline solid $border_input;
     border-radius: $radius_md;
     padding: 5px 12px;
     min-height: 18px;
@@ -830,7 +833,7 @@ QPushButton:disabled { background: $disabled_bg; color: $disabled_text;
                        border-color: $border_default; }
 /* primary action (Run trial / Run all): objectName = "primary" */
 QPushButton#primary {
-    background: $accent; color: #ffffff; border: 1px solid $accent;
+    background: $accent; color: #ffffff; border: $hairline solid $accent;
     padding: 5px 18px; font-weight: 600;
 }
 /* Same as the toolbar copy above: the border follows the fill. */
@@ -840,24 +843,24 @@ QPushButton#primary:pressed { background: $accent_active;
                               border-color: $accent_active; }
 /* See the toolbar copy above for why disabled-primary keeps the accent plate. */
 QPushButton#primary:disabled {
-    background: $accent_bg; color: $text_disabled; border: 1px solid $accent_border;
+    background: $accent_bg; color: $text_disabled; border: $hairline solid $accent_border;
 }
 QPushButton[variant="secondary"] {
-    background: $bg_input; color: $accent_active; border: 1px solid $accent;
+    background: $bg_input; color: $accent_active; border: $hairline solid $accent;
     font-weight: 600;
 }
 QPushButton[variant="secondary"]:hover { background: $accent_bg; }
 QPushButton[variant="secondary"]:pressed { background: $accent_bg;
-                                           border: 1px solid $accent_active; }
+                                           border: $hairline solid $accent_active; }
 QPushButton[variant="secondary"]:disabled {
-    background: $disabled_bg; color: $disabled_text; border: 1px solid $border_default;
+    background: $disabled_bg; color: $disabled_text; border: $hairline solid $border_default;
 }
 QPushButton[variant="ghost"] {
-    background: transparent; color: $text_secondary; border: 1px solid transparent;
+    background: transparent; color: $text_secondary; border: $hairline solid transparent;
 }
 QPushButton[variant="ghost"]:hover { background: $hover_warm; color: $text_primary; }
 QPushButton[variant="danger"] {
-    background: $danger_bg; color: $danger_text; border: 1px solid $danger_border;
+    background: $danger_bg; color: $danger_text; border: $hairline solid $danger_border;
     font-weight: 600;
 }
 QPushButton[variant="danger"]:hover { border-color: $danger_text; }
@@ -879,7 +882,7 @@ QPushButton[variant="danger"]:disabled {
  * selector outranks [shape], so leaving them here would silently win. */
 QPushButton#cardButton {
     background: transparent; color: $text_secondary;
-    border: 1px solid transparent; border-radius: $radius_sm;
+    border: $hairline solid transparent; border-radius: $radius_sm;
     font-weight: 700;
 }
 QPushButton[shape="square"] {
@@ -898,7 +901,7 @@ QPushButton[shape="wide"] {
  * which is the same reason F7-13 gave the toolbar buttons a border. The ones
  * that live inside a card stay transparent: there the card is the surface. */
 QPushButton#cardButton[kind="icon"] {
-    background: $bg_surface; border: 1px solid $border_default;
+    background: $bg_surface; border: $hairline solid $border_default;
 }
 QPushButton#cardButton[kind="icon"]:hover {
     background: $hover_warm; border-color: $border_hover; color: $accent_active;
@@ -908,15 +911,15 @@ QPushButton#cardButton[kind="icon"]:hover {
  * button in the app had the loudest reaction of any of them. Accent text is
  * kept for :checked, where it means something. */
 QPushButton#cardButton:hover { background: $hover_warm_strong;
-                               border: 1px solid $border_default; }
+                               border: $hairline solid $border_default; }
 QPushButton#cardButton:pressed { background: $pressed_bg;
-                                 border: 1px solid $border_hover; }
+                                 border: $hairline solid $border_hover; }
 QPushButton#cardButton:disabled { color: $disabled_text; background: transparent; }
 /* The card / features switch under the image: the selected one has to look
  * selected, or the pair reads as two labels rather than a choice (F7-17). */
 QPushButton#cardButton:checked {
     background: $accent_bg; color: $accent_active;
-    border: 1px solid $accent_border; font-weight: 600;
+    border: $hairline solid $accent_border; font-weight: 600;
 }
 
 /* -- keyboard focus (F7-23) --------------------------------------------- *
@@ -971,7 +974,7 @@ QToolBar QToolButton#primary[kbFocus="true"]:focus {
  * nothing - but they must restate their padding, or the blanket rule's
  * 1px-compensation above applies to them and the label shifts anyway. */
 QPushButton[variant="ghost"][kbFocus="true"]:focus {
-    border: 1px solid $border_focus; padding: 5px 12px;
+    border: $hairline solid $border_focus; padding: 5px 12px;
 }
 /* #cardButton forgot its padding, and the vacuous label-shift test never said
  * so (F80): the blanket rule above gives back 1px for its 2px ring, and that
@@ -987,7 +990,7 @@ QPushButton[variant="ghost"][kbFocus="true"]:focus {
  * blanket value got in. The [shape] variants pin min/max on both axes so their
  * size cannot move, but their content can, so they restate theirs too. */
 QPushButton#cardButton[kbFocus="true"]:focus {
-    border: 1px solid $border_focus; background: $accent_bg; color: $accent_active;
+    border: $hairline solid $border_focus; background: $accent_bg; color: $accent_active;
     padding: 5px 12px;
 }
 QPushButton#cardButton[shape="square"][kbFocus="true"]:focus,
@@ -1005,16 +1008,16 @@ QPushButton#cardButton[shape="wide"][kbFocus="true"]:focus { padding: 0px 8px; }
  * What genuinely varies per instance stays in the widget: the stage colour of
  * the rail icon and the category dot are computed from the step, not the theme.
  */
-QFrame#libItem { background: transparent; border: 1px solid transparent;
+QFrame#libItem { background: transparent; border: $hairline solid transparent;
                  border-radius: $radius_sm; }
 QFrame#libItem:hover { background: $hover_warm; border-color: $border_default; }
 /* A card whose inputs are not on the canvas yet is dimmed, badge and all. */
 QFrame#libItem[missing="true"] QLabel { color: $text_disabled; }
-QLabel#libBadge { color: $text_disabled; font-size: 10px;
-                  border: 1px solid $border_default; border-radius: $radius_sm;
+QLabel#libBadge { color: $text_disabled; font-size: $font_tiny;
+                  border: $hairline solid $border_default; border-radius: $radius_sm;
                   padding: 0px 4px; }
 
-QFrame#stageButton { background: transparent; border: 1px solid transparent;
+QFrame#stageButton { background: transparent; border: $hairline solid transparent;
                      border-radius: $radius_md; }
 QFrame#stageButton:hover { background: $hover_warm; }
 QFrame#stageButton[active="true"] { background: $accent_bg;
@@ -1024,12 +1027,12 @@ QFrame#stageButton[active="true"] { background: $accent_bg;
  * "switched off", not "secondary". Measured on the old colour: 2.90 in dark and
  * 1.89 in light, against a 4.5 AA floor for small text. No background behind it
  * (the user's call, second round): the colour alone carries the stage. */
-QLabel#stageCount { font-size: 9px; }
+QLabel#stageCount { font-size: $font_micro; }
 
 QPushButton#galleryChip {
     background: $accent_bg; color: $accent_active;
-    border: 1px solid $accent_border; border-radius: $radius_pill;
-    padding: 2px 9px; font-size: 11px; font-weight: 500; min-height: 16px;
+    border: $hairline solid $accent_border; border-radius: $radius_pill;
+    padding: 2px 9px; font-size: $font_small; font-weight: 500; min-height: 16px;
 }
 QPushButton#galleryChip:hover { background: $hover_warm_strong; }
 QPushButton#galleryChip:pressed { background: $pressed_bg; }
@@ -1037,13 +1040,13 @@ QPushButton#galleryChip:pressed { background: $pressed_bg; }
  * #galleryChip BASE rule declares its own padding, and an id selector outranks
  * the blanket [kbFocus]:focus rule per property - so the compensation never
  * reaches it. Measured both ways: 67x22 either way. */
-QPushButton#galleryChip[kbFocus="true"]:focus { border: 1px solid $border_focus; }
+QPushButton#galleryChip[kbFocus="true"]:focus { border: $hairline solid $border_focus; }
 
 /* -- inputs ------------------------------------------------------------ */
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
     background: $bg_input;
     color: $text_primary;
-    border: 1px solid $border_input;
+    border: $hairline solid $border_input;
     border-radius: $radius_md;
     padding: 2px 6px;
     min-height: 22px;
@@ -1055,7 +1058,7 @@ QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover {
 }
 /* No [kbFocus="true"] here, on purpose - see the buttons section above. */
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
-    border: 1px solid $border_focus; background: $focus_bg;
+    border: $hairline solid $border_focus; background: $focus_bg;
 }
 QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled {
     background: $disabled_bg; color: $disabled_text; border-color: $border_default;
@@ -1075,13 +1078,13 @@ QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabl
 QComboBox::drop-down { width: 20px; subcontrol-origin: padding;
                        subcontrol-position: center right; }
 QComboBox QAbstractItemView {
-    background: $bg_input; border: 1px solid $border_default;
+    background: $bg_input; border: $hairline solid $border_default;
     selection-background-color: $selection; selection-color: $text_primary;
     outline: 0;
 }
 QSpinBox::up-button, QSpinBox::down-button,
 QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
-    width: 16px; background: $bg_elevated; border-left: 1px solid $border_default;
+    width: 16px; background: $bg_elevated; border-left: $hairline solid $border_default;
 }
 
 /* -- sliders (F7-8) ----------------------------------------------------- *
@@ -1109,7 +1112,7 @@ QSlider:disabled::handle:horizontal { border-color: $border_default; }
 QCheckBox { background: transparent; spacing: 6px; }
 QCheckBox::indicator {
     width: 14px; height: 14px;
-    border: 1px solid $border_input; border-radius: $radius_sm; background: $bg_input;
+    border: $hairline solid $border_input; border-radius: $radius_sm; background: $bg_input;
 }
 QCheckBox::indicator:hover { border-color: $border_hover; }
 QCheckBox::indicator:checked { background: $accent; border-color: $accent_active; }
@@ -1123,7 +1126,7 @@ QLabel:disabled { color: $text_disabled; }
 /* -- views / lists / tables -------------------------------------------- */
 QAbstractItemView {
     background: $list_bg; alternate-background-color: $row_alt;
-    border: 1px solid $border_default; border-radius: $radius_md;
+    border: $hairline solid $border_default; border-radius: $radius_md;
     selection-background-color: $selection; selection-color: $text_primary;
     outline: 0;
 }
@@ -1134,7 +1137,7 @@ QTableView::item { padding: 2px 6px; }
 QHeaderView { background: $list_bg; }
 QHeaderView::section {
     background: $bg_elevated; color: $text_secondary; border: 0;
-    border-bottom: 1px solid $border_default; padding: 5px 8px; font-weight: 600;
+    border-bottom: $hairline solid $border_default; padding: 5px 8px; font-weight: 600;
 }
 
 /* -- scroll area ------------------------------------------------------- */
@@ -1164,14 +1167,14 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 
 /* -- progress bar ------------------------------------------------------ */
 QProgressBar {
-    background: $bg_elevated; border: 1px solid $border_default;
+    background: $bg_elevated; border: $hairline solid $border_default;
     border-radius: $radius_md; text-align: center; min-height: 14px;
     color: $text_secondary;
 }
 QProgressBar::chunk { background: $accent; border-radius: $radius_md; }
 
 /* -- tabs -------------------------------------------------------------- */
-QTabWidget::pane { border: 1px solid $border_default; border-radius: $radius_md;
+QTabWidget::pane { border: $hairline solid $border_default; border-radius: $radius_md;
                    background: $bg_surface; }
 QTabBar::tab { background: $tab_inactive; color: $text_secondary;
                padding: 5px 14px; margin-right: 2px;
@@ -1181,35 +1184,35 @@ QTabBar::tab:selected { background: $bg_surface; color: $accent_active;
                         font-weight: 700; }
 
 /* -- menus / tooltips -------------------------------------------------- */
-QMenu { background: $bg_surface; border: 1px solid $border_default; padding: 4px; }
+QMenu { background: $bg_surface; border: $hairline solid $border_default; padding: 4px; }
 QMenu::item { padding: 4px 18px; border-radius: $radius_sm; }
 QMenu::item:selected { background: $selection; color: $text_primary; }
 QToolTip {
-    background: $tooltip_bg; color: $tooltip_text; border: 1px solid $tooltip_border;
+    background: $tooltip_bg; color: $tooltip_text; border: $hairline solid $tooltip_border;
     padding: 4px 6px;
 }
 
 /* -- Studio-specific object names -------------------------------------- */
-QLabel#paramTitle { color: $text_primary; font-size: 14px; font-weight: 700; }
-QLabel#paramStepHelp { color: $text_secondary; font-size: 11px; }
+QLabel#paramTitle { color: $text_primary; font-size: $font_title; font-weight: 700; }
+QLabel#paramStepHelp { color: $text_secondary; font-size: $font_small; }
 /* Section heading in the parameter form. A signpost, not content: it has to
    read as a heading (weight, colour, space above) without competing with the
    parameters themselves. */
 QLabel#paramSection {
-    color: $text_secondary; font-size: 10px; font-weight: 600;
-    padding: 10px 0 2px 2px; border-bottom: 1px solid $border_default;
+    color: $text_secondary; font-size: $font_tiny; font-weight: 600;
+    padding: 10px 0 2px 2px; border-bottom: $hairline solid $border_default;
 }
 /* "Show N more settings". Deliberately not a real-looking button: it does not
    change anything about the recipe, it only changes how much of the form you
    are looking at. Same weight as a section heading, aligned with it. */
 QPushButton#advancedToggle {
     color: $accent; background: transparent; border: 0;
-    font-size: 11px; font-weight: 600;
+    font-size: $font_small; font-weight: 600;
     padding: 8px 2px 2px 2px; text-align: left;
 }
 QPushButton#advancedToggle:hover { color: $accent_hover; }
 QPushButton#advancedToggle[kbFocus="true"]:focus {
-    border: 1px solid $border_focus; border-radius: $radius_sm;
+    border: $hairline solid $border_focus; border-radius: $radius_sm;
     padding: 7px 1px 1px 1px;
 }
 /* One row of the verdict band (R3). The whole row is clickable - there is only
@@ -1233,13 +1236,13 @@ QWidget#wiringSlot {
     border-radius: $radius_md;
 }
 QLabel#wiringValue { color: $text_primary; }
-QLabel#paramHint { color: $text_hint; font-size: 11px; }
-QLabel#paramHint[error="true"] { color: $danger_text; font-size: 11px; font-weight: 600; }
-QLabel#placeholder { color: $text_disabled; font-size: 12px; }
-QLabel#libEmpty { color: $text_disabled; font-size: 11px; }
+QLabel#paramHint { color: $text_hint; font-size: $font_small; }
+QLabel#paramHint[error="true"] { color: $danger_text; font-size: $font_small; font-weight: 600; }
+QLabel#placeholder { color: $text_disabled; font-size: $font_body; }
+QLabel#libEmpty { color: $text_disabled; font-size: $font_small; }
 QLabel#nodeLabel { color: $text_primary; font-weight: 700; }
-QLabel#nodeSummary { color: $text_secondary; font-size: 11px; }
-QLabel#scoreSummary { color: $text_secondary; font-size: 11px; }
+QLabel#nodeSummary { color: $text_secondary; font-size: $font_small; }
+QLabel#scoreSummary { color: $text_secondary; font-size: $font_small; }
 """)
 
 

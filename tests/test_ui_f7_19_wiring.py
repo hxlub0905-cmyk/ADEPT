@@ -336,7 +336,13 @@ def test_the_settings_pane_follows_whether_there_is_anything_to_set(window):
     F7-22 的「雙擊才攤開」仍然退役：雙擊可以把收起來的設定重新攤開，
     但那不是唯一入口。
     """
-    assert window.params_open() is False, "沒選卡片 → 那一塊還給畫布"
+    # F100（2026-09-08）：影像住進了工作台，所以工作台**開窗就攤開** ——
+    # 收掉它等於把影像藏起來。「跟著有沒有東西可以設定走」的那一半改成：
+    # 沒選卡片時設定區顯示的是那行灰字，而使用者自己收起來的工作台，選到
+    # 卡片會再打開。
+    assert window.params_open() is True, "F100：工作台開窗就攤開（影像在裡面）"
+    window.set_params_open(False)
+    assert window.params_open() is False, "使用者自己收得起來"
 
     src = first_source(window)
     window.select_node(src)

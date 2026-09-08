@@ -154,7 +154,8 @@ def test_the_two_modes_remember_different_ratios(window):
 
     共用一格的話切一次模式就把另一個覆蓋掉，而他每次切回來都要再調一次。
     """
-    keys = window._SPLIT_KEYS
+    from d4t.ui import workbench
+    keys = workbench.SPLIT_KEYS
     assert set(keys) == {"build", "tune"}
     assert keys["build"] != keys["tune"]
 
@@ -209,14 +210,22 @@ def test_they_are_actually_side_by_side_on_screen(window, qapp):
     assert bottom > top, "參數與儀表沒有併排：%s vs %s" % (a, b)
 
 
-def test_the_image_stayed_in_its_own_column(window):
-    """影像**不搬**：它是另一種迴圈（改參數 → 看圖），而且它要的是高度。"""
-    kids = [window.root_splitter.widget(i)
-            for i in range(window.root_splitter.count())]
-    assert window.preview_pane in kids
-    assert window.gauge_pane not in kids
+def test_the_image_has_its_own_cell_on_the_workbench(window):
+    """影像有自己的一格，而且不裝儀表。
+
+    ⚠ F100（2026-09-08）把這一條的形狀改了：影像以前是右邊獨立的一欄
+    （「影像不搬」），現在是工作台的第三格 —— 那一欄的硬最小寬度讓整個視窗在
+    1366 上裝不下，而畫布因此只有一格窄的直立空間。**問題沒有變**：影像不跟
+    儀表擠在同一格。
+    """
+    wb = window.workbench
+    cells = [wb.widget(i) for i in range(wb.count())]
+    assert cells == [window.stack, window.gauge_pane, window.preview_pane]
     assert not window.preview_pane.isAncestorOf(window.gauge_pane), \
-        "儀表還留在影像那一欄裡"
+        "儀表還留在影像那一格裡"
+    root = window.root_splitter
+    assert [root.widget(i) for i in range(root.count())] == [
+        window.library, window.main_column], "F100：右邊整塊都是主欄"
 
 
 def test_the_card_name_is_only_written_once(window, qapp):

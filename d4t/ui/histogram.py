@@ -253,7 +253,7 @@ class HistogramWidget(QWidget):
 
         r = self._plot_rect()
         small = QFont(p.font())
-        small.setPointSize(8)
+        small.setPixelSize(theme.font_px("font_tiny"))
         p.setFont(small)
 
         # 座標軸（低調的細線）

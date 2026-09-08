@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.pipeline.step import GROUPS as STAGE_GROUPS
+from . import strings
 from . import theme
 from .buttons import small_button
 from .icons import restyle
@@ -132,6 +133,20 @@ def draw_group_icon(p: QPainter, group: str, color: str, size: float) -> None:
         p.drawLine(QPointF(w * 0.42, h - m), QPointF(w - m, m))
 
 
+
+def missing_words(missing) -> str:
+    """卡片庫上「上游還沒有的影像流」那個灰字 badge 的字。
+
+    ``["test"]`` → ``needs a “test” stream``；
+    ``["test", "ref"]`` → ``needs “test” + “ref” streams``。
+    """
+    names = [str(m) for m in (missing or ()) if str(m)]
+    if not names:
+        return ""
+    if len(names) == 1:
+        return "needs a “%s” stream" % names[0]
+    return "needs %s streams" % " + ".join("“%s”" % n for n in names)
+
 class GroupIcon(QWidget):
     """:func:`draw_group_icon` 的 widget 包裝（給 rail 與區塊標題用）。"""
 
@@ -222,7 +237,10 @@ class _LibraryItem(QFrame):
         self.setProperty("missing", "true" if missing else "false")
         restyle(self)
         if missing:
-            self.badge.setText("needs %s" % ", ".join(missing))
+            # **不印裸的流名**（F99 P1-4）：「needs test」會被讀成「需要測試」——
+            # 而它的意思是「上游還沒有一條叫 test 的影像流」。名字加引號、
+            # 說出它是一條 stream，那句話就只剩一種讀法。
+            self.badge.setText(missing_words(missing))
             self.badge.setVisible(True)
             self.setToolTip(
                 "%s\n\nNot available yet: this card reads %s, which nothing "
@@ -315,6 +333,8 @@ class StageButton(QFrame):
         self.setObjectName("stageButton")
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip("%s — %s" % (title, subtitle))
+        # 輔具讀得到它是哪一段（F99 P2-4）；圖示磚與 9 px 的計數對讀屏是空的。
+        self.setAccessibleName("%s stage — %s" % (title, subtitle))
         self._colour = colour
         self._active = False
 
@@ -504,9 +524,9 @@ class LibraryPanel(QWidget):
         panel_lay.addWidget(head_wrap)
 
         self.search = QLineEdit(self)
-        self.search.setPlaceholderText("Search cards…")
+        self.search.setPlaceholderText(strings.tr("Search cards…"))
         self.search.setClearButtonEnabled(True)
-        self.search.setToolTip("Filter the card library by name or description")
+        self.search.setToolTip(strings.tr("Filter the card library by name or description"))
         self.search.textChanged.connect(self._on_search)
         wrap = QWidget(self.panel)
         wl = QHBoxLayout(wrap)

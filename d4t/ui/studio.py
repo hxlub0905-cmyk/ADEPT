@@ -1,21 +1,25 @@
 # d4t Studio 主視窗 — authored 2026-07-28 (M3 收尾).
 """``StudioWindow`` —— 把 M3 的元件、view-model 與背景工作接成一台可用的機器。
 
-版面（全部用 QSplitter，使用者拉得動）::
+版面（全部用 QSplitter，使用者拉得動；F100 起畫布橫躺在上面，
+`docs/plans/F100-workbench-layout.md`）::
 
-    ┌ 工具列：開啟 Recipe／存檔／範本 ｜ 復原／重做 ｜ 說明／主題 ｜ 試跑
+    ┌ 工具列：開啟 Recipe／存檔／範本 ｜ 復原／重做 ｜ Results／說明▾／主題
     │         ｜ 試跑筆數 ▶試跑 ▶全跑                                      ┐
-    ├──────────┬──────────────────────┬──────────────────────────────┤
-    │ 卡片庫    │ 流程（PipelineCanvas）│ ［單顆預覽］［Gallery］        │
-    │ Library  │ ──────────────────── │  單顆：◀ ▶ 缺陷選單 / 影像流   │
-    │ ~230px   │ 參數表單 / 分數編輯   │        ImageView              │
-    │          │ （QStackedWidget）    │        特徵表 + 判定 chip     │
-    │          │                      │  Gallery：縮圖牆（同屏比多顆）  │
-    ├──────────┴──────────────────────┴──────────────────────────────┤
-    │ 分數分佈直方圖（可拖門檻線、可點長條）                             │
-    ├─────────────────────────────────────────────────────────────────┤
-    │ 狀態列：進度 / 訊息                                              │
+    ├──────────┬──────────────────────────────────────────────────────┤
+    │ 卡片庫    │ 流程（PipelineCanvas）—— 吃滿右邊整個寬度、高度保底     │
+    │ Library  ├───────────────┬────────────────┬─────────────────────┤
+    │ rail+    │ 參數表單 /     │ 這張卡的儀表   │ 單顆預覽：◀ ▶ 影像流  │
+    │ panel    │ 分數編輯 /     │ （Card /       │        ImageView    │
+    │          │ 判定樹一步     │  Features）    │                     │
+    │          ├───────────────┴────────────────┴─────────────────────┤
+    │          │ Verdict：類別 · score · Path（常駐，不在 splitter 裡）  │
+    ├──────────┴──────────────────────────────────────────────────────┤
+    │ Problems 列（為什麼還不能跑）／ 狀態列：進度 / 訊息                 │
     └─────────────────────────────────────────────────────────────────┘
+
+    Build 模式把工作台（中間那三格）收到 0；Tune 模式（預設）開著。
+    Gallery 與分數分佈直方圖住在 Results 視窗（F7-5）。
 
 五條資料流（別搞混）
 --------------------
@@ -118,10 +122,13 @@ from d4t.core.pipeline import verdict_features
 from d4t.core.pipeline.verdict_trace import verdict_trace
 
 from . import autosave
+from . import card_menu
+from . import clipboard
+from . import windows_menu
 from . import baseline
 from . import fit_screen
 from . import edit_plan
-from .canvas import SUMMARY_SEP, PipelineCanvas
+from .canvas import NODE_H, NODE_W, SUMMARY_SEP, PipelineCanvas, run_status_from
 from .inspectors import inspector_for
 from .problems_bar import ProblemsBar
 from .why_panel import WhyPanel
@@ -146,6 +153,8 @@ from .viewmodel import (GLV_INTENTS, RecipeModel,
                         rebin)
 from . import theme
 from .theme import DEFAULT_THEME, THEMES, apply_theme, current_theme
+from .workbench import MODES as LAYOUT_MODE_NAMES
+from .workbench import WorkbenchLayout
 from .welcome import (
     RecipeLibraryDialog, WelcomeDialog, app_settings, save_theme,
     welcome_disabled,
@@ -244,10 +253,10 @@ TRIAL_WORKERS = None
 #: model 變動 → 重算預覽 的去抖動間隔（毫秒）。拖 spinbox 不會每格都重算。
 PREVIEW_DEBOUNCE_MS = 300
 
-#: 主視窗三欄的出廠寬度：卡片庫 | 流程+參數 | 單顆預覽。
-#: F7-5 之後預覽拿到最寬的一欄（使用者要求「影像大一點、置中」），
-#: 因為直方圖與 Gallery 都搬去 Results 視窗了。
-COLUMN_SIZES = (256, 470, 674)
+#: 主視窗兩欄的出廠寬度：卡片庫 | 主欄（畫布在上、工作台在下）。
+#: F100 之前是三欄（卡片庫 | 流程+參數 | 單顆預覽），預覽影像現在住在工作台的
+#: 第三格（`ui/workbench.py`）——右邊整塊都是主欄。
+COLUMN_SIZES = (256, 1144)
 
 #: 「試跑筆數」的出廠值。載入資料集時會再夾成 ``min(這個值, 資料集顆數)`` ——
 #: 對一份只有 24 顆的 lot 顯示 200 沒有任何意義，只會讓人以為自己看錯了。
@@ -472,6 +481,20 @@ class ThumbWorker(_ThreadedWorker):
         self._inflight = []
 
 
+
+def verdict_note(selected_node: Optional[str], verdict_bin: Any,
+                 ok: bool) -> str:
+    """Verdict 膠囊旁邊那句「為什麼是破折號」（F99 P1-2）。
+
+    只在一種情況講話：預覽跑得好好的、有選一張卡、而判定還沒跑到
+    （``bin`` 是空的）。其他情況（沒選卡、跑出錯、真的有判定）都是空字串 ——
+    膠囊或狀態列已經在講那件事，這裡再講一次只是把位子佔掉。
+    """
+    if selected_node and ok and verdict_bin is None:
+        return ("preview stops at “%s” — press Esc to run the decision too"
+                % selected_node)
+    return ""
+
 class StudioWindow(QMainWindow):
     """d4t Studio 主視窗（M3 組裝 + M5 Gallery / 直方圖聯動 / 輸出）。"""
 
@@ -634,6 +657,13 @@ class StudioWindow(QMainWindow):
 
         if show_welcome_on_start is None:
             show_welcome_on_start = _welcome_on_start_default()
+        # ⚠ 跑測試時**這一扇**關窗對話框預設關掉（F99）。conftest 那支 autouse
+        # 只在 `d4t.ui.studio` 已經 import 的時候改得到類別屬性——在 fixture 裡
+        # 才 import 的測試檔改不到，於是一條失敗的測試在 teardown 停在
+        # 「要不要存」的 modal 上，faulthandler 都叫不醒（C++ 的 exec 裡 Python
+        # 沒有機會跑）。真的要測那扇門的測試自己把它設回 True。
+        if _running_under_pytest():
+            self.PROMPT_ON_CLOSE = False
         if show_welcome_on_start:
             # 非 modal + 排到下一輪 event loop：建構式永遠不會被對話框卡住
             QTimer.singleShot(0, lambda: self.show_welcome(force=False))
@@ -755,6 +785,8 @@ class StudioWindow(QMainWindow):
             "Help", "Reopen the getting-started tour (includes “Try it with "
                     "sample data”)",
             lambda: self.show_welcome(force=True))
+        # 那顆鈕的小箭頭：現在開著哪些視窗（F99 P2-6；內容在 `windows_menu`）。
+        windows_menu.attach(self.btn_help, self._open_windows)
         # 主題切換：一顆字元鈕，不佔位子也找得到（偏好存 QSettings）
         self.btn_theme = self._tool_button(
             "", "Switch between the light and dark theme",
@@ -937,13 +969,19 @@ class StudioWindow(QMainWindow):
         # Delete 綁成 window-level 的話，使用者在參數區的輸入框裡按 Delete
         # 會刪掉一張卡 —— 那是這張表最貴的一種錯。
         ("Del", "delete_selected"), ("Esc", "clear_selection"),
+        ("Ctrl+C", "copy_cards"), ("Ctrl+V", "paste_cards"),
+        ("Ctrl+D", "duplicate_cards"),
     )
 
     #: 這幾個鍵**只在畫布上**管用（見上面那段 ⚠）。
     #:
     #: 它們仍然列在 `SHORTCUTS` 裡，因為那張表回答的是「這個工具有哪些鍵」——
     #: 一個使用者讀得到的答案，不是一份綁定清單。
-    _WIDGET_SHORTCUTS = frozenset(("delete_selected", "clear_selection"))
+    # ⚠ Ctrl+C / Ctrl+V 跟 Delete 同一條規矩（U18）：掛在**畫布**上。綁在視窗
+    # 層的話，使用者在參數格裡按 Ctrl+C 複製一個數字，複製到的會是一張卡。
+    _WIDGET_SHORTCUTS = frozenset(("delete_selected", "clear_selection",
+                                   "copy_cards", "paste_cards",
+                                   "duplicate_cards"))
 
     def _build_shortcuts(self) -> None:
         handlers = {
@@ -965,6 +1003,9 @@ class StudioWindow(QMainWindow):
             "layout_mode": self.toggle_layout_mode,
             "delete_selected": self._delete_selected_on_canvas,
             "clear_selection": self._clear_canvas_selection,
+            "copy_cards": self.copy_cards,
+            "paste_cards": self.paste_cards,
+            "duplicate_cards": self.duplicate_cards,
         }
         self._shortcuts = []
         for keys, name in self.SHORTCUTS:
@@ -1180,16 +1221,11 @@ class StudioWindow(QMainWindow):
         # 551px 高）裝的是一行灰字「(Pick a card from the library…)」——
         # 一塊叫人去別的地方點東西的空白，而它同時把畫布壓到 50% 縮放，
         # 卡片的副標（「這張卡吃什麼吐什麼」）當場讀不出來。
-        # 現在高度跟著「有沒有東西可以設定」走，見 :meth:`_sync_params_pane`。
-        self._params_open = False
+        # F100：那個狀態現在住在 `WorkbenchLayout.open`（工作台攤開著嗎）——
+        # 而 Tune 模式開窗就是攤開的，因為影像住在工作台裡。
         # 比例在 showEvent 才真的套 —— setSizes 要有實際高度才算得出來
         #（isVisible 之前那些數字沒有意義，docs/PITFALLS.md 的老坑）。
         self._layout_ratio_applied = False
-        #: 畫布的彈出視窗（沒開著是 None）。
-        #: 版面模式（U5）。`tune` 是預設 —— 它就是這一輪之前的那個比例，
-        #: 所以開窗看到的東西一個位元都沒變。
-        self._layout_mode: str = "tune"
-
         # 右：單顆預覽（F7-5：Gallery 與直方圖搬到 Results 視窗，
         #     主視窗只留「編流程 + 看單顆」，影像因此拿得到整欄高度）
         self.preview_pane = self._build_preview_pane()
@@ -1198,6 +1234,18 @@ class StudioWindow(QMainWindow):
         middle.addWidget(self._build_params_row())
         middle.setStretchFactor(0, 2)
         middle.setStretchFactor(1, 3)
+        # 版面模式的狀態與幾何（F100）—— 邏輯在 `ui/workbench.py`，這裡只接。
+        self.layout_modes = WorkbenchLayout(
+            middle, self.params_row, self.pipeline, self.library,
+            load=_load_sizes, save=_save_sizes)
+        # 主欄 = 畫布/工作台那根 splitter ＋ 常駐的 Verdict 列（F100）。
+        # Verdict 不在 splitter 裡：Build 模式把工作台收到 0 之後它還在。
+        self.main_column = QWidget(self)
+        mcol = QVBoxLayout(self.main_column)
+        mcol.setContentsMargins(0, 0, 0, 0)
+        mcol.setSpacing(0)
+        mcol.addWidget(middle, 1)
+        mcol.addWidget(self.verdict_strip)
 
         # Results 視窗（跑完才 show；先建好讓 histogram / gallery 一直有實體，
         # 這樣所有既有接線與測試都不用管它現在開著沒有）
@@ -1209,14 +1257,14 @@ class StudioWindow(QMainWindow):
 
         root = QSplitter(Qt.Horizontal, self)
         root.addWidget(self.library)
-        root.addWidget(middle)
-        root.addWidget(self.preview_pane)
+        root.addWidget(self.main_column)
         root.setStretchFactor(0, 0)
-        root.setStretchFactor(1, 2)
-        root.setStretchFactor(2, 4)
+        root.setStretchFactor(1, 1)
+        root.setCollapsible(1, False)
         # 上一次關窗時的欄寬（F13-1）—— 拖過的分隔線在下一次開窗還在。
-        # 沒存過（或在跑測試）就用出廠值。
-        root.setSizes(_load_sizes(COLUMNS_KEY, 3) or list(COLUMN_SIZES))
+        # 沒存過（或在跑測試）就用出廠值。F100 之前這裡是三個值，舊的設定
+        # 長度對不上會自己退回出廠值（`_load_sizes` 的規矩）。
+        root.setSizes(_load_sizes(COLUMNS_KEY, 2) or list(COLUMN_SIZES))
         self.top_splitter = root
         self.root_splitter = root
 
@@ -1290,6 +1338,10 @@ class StudioWindow(QMainWindow):
         row = QSplitter(Qt.Horizontal, self)
         row.addWidget(self.stack)
         row.addWidget(self.gauge_pane)
+        # F100：影像是工作台的第三格。它以前是右邊獨立的一欄，而那一欄的硬
+        # 最小寬度讓整個視窗在 1366 上裝不下（`docs/plans/F100-workbench-layout.md`）。
+        row.addWidget(self.preview_pane)
+        self.workbench = row
         # 參數那一邊寬一點：它裝的是一排排可以拖的滑桿（F7-8），而儀表是
         # 讀的東西。3:2 是量出來的 —— 再窄一點，`Borrow range from` 那種
         # 兩行的 label 會開始折行。
@@ -1363,7 +1415,10 @@ class StudioWindow(QMainWindow):
         # 狀態列該留給「使用者要讀的事件」，一直在刷的東西不該跟它搶同一格。
         self.cursor_label = QLabel("", pane)
         self.cursor_label.setObjectName("paramHint")
-        self.cursor_label.setMinimumWidth(150)
+        # F100：這一列住在工作台的一格裡（1366 上約 420 px），150 的保留寬度
+        # 是那一格硬最小寬度的最大來源之一。讀數最長是「x 1234, y 1234 · 255」，
+        # 100 夠；不夠的那一瞬間它會被擠成省略號，而不是把整個視窗撐寬。
+        self.cursor_label.setMinimumWidth(100)
         self.cursor_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.cursor_label.setToolTip("Cursor position and gray level")
         srow.addWidget(self.cursor_label)
@@ -1382,7 +1437,13 @@ class StudioWindow(QMainWindow):
         # 還沒載資料時，畫面上最大的一塊是**一片黑**，角落有一行極小的
         # 「(no dataset loaded)」（F7-15）。首啟導覽關掉之後就沒有任何東西告訴
         # 使用者下一步要做什麼 —— 而「下一步」只有兩個，就把那兩個放在這裡。
-        self.empty_state = QWidget(pane)
+        # F100：影像現在是工作台的一格（1366 上約 480 px 寬、380 px 高），而這
+        # 一塊空白狀態是四列「鈕 ＋ 一句話」—— 塞不下的時候要**捲**，不是疊在
+        # 一起（第一版就是疊的）。用 `fit_screen.scrolled` 在**建構時**包，
+        # 事後搬是 segfault（`CLAUDE.md` §4）。捲軸還有第二個好處：
+        # `QStackedWidget` 的最小寬度是它每一頁的最大值——**藏起來的那一頁也
+        # 算**——而以前這一頁的 468 px 就是右欄硬最小寬度的來源。
+        self.empty_state_host, self.empty_state = fit_screen.scrolled(pane)
         estack = QVBoxLayout(self.empty_state)
         estack.addStretch(1)
         title = QLabel("No data loaded yet", self.empty_state)
@@ -1437,7 +1498,7 @@ class StudioWindow(QMainWindow):
                           self.empty_state)
             what.setObjectName("paramHint")
             what.setWordWrap(True)
-            what.setMinimumWidth(300)
+            what.setMinimumWidth(200)
             row.addWidget(what, 2)
             row.addStretch(1)
             rows.addLayout(row)
@@ -1479,7 +1540,7 @@ class StudioWindow(QMainWindow):
         estack.addStretch(1)
 
         self.image_stack = QStackedWidget(pane)
-        self.image_stack.addWidget(self.empty_state)      # index 0
+        self.image_stack.addWidget(self.empty_state_host)  # index 0
         self.image_stack.addWidget(images)                # index 1
         lay.addWidget(self.image_stack, 3)
 
@@ -1555,7 +1616,12 @@ class StudioWindow(QMainWindow):
             b.setCheckable(True)
             b.clicked.connect(lambda _c=False, k=i: self.show_bottom_page(k))
             tabs.addWidget(b)
-        tabs.addStretch(1)
+        # 選到判定樹的一步時，這一塊裝的還是**上一張卡**的儀表（F99 P1-7）——
+        # 以前畫面上沒有任何東西講這件事，左邊寫著 Decision、右邊寫著 GLV。
+        # 現在它淡掉，而且這一句說出它是誰的。
+        self.gauge_note = QLabel("", self.gauge_pane)
+        self.gauge_note.setObjectName("paramHint")
+        tabs.addWidget(self.gauge_note, 1)
         glay.addLayout(tabs)
         glay.addWidget(self.bottom_stack, 1)
 
@@ -1567,7 +1633,13 @@ class StudioWindow(QMainWindow):
         # 面積正好是量測卡最需要的地方（同 F7-15「空白狀態要說得出下一步」、
         # 以及 scope.SHOW_SAMPLE_DATA 那條「按了撞牆的鈕比沒有那顆鈕更糟」
         # 的鏡像 —— 這裡是「說不出話的那一格比沒有那一格更佔位」）。
-        self.verdict_live = QWidget(pane)
+        # Verdict 是一條**常駐的結論列**（F100）：橫跨在工作台下面，不在任何
+        # splitter 裡，所以 Build 模式收掉工作台之後它還在。
+        self.verdict_strip = QWidget(self)
+        strip = QVBoxLayout(self.verdict_strip)
+        strip.setContentsMargins(8, 4, 8, 4)
+        strip.setSpacing(0)
+        self.verdict_live = QWidget(self.verdict_strip)
         vrow = QHBoxLayout(self.verdict_live)
         vrow.setContentsMargins(0, 0, 0, 0)
         vrow.setSpacing(8)
@@ -1583,6 +1655,13 @@ class StudioWindow(QMainWindow):
         self.verdict_score = QLabel("", self.verdict_live)
         self.verdict_score.setStyleSheet("font-weight:700;")
         vrow.addWidget(self.verdict_score)
+        # **膠囊寫著「—」的時候要說為什麼**（F99 P1-2）。預覽停在選到的那張卡
+        # 是對的（F7 定調），但那一刻 Verdict 從「more than one box is off」
+        # 變成一個破折號，而畫面上沒有任何東西講它為什麼不見 —— 看起來像剛剛
+        # 還有判定、現在壞了。這一句住在膠囊旁邊，不住在狀態列。
+        self.verdict_note = QLabel("", self.verdict_live)
+        self.verdict_note.setObjectName("paramHint")
+        vrow.addWidget(self.verdict_note)
         # **那一行點得下去**（U11）：走過的路旁邊沒有別的入口，而回溯以前只有
         # 「跑一整批 → Results → 點 score/bin」那一條路 —— 使用者手上明明就有
         # 這一顆的每一個數字。做成連結而不是另加一顆鈕：這一列已經有三樣東西
@@ -1595,7 +1674,7 @@ class StudioWindow(QMainWindow):
         self.decide_path.linkActivated.connect(
             lambda _href: self.toggle_preview_why())
         vrow.addWidget(self.decide_path, 1)
-        lay.addWidget(self.verdict_live)
+        strip.addWidget(self.verdict_live)
 
         # 這一顆為什麼判成這樣（U11）—— **跟 Results 那一份是同一個 widget**
         # （`why_panel.WhyPanel`），只是住在單顆預覽這一欄。跑整批之前它就答得
@@ -1613,7 +1692,7 @@ class StudioWindow(QMainWindow):
 
         # 還沒有判定的時候換成**一句可以照做的話 ＋ 那顆鈕**（推廣鐵則：
         # 講得出下一步，而那一步就在旁邊）。
-        self.verdict_empty = QWidget(pane)
+        self.verdict_empty = QWidget(self.verdict_strip)
         erow = QHBoxLayout(self.verdict_empty)
         erow.setContentsMargins(0, 0, 0, 0)
         erow.setSpacing(8)
@@ -1628,7 +1707,7 @@ class StudioWindow(QMainWindow):
         self.btn_add_decision.setProperty("variant", "secondary")
         self.btn_add_decision.clicked.connect(self.show_score_page)
         erow.addWidget(self.btn_add_decision)
-        lay.addWidget(self.verdict_empty)
+        strip.addWidget(self.verdict_empty)
         self._sync_verdict_block()
 
         return pane
@@ -1669,6 +1748,8 @@ class StudioWindow(QMainWindow):
         view.node_selected.connect(self.select_node)
         view.node_activated.connect(self._on_node_activated)
         view.card_dropped.connect(self._on_card_dropped)
+        view.add_menu_requested.connect(self._on_add_menu)
+        view.link_dropped.connect(self._on_link_dropped)
         view.node_toggled.connect(self._on_node_toggled)
         view.move_requested.connect(self._on_move_requested)
         view.remove_requested.connect(self._on_remove_requested)
@@ -1896,6 +1977,52 @@ class StudioWindow(QMainWindow):
         """Esc：放掉手上的東西。"""
         self.pipeline.clear_selection()
 
+    # ---- 複製 / 貼上 / 複製一份（F99 P1-8；內容在 `ui/clipboard.py`）--------
+    def copy_cards(self) -> int:
+        """把畫布上選著的卡（可以好幾張）記進剪貼簿；回幾張。"""
+        ids = [n for n in self.pipeline.selected_ids() if n in self.model.nodes]
+        if not ids and self.selected_node in self.model.nodes:
+            ids = [self.selected_node]
+
+        def pos_of(nid: str):
+            item = self.pipeline.node_item(nid)
+            return item.pos().toTuple() if item is not None else None
+
+        self._card_clipboard = clipboard.snapshot(self.model, ids, pos_of)
+        n = len(self._card_clipboard)
+        if n:
+            self._status("Copied %d card%s — Ctrl+V pastes %s next to the "
+                         "original, without the lines."
+                         % (n, "" if n == 1 else "s", "it" if n == 1 else "them"))
+        return n
+
+    def paste_cards(self) -> List[str]:
+        """貼上：每一張加在原位右下角一點的地方，**沒有線**；一步復原。"""
+        items = list(getattr(self, "_card_clipboard", None) or [])
+        if not items:
+            self._status("Nothing to paste — select a card and press Ctrl+C first.")
+            return []
+        made = clipboard.paste(self.model, items, self._status)
+        for nid, (x, y) in made:
+            # `place_dropped` 把卡**置中**在那個點上（拖放的語意）；剪貼簿記的
+            # 是左上角，所以補半張卡。
+            self.pipeline.place_dropped(nid, x + NODE_W / 2.0, y + NODE_H / 2.0)
+        if made:
+            self.select_node(made[-1][0])
+            self._status("Pasted %d card%s — wire %s up on the canvas."
+                         % (len(made), "" if len(made) == 1 else "s",
+                            "it" if len(made) == 1 else "them"))
+        return [nid for nid, _p in made]
+
+    def duplicate_cards(self) -> List[str]:
+        """Ctrl+D ＝ 複製再貼上，剪貼簿不留東西。"""
+        before = list(getattr(self, "_card_clipboard", None) or [])
+        if not self.copy_cards():
+            return []
+        made = self.paste_cards()
+        self._card_clipboard = before
+        return made
+
     def _status_next_step(self, msg: str, label: str, callback: Any,
                           level: str = "info", tip: str = "") -> None:
         """一句話 ＋ 它旁邊那顆「接下來能做什麼」的鈕。
@@ -1972,7 +2099,7 @@ class StudioWindow(QMainWindow):
         if root is None:
             return
         sizes = list(root.sizes())
-        if len(sizes) != 3 or sum(sizes) <= 0:
+        if len(sizes) != 2 or sum(sizes) <= 0:
             return
         want = self.library.minimumWidth()
         delta = want - sizes[0]
@@ -2109,10 +2236,15 @@ class StudioWindow(QMainWindow):
         （使用者回報的「normalize 的節點文字會被吃掉」）。見
         `canvas._draw_parts`。
         """
-        text = self._node_summary(node, shown=shown)
+        # 畫在卡片上的那一份用 `ParamSpec.label`（F99 P1-4）：``roi_out=on_pattern``
+        # 是 recipe 的鍵，對製程工程師不是一句話；``Call the regions=on_pattern``
+        # 才是。字串版（`info["summary"]`）**維持鍵名**——狀態列與測試讀的是它，
+        # 而測試要問的是「這張卡被設成什麼」，鍵名才是穩定的那一個。
+        text = self._node_summary(node, shown=shown, use_labels=True)
         return [s for s in text.split(SUMMARY_SEP) if s]
 
-    def _node_summary(self, node: Any, shown: Optional[Sequence[str]] = None) -> str:
+    def _node_summary(self, node: Any, shown: Optional[Sequence[str]] = None,
+                      use_labels: bool = False) -> str:
         """「非預設」參數渲染成 ``k=v`` 串起來。
 
         ``shown`` 是**副標那一行已經講過的影像流名**（``test ref → test ref``）。
@@ -2125,6 +2257,8 @@ class StudioWindow(QMainWindow):
         except KeyError:
             return "(unknown card %s)" % node.step
         defaults = {p.name: p.default for p in step_cls.params}
+        shown_as = {p.name: (str(getattr(p, "label", "") or "") or p.name)
+                    for p in step_cls.params} if use_labels else {}
         # 有些參數的值不是給人看的（模板是一整張影像的內容，六千多個字元）。
         # 直接串進摘要，那張卡的第三行就變成一段 base64 —— 元件會把它切掉，
         # 於是看到的是「template=gc1:iVBORw0KGg…」，既沒有資訊也擠掉了真正
@@ -2151,10 +2285,11 @@ class StudioWindow(QMainWindow):
                 picked = {v.strip() for v in str(value).split(",") if v.strip()}
                 if picked and picked <= seen:
                     continue
+            word = shown_as.get(name, name)
             if name in opaque:
-                parts.append("%s: set" % name)
+                parts.append("%s: set" % word)
             else:
-                parts.append("%s=%s" % (name, _fmt(value)))
+                parts.append("%s=%s" % (word, _fmt(value)))
             # 上限放寬到 4：塞得下幾項由**畫的人**決定（`canvas._draw_parts`），
             # 而它會把放不下的收成 `+N`。這裡的上限只是別讓一張 19 個參數的卡
             # （`roi_cross`）產出一串沒有人讀得完的字。
@@ -3477,6 +3612,8 @@ class StudioWindow(QMainWindow):
             view.set_tree_selected(None)   # 一次只編一個東西（卡片或樹的一步）
         self._fill_param_form(node_id)
         self.stack.setCurrentWidget(self.param_form)
+        self.gauge_note.setText("")              # 儀表又是這張卡的了（P1-7）
+        self.bottom_stack.setEnabled(True)
         self._sync_params_pane()
         self._refresh_region_button()
         # 右下角換成這張卡的儀表（F7-17）。**參數要一起給**：`roi_reference`
@@ -3777,25 +3914,18 @@ class StudioWindow(QMainWindow):
 
     # ---- 設定面板：跟著「有沒有東西可以設定」走（F13-1）--------------------
     def _sync_params_pane(self) -> None:
-        """選了卡片就攤開，沒選就收起來 —— 把那塊空白還給畫布。
+        """選了卡片就把收起來的工作台打開；**取消選取不收**（F100）。
 
-        **只在狀態真的翻面時動**（`set_params_open` 會重算高度）：使用者自己拖
-        過的分隔線不可以被下一次 `_refresh_pipeline` 洗掉，而那件事每改一個參數
-        就會發生一次。
+        影像住在工作台裡，收掉它等於把影像藏起來。F13-1 那條「沒選卡片時設定
+        區收起來」的理由（那塊空白壓到畫布）在新版面上不成立：畫布現在吃滿寬
+        度，高度有保底。
 
-        兩個例外：
-        * 分數面板是「我要編」，本來就該開著（`show_score_page` 自己開）；
-        * **使用者自己切到 Build 模式的時候不要跟他搶**（U5）。這一條以前
-          問的是「畫布彈出去了嗎」，而 Build 就是那件事的新形狀：他明講了
-          「現在我要看流程」，選一張卡不該把設定區推回來。
+        兩個例外照舊：分數面板自己開（`show_score_page`）；使用者切到 Build 的
+        時候不跟他搶（U5）。
         """
-        if self._layout_mode == "build":
-            return
         if self.stack.currentWidget() is not self.param_form:
             return
-        want = self.selected_node is not None
-        if want != self._params_open:
-            self.set_params_open(want)
+        self.layout_modes.on_selection(self.selected_node is not None)
 
     def _on_node_activated(self, node_id: str) -> None:
         """雙擊一張卡：選它 + 把設定攤開。"""
@@ -3815,100 +3945,78 @@ class StudioWindow(QMainWindow):
         if nid:
             self.pipeline.place_dropped(nid, float(x), float(y))
 
-    def params_open(self) -> bool:
-        """設定面板現在攤開著嗎。
+    def _on_add_menu(self, x: float, y: float,
+                     pick: Optional[str] = None) -> Optional[str]:
+        """空白處按右鍵 → 整個卡片庫的選單（F99 P1-1）；挑了就放在那裡。
 
-        追**明確狀態**而不是問 widget：`isVisible()` 在視窗 show 之前恆為
-        False，那個坑這個 repo 踩過（見 docs/PITFALLS.md）。
-
-        ⚠ **它跟版面模式不是同一件事**（U5）：模式是使用者選的版面，這一個是
-        Tune 裡「選到一張卡就攤開」那個**自動**行為。Build 模式下它恆為 False
-        —— 那時候中欄整欄都是畫布，沒有設定區可以攤開。
+        ``pick`` 是測試用的：直接指定挑哪一張，不開選單。內容在 `card_menu`。
         """
-        return bool(self._params_open)
+        keys = self.library.step_keys()
+        if pick is not None:
+            self._on_card_dropped(str(pick), float(x), float(y))
+            return self.selected_node
+        from PySide6.QtGui import QCursor
+        menu = card_menu.build_menu(
+            self, keys, lambda k: self._on_card_dropped(k, float(x), float(y)),
+            title="Add a card here")
+        card_menu.pick_at(menu, QCursor.pos())
+        return None
+
+    def _on_link_dropped(self, src: str, kind: str, stream: str,
+                         x: float, y: float,
+                         pick: Optional[str] = None) -> Optional[str]:
+        """線拖到空白處放開 → 只列接得上的卡；挑了就加在那裡並把線接上
+        （F99 P1-1）。線是使用者拉的，所以這不是「加卡順手接線」。
+        """
+        keys = card_menu.compatible(self.library.step_keys(), kind)
+
+        def add(step_key: str) -> None:
+            self._on_card_dropped(str(step_key), float(x), float(y))
+            nid = self.selected_node
+            if not nid:
+                return
+            dst_in = card_menu.input_param_for(str(step_key), kind)
+            self._on_edge_added(str(src), nid, str(stream), dst_in)
+
+        if pick is not None:
+            add(str(pick))
+            return self.selected_node
+        from PySide6.QtGui import QCursor
+        menu = card_menu.build_menu(
+            self, keys, add, flat=True,
+            title="Connect “%s” to a new card" % (stream or kind))
+        card_menu.pick_at(menu, QCursor.pos())
+        return None
+
+    def params_open(self) -> bool:
+        """工作台現在攤開著嗎（**明確狀態**，見 `WorkbenchLayout.open`）。
+
+        F100 之前這一支問的是「設定區攤開著嗎」；現在設定區、儀表板、影像同住
+        工作台，所以它問的是那整塊。Build 模式下恆為 False。
+        """
+        return bool(self.layout_modes.open)
 
     def set_params_open(self, on: bool) -> bool:
-        """攤開／收起設定區（中欄的下半）。預設是攤開的（D 案）——
-        畫布會 zoom，平面上只需要中上一塊；收起來是給「現在只想看流程」的人。
+        """攤開／收起工作台。Build 模式下什麼都不做（U5）。"""
+        return self.layout_modes.set_open(on)
 
-        ⚠ **Build 模式下這一支什麼都不做**（U5）：使用者明講了「現在我要看
-        流程」，而選一張卡不該把設定區推回來。要攤開設定就是切回 Tune。
-        """
-        on = bool(on)
-        if self._layout_mode == "build":
-            return False
-        self._params_open = on
-        total = sum(self.canvas_column.sizes()) or self.canvas_column.height()
-        if on:
-            keep = max(240, int(total * 0.6))
-            self.canvas_column.setSizes([max(0, total - keep), keep])
-        else:
-            self.canvas_column.setSizes([total, 0])
-        return on
-
-    # ---- Build / Tune 兩種模式（U5，2026-09-08）----------------------------
-    #: 兩種模式各自的中欄比例存在哪一格 QSettings。
-    #:
-    #: **兩格而不是一格**：使用者在 Build 裡把畫布拉高、在 Tune 裡把設定拉高，
-    #: 那是兩個不同的偏好。共用一格的話切一次模式就把另一個覆蓋掉，而使用者
-    #: 每次切回來都要再調一次。
-    #: ⚠ `tune` 用的是**舊的那一格**（`CANVAS_SPLIT_KEY`）—— 那是這一輪之前
-    #: 唯一的比例，而使用者已經調過它了。換一個新名字等於在升級的那一天把每
-    #: 個人的版面偷偷重設回預設值。
-    _SPLIT_KEYS = {"build": "ui/canvas_split_build",
-                   "tune": CANVAS_SPLIT_KEY}
-
-    LAYOUT_MODES = ("build", "tune")
+    # ---- Build / Tune 兩種模式（U5 → F100）----------------------------------
+    LAYOUT_MODES = LAYOUT_MODE_NAMES
 
     def layout_mode(self) -> str:
         """現在是哪一種版面（**明確狀態**，不去量 splitter）。"""
-        return self._layout_mode
+        return self.layout_modes.mode
 
     def set_layout_mode(self, mode: str, remember: bool = True) -> str:
         """換版面。回真的套上去的那一個。
 
-        為什麼是模式而不是一個彈出視窗（U5）
-        ------------------------------------
-        以前「看全貌」是把畫布開在**第二個視窗**裡（F8-UI D 案）。那條路能
-        work，但代價是兩份 `PipelineCanvas` 實體與兩份狀態 —— 每一個訊號都要
-        接兩次、每一次重畫都要記得兩邊都畫（`_canvases()` 的存在就是那個稅），
-        而**畫布是這個工具的賣點，卻是螢幕上第三大的東西**。
+        兩種模式共用同一份畫布（U5 的驗收條件：切模式不重建畫布，node id 與
+        選取狀態原封不動）。幾何在 `ui/workbench.py`：
 
-        兩種模式共用同一份畫布：
-
-        * **Build** —— 畫布吃滿中欄。接線、看全貌、排版。
-        * **Tune** —— 現在這個比例（畫布 2 / 設定 3）。調參數、看影像。
-
-        ⚠ **切模式不重建畫布**：node id 與選取狀態原封不動（那是驗收條件）。
-        它動的只有 splitter 的兩個數字。
+        * **Build** —— 工作台收到 0，畫布吃滿右邊整塊。
+        * **Tune** —— 工作台開著（影像住在裡面），畫布保底、預設 40%。
         """
-        use = str(mode or "")
-        if use not in self.LAYOUT_MODES:
-            return self._layout_mode
-        if remember and self._layout_mode in self._SPLIT_KEYS:
-            sizes = list(self.canvas_column.sizes())
-            if sum(sizes):
-                _save_sizes(self._SPLIT_KEYS[self._layout_mode], sizes)
-        self._layout_mode = use
-        total = sum(self.canvas_column.sizes()) or self.canvas_column.height()
-        saved = _load_sizes(self._SPLIT_KEYS[use], 2)
-        if saved and sum(saved) and use == "tune":
-            self.canvas_column.setSizes(saved)
-        elif use == "build":
-            self.canvas_column.setSizes([total, 0])
-        elif self.selected_node is not None:
-            keep = max(240, int(total * 0.6))
-            self.canvas_column.setSizes([max(0, total - keep), keep])
-        else:
-            # 沒選任何卡 → 設定區收著（開窗時的樣子）。
-            self.canvas_column.setSizes([total, 0])
-        # ⚠ **模式與 `params_open` 不是同一件事**（第一版把它們合在一起，
-        # 而那是錯的）：模式是**使用者選的版面**，`params_open` 是 Tune 裡
-        # 「選到一張卡就把設定攤開」那個**自動**行為。Build 模式下沒有設定區
-        # 可以攤開，所以那個旗標跟著關掉；切回 Tune 時交還給
-        # `_sync_params_pane` —— 有選卡就攤開，沒選就收著（開窗時的樣子）。
-        self._params_open = (use == "tune"
-                             and self.selected_node is not None)
+        use = self.layout_modes.apply(mode, remember=remember)
         self._sync_layout_button()
         # 換到 Build 的時候把畫布重新 fit 一次：位子變大了而使用者要的正是
         # 「看全貌」，停在原本的縮放等於那顆鈕只做了一半。
@@ -3919,7 +4027,7 @@ class StudioWindow(QMainWindow):
     def toggle_layout_mode(self) -> str:
         """Build ⇄ Tune（工具列那顆鈕與 Ctrl+B）。"""
         return self.set_layout_mode(
-            "tune" if self._layout_mode == "build" else "build")
+            "tune" if self.layout_mode() == "build" else "build")
 
     def _sync_layout_button(self) -> None:
         """鈕上寫的是**按下去會去哪裡**，不是現在在哪裡。
@@ -3933,7 +4041,7 @@ class StudioWindow(QMainWindow):
             if hasattr(self.pipeline, "zoom_buttons") else None
         if btn is None:
             return
-        going = "Tune" if self._layout_mode == "build" else "Build"
+        going = "Tune" if self.layout_mode() == "build" else "Build"
         # 同 `_refresh_results_button`：它繞過 `_tool_button`，要自己翻。
         # **模式的名字（Build / Tune）不翻** —— 它們是 `Ctrl+B` 的兩個檔位，
         # 跟卡片名同一類：使用者跟同事講的是那兩個字。
@@ -4227,6 +4335,11 @@ class StudioWindow(QMainWindow):
         self.tree_pane.show_path(str(path))
         self.stack.setCurrentWidget(self.tree_pane)
         self.set_params_open(True)
+        # 儀表板不是這一步的（F99 P1-7）：淡掉、說出它是誰的。
+        last = self.selected_node or ""
+        self.gauge_note.setText(
+            ("showing “%s” — the card picked last" % last) if last else "")
+        self.bottom_stack.setEnabled(False)
         for view in self._canvases():
             view.set_tree_selected(str(path))
 
@@ -4482,6 +4595,7 @@ class StudioWindow(QMainWindow):
         self._items_by_id = {str(getattr(it, "defect_id", "")): it for it in items}
         # 換資料集 = 舊的結果與縮圖全部作廢
         self.trial_results = []
+        self.pipeline.set_run_status({})       # 換一批資料，舊的執行狀態不算數
         self._refresh_results_button()
         self.trial_scores = []
         self._score_filter = None
@@ -4969,6 +5083,8 @@ class StudioWindow(QMainWindow):
                                  label=names.get(verdict_bin, ""))
         self.verdict_score.setText("" if score is None
                                    else "score %s" % format_feature_value(score))
+        self.verdict_note.setText(verdict_note(
+            self.selected_node, verdict_bin, getattr(result, "ok", False)))
         self._show_decide_path(result)
 
         if not ran:
@@ -6516,6 +6632,8 @@ class StudioWindow(QMainWindow):
         self._progress_done()
         self.trial_results = results
         self._refresh_results_button()
+        # 每張卡在這一批跑得怎樣，標在卡片上（F99 P1-5）。
+        self.pipeline.set_run_status(run_status_from(results))
         self.trial_scores = [r["score"] for r in results
                              if r.get("ok") and r.get("score") is not None]
         # ⚠ **判定段要先算**：分布圖的分段染色讀的是它算好的「哪一類是哪幾顆」
@@ -6866,6 +6984,12 @@ class StudioWindow(QMainWindow):
     # ==================================================================== #
     # 首次開啟導覽 + 範例 recipe 庫（M6）
     # ==================================================================== #
+    def _open_windows(self):
+        """「Windows」下拉列的那幾個頂層視窗（U15 那張表上准開的）。"""
+        return [("Results", getattr(self, "results", None)),
+                ("Region check", getattr(self, "region_window", None)),
+                ("Uniformity charts", getattr(self, "_charts_window", None))]
+
     def show_welcome(self, force: bool = False) -> Optional[Any]:
         """開（或重開）首次導覽。
 
@@ -7409,7 +7533,7 @@ class StudioWindow(QMainWindow):
             # 版面模式自己會去讀那一格 QSettings（U5）—— 這裡以前有一段
             # 「只在設定區攤開時才還原」的判斷，而那個判斷現在住在
             # `set_layout_mode` 裡（Build 模式不吃存下來的比例，它就是滿版）。
-            self.set_layout_mode(self._layout_mode, remember=False)
+            self.set_layout_mode(self.layout_mode(), remember=False)
 
     def closeEvent(self, event) -> None:      # noqa: D102 - Qt hook
         if not self.confirm_close():
@@ -7423,11 +7547,8 @@ class StudioWindow(QMainWindow):
         self.autosave.stop()
         autosave.clear()
         _save_sizes(COLUMNS_KEY, self.root_splitter.sizes())
-        if self._layout_mode == "tune":
-            # **只存 Tune 的比例。** Build 模式的中欄是「畫布 100% / 設定 0」
-            # ——那不是一個使用者調出來的比例，存下來下次開窗照著還原的話，
-            # 他會看到一個他從來沒有調成那樣的版面。
-            _save_sizes(self._SPLIT_KEYS["tune"], self.canvas_column.sizes())
+        # 只存 Tune 的比例與工作台的欄寬（F100，理由在 `WorkbenchLayout.remember`）。
+        self.layout_modes.remember()
         for dlg in (self.welcome_dialog, self.library_dialog, self.results):
             try:
                 if dlg is not None:

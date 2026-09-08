@@ -1625,7 +1625,7 @@ class GlvInspector(Inspector):
         counts = [max(0, int(c)) for c in ((worst or {}).get("bins") or [])]
         if not counts or plot.height() < 10:
             return
-        ink = QColor(TOKENS.get("danger_text", "#a83f33"))
+        ink = QColor(TOKENS["danger_text"])
         top = max(counts) or 1
         bw = plot.width() / float(len(counts))
         pts = [QPointF(plot.left() + (k + 0.5) * bw,
@@ -1662,7 +1662,7 @@ class GlvInspector(Inspector):
             " (sampled)" if judge.get("sampled") else "")
         p.setPen(QColor(TOKENS["text_hint"]))
         f = p.font()
-        f.setPointSizeF(max(7.0, f.pointSizeF() - 1.0))
+        f.setPixelSize(theme.font_px("font_small"))
         p.setFont(f)
         p.drawText(band, Qt.AlignLeft | Qt.AlignTop, caption)
 
@@ -1683,7 +1683,7 @@ class GlvInspector(Inspector):
             if b == worst_box:
                 worst_at = x
         if worst_at is not None:
-            ring = QColor(TOKENS.get("danger_text", "#a83f33"))
+            ring = QColor(TOKENS["danger_text"])
             p.setPen(QPen(ring, 1.2))
             p.setBrush(Qt.NoBrush)
             p.drawEllipse(QPointF(worst_at, mid), 4.0, 4.0)
@@ -2019,21 +2019,58 @@ def paint_note_header(p: QPainter, band: QRectF, note: Dict[str, Any], *,
     的底線會被切掉（CD 那邊踩過，教訓收進這裡一次）。
     """
     left, right = note_header(note, label, unit)
-    head_h = max(13.0, QFontMetricsF(p.font()).height())
+    fm = QFontMetricsF(p.font())
+    head_h = max(13.0, fm.height())
     head = QRectF(band.left(), band.top(), band.width(), head_h)
+    right_text = "%s · %s" % (right, trust) if trust else right
+    left_box, tail_box, right_box = header_boxes(
+        head, fm.horizontalAdvance(left), fm.horizontalAdvance(tail) if tail
+        else 0.0, fm.horizontalAdvance(right_text))
     p.setPen(colour)
-    p.drawText(head, Qt.AlignLeft | Qt.AlignVCenter, left)
-    if tail:
-        w = QFontMetricsF(p.font()).horizontalAdvance(left)
+    p.drawText(left_box, Qt.AlignLeft | Qt.AlignVCenter,
+               fm.elidedText(left, Qt.ElideRight, left_box.width()))
+    if tail and tail_box.width() > 0:
         p.setPen(tail_colour if tail_colour is not None
                  else QColor(TOKENS["text_secondary"]))
-        p.drawText(QRectF(head.left() + w, head.top(),
-                          head.width() - w, head.height()),
-                   Qt.AlignLeft | Qt.AlignVCenter, tail)
+        p.drawText(tail_box, Qt.AlignLeft | Qt.AlignVCenter,
+                   fm.elidedText(tail, Qt.ElideRight, tail_box.width()))
     p.setPen(QColor(TOKENS["text_hint"]))
-    p.drawText(head, Qt.AlignRight | Qt.AlignVCenter,
-               "%s · %s" % (right, trust) if trust else right)
+    p.drawText(right_box, Qt.AlignRight | Qt.AlignVCenter,
+               fm.elidedText(right_text, Qt.ElideLeft, right_box.width()))
     return head_h
+
+
+#: 共用 header 左右兩段之間至少留這麼寬（px）—— 兩段字貼在一起讀起來像一句。
+HEADER_GAP = 8.0
+
+
+def header_boxes(head: QRectF, left_w: float, tail_w: float,
+                 right_w: float) -> Tuple[QRectF, QRectF, QRectF]:
+    """把 header 那一列切成**互不重疊**的三塊：左、尾、右（F99 P0-2）。
+
+    以前左右兩段各自畫進同一個矩形（一個靠左、一個靠右），而沒有一方讓出
+    寬度 —— 面板窄到 200 px 的時候「single · on_pattern」跟
+    「n=81 px · 0.0% saturated」直接疊在一起，三張直方圖每一張都是。那是
+    2026-09-08 外部評審在預設版面上一眼看到的第一個 bug，而它待在調參數時
+    視線停留最久的地方。
+
+    規則：**右段（n、可信度）先拿它要的寬度**（那兩個數字是「這塊還能不能
+    信」，比左邊的名字更不能少），但最多拿一半；左段拿剩下的，尾段（GLV 的
+    「vs 參照」）只在左段講完之後還有位子才畫。每一塊都可能比字短 —— 那時候
+    呼叫端用 ``elidedText`` 縮，而不是讓字溢出到隔壁那一塊。
+    純幾何、不碰 QPainter，所以測試不用開視窗就能量。
+    """
+    width = max(0.0, float(head.width()))
+    right_take = min(float(right_w), width * 0.5)
+    left_room = max(0.0, width - right_take - (HEADER_GAP if right_take else 0.0))
+    left_take = min(float(left_w), left_room)
+    tail_take = min(float(tail_w), max(0.0, left_room - left_take))
+    left_box = QRectF(head.left(), head.top(), left_take, head.height())
+    tail_box = QRectF(head.left() + left_take, head.top(), tail_take,
+                      head.height())
+    right_box = QRectF(head.right() - right_take, head.top(), right_take,
+                       head.height())
+    return left_box, tail_box, right_box
 
 
 class CdInspector(Inspector):
@@ -2789,7 +2826,7 @@ class GdsInspector(Inspector):
             return
 
         f = QFont(p.font())
-        f.setPointSizeF(max(7.5, f.pointSizeF() - 0.5))
+        f.setPixelSize(theme.font_px("font_body"))
         p.setFont(f)
         fm = QFontMetricsF(f)
         line = fm.height() + 6.0
@@ -3170,7 +3207,7 @@ class SubtractInspector(Inspector):
                 continue
             p.setPen(QColor(TOKENS["text_hint"]))
             f = p.font()
-            f.setPointSizeF(max(7.0, f.pointSizeF() - 1.0))
+            f.setPixelSize(theme.font_px("font_small"))
             p.setFont(f)
             p.drawText(box, Qt.AlignLeft | Qt.AlignTop, name)
             plot = QRectF(box.left(), box.top() + 11, box.width(),

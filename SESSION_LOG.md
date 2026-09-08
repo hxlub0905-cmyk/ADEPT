@@ -22,6 +22,63 @@
 
 ---
 
+## F99／F100：一份 UI/UX 評審，與它的二十一件修正（2026-09-08）
+
+一份以 UI/UX 設計師角度做的評審（實際開起 Studio、載出貨 recipe、選卡、試跑、
+判定、Results，在 1440×900 與 1366×768、light 與 dark 上截圖）。結論：
+**引擎與設計系統是 A，畫面組合是 B−，首次使用的可理解度是 C+。**
+使用者定調「加入待辦事項後開始修正」，版面配置「按照你的建議改」。
+逐項在 [`docs/plans/F99-ui-review-fixes.md`](docs/plans/F99-ui-review-fixes.md)，
+版面在 [`docs/plans/F100-workbench-layout.md`](docs/plans/F100-workbench-layout.md)。
+
+### 三個 P0 全都符合 F83 那句「UI 的路壞掉不會讓任何測試變紅」
+
+| | 症狀 | 為什麼沒有測試看到 |
+|---|---|---|
+| P0-1 | 第二次按 fit／1:1／切 Build 丟 `RuntimeError: … QVariantAnimation already deleted` | conftest 把 `ANIMATE` 關掉了；`DeleteWhenStopped` 之後的殼還握在 `_view_anim` 上 |
+| P0-2 | GLV 儀表板三張直方圖的標題左右兩段疊在一起 | 兩段畫進同一個矩形而沒有一方讓寬度；沒有人量過寬度 |
+| P0-3 | 載入之後 `minimumSizeHint` 1,334、視窗被撐到 1,495 | U1 的 `fit_screen` 只量開窗那一刻 |
+
+所以這一輪每一項都配一條**會真的開視窗或量幾何**的測試，而
+`test_ui_workbench.py` 是第一條「在 1366×768 開 Studio、載資料、選卡、量幾何」
+的測試。
+
+### F100：畫布橫躺在上面、工作台在下面
+
+三個結構性的毛病：pipeline 橫著流而畫布是一格窄的直立空間（六張卡永遠得縮到
+50%，在 LOD 門檻之下）；畫布和設定區綁在同一根 splitter 上互相擠（1366 上
+畫布剩 230 px）；右欄預覽影像的硬最小寬度讓整個視窗裝不下。
+新版面：畫布吃滿卡片庫右邊整個寬度、工作台三格（設定區｜儀表板｜預覽影像）
+並排在下、Verdict 是常駐的結論列。邏輯在新模組 `ui/workbench.py`，
+`studio.py` 只留接線。⚠ `params_open` 的意思從「設定區攤開」變成「工作台攤開」
+—— 影像住在裡面，所以 Tune 模式**開窗就攤開**、取消選取不收。
+
+### 順手抓到的兩個測試陷阱（都會讓整套 UI 測試停在一個 modal 上）
+
+* `autosave.offer_restore` 在 pytest 裡會讀、會問、會刪**使用者真正的**草稿。
+  一支被中途殺掉的工具（`tools/i18n_todo.py`）留下 `~/.d4t/autosave.json`，
+  之後每一條會開 Studio 的測試都停在「Bring back your unsaved pipeline?」上，
+  faulthandler 都叫不醒（C++ 的 `exec` 裡 Python 沒有機會跑）。現在 `DIR` 是
+  預設而且在 pytest 裡 → 什麼都不碰。
+* conftest 那支關掉「要不要存」的 autouse，只在 `d4t.ui.studio` **已經** import
+  的時候改得到類別屬性——在 fixture 裡才 import 的測試檔改不到。
+  `StudioWindow.__init__` 現在在 pytest 裡預設關掉它。
+
+### 其他
+
+P1：空白處右鍵加卡、拖線到空白處彈相容卡片的選單（`ui/card_menu.py`）、
+Verdict 停在中途時說為什麼、Region 卡標題帶區域名、`needs test` →
+`needs a “test” stream`、卡片第三行用 `ParamSpec.label`、試跑後每張卡標
+`24 ok · 0.3 s`、選到判定樹時儀表板淡掉、Ctrl+C/V/D（`ui/clipboard.py`）。
+P2：字級全部走 token（`font_body` 12 → 13 對齊真相；26 處 `setPointSizeF` 改
+`font_px`）、顏色漏網收進 token、對比度參數化測試（dark 的 accent 量到 3.33，
+釘住配反向測試）、accessible name、i18n 接 library／problems_bar／welcome、
+Help 鈕的小箭頭列出開著的視窗（`ui/windows_menu.py`）。
+
+`test_size_ceilings.py` 的五格各調了一次，理由寫在每一格旁邊。
+
+---
+
 ## F95–F98：外部檢視清單剩下的十七件（2026-09-08）
 
 P0 六件與 X4／U11／U7／U6 收完之後，這一輪把 P1 與 P2 全部做完。

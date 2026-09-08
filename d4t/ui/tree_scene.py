@@ -185,7 +185,7 @@ class _ZoneItem(QGraphicsItem):
         p.drawRoundedRect(self._rect, 10, 10)
         f = p.font()
         f.setBold(True)
-        f.setPointSizeF(max(7.0, f.pointSizeF() - 1.0))
+        f.setPixelSize(theme.font_px("font_small"))
         f.setLetterSpacing(f.SpacingType.AbsoluteSpacing, 1.2)
         p.setFont(f)
         p.setPen(col)
@@ -276,10 +276,10 @@ class _EntryItem(QGraphicsItem):
         p.setPen(QPen(QColor(TOKENS["bg_surface"]), 1.5))
         p.setBrush(QBrush(col))
         p.drawEllipse(centre, r, r)
-        p.setPen(QPen(QColor("#ffffff"), 1.0))
+        p.setPen(QPen(QColor(TOKENS["focus_ring_inverse"]), 1.0))
         f = p.font()
         f.setBold(True)
-        f.setPointSizeF(8.0)
+        f.setPixelSize(theme.font_px("font_tiny"))
         p.setFont(f)
         p.drawText(QRectF(centre.x() - r, centre.y() - r, 2 * r, 2 * r),
                    Qt.AlignCenter, "!")
@@ -321,7 +321,7 @@ class _EntryItem(QGraphicsItem):
         p.setFont(f)
         _elide(p, QRectF(text_x, 9, _ENTRY_W - text_x - 8, 16), "Decision")
         f.setBold(False)
-        f.setPointSizeF(max(6.0, f.pointSizeF() - 1.0))
+        f.setPixelSize(theme.font_px("font_small"))
         p.setFont(f)
         p.setPen(QColor(TOKENS["text_secondary"]))
         if self._collapsed:
@@ -424,7 +424,7 @@ class _DiamondItem(QGraphicsItem):
         p.drawPath(self._diamond())
         p.setPen(QColor(TOKENS["text_primary"]))
         f = p.font()
-        f.setPointSizeF(max(6.5, f.pointSizeF() - 1.0))
+        f.setPixelSize(theme.font_px("font_small"))
         p.setFont(f)
         _elide(p, QRectF(18, _DIA_H / 2.0 - 8, _DIA_W - 36, 16),
                (self.when + " ?") if self.when else "( … ) ?",
@@ -492,7 +492,7 @@ class _TrayItem(QGraphicsItem):
         p.setPen(QColor(TOKENS["text_primary"]))
         f = p.font()
         f.setBold(True)
-        f.setPointSizeF(max(6.5, f.pointSizeF() - 0.5))
+        f.setPixelSize(theme.font_px("font_body"))
         p.setFont(f)
         _elide(p, QRectF(12, 6, _TRAY_W - 52, 15), title)
         f.setBold(False)
@@ -576,7 +576,7 @@ class _BranchItem(QGraphicsItem):
             return
         mid = (self._a + self._b) / 2.0
         f = p.font()
-        f.setPointSizeF(max(6.0, f.pointSizeF() - 1.5))
+        f.setPixelSize(theme.font_px("font_tiny"))
         p.setFont(f)
         fm = p.fontMetrics()
         w = fm.horizontalAdvance(text) + 8
@@ -736,7 +736,7 @@ class _GhostWireItem(QGraphicsItem):
             return
         mid = path.pointAtPercent(0.5)
         f = p.font()
-        f.setPointSizeF(max(6.0, f.pointSizeF() - 1.5))
+        f.setPixelSize(theme.font_px("font_tiny"))
         p.setFont(f)
         fm = p.fontMetrics()
         w = fm.horizontalAdvance(self._label) + 10

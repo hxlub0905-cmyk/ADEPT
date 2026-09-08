@@ -29,6 +29,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from . import theme
 from .theme import TOKENS
 
 __all__ = ["SplitBar", "ThresholdHistogram"]
@@ -42,17 +43,20 @@ BINS = 24
 PLOT_H = 64
 
 
-def _hex(token: str, fallback: str) -> str:
-    return str(TOKENS.get(token, fallback))
+def _hex(token: str, fallback: str = "") -> str:
+    """``fallback`` 留著是為了呼叫端的簽名，**不再用**（F99 P2-2）：一個沒有
+    測試的 fallback 是一份影子調色盤 —— token 調了、這裡的複本不會跟。缺鍵就
+    讓它 KeyError，那是「有人拼錯 token 名」該有的聲音。"""
+    return str(TOKENS[token])
 
 
 def _yes_color() -> QColor:
     """yes 那一側的顏色 —— 跟畫布上分支的顏色同一組（`tree_scene`）。"""
-    return QColor(_hex("chip_good_text", "#2f7a52"))
+    return QColor(_hex("chip_good_text"))
 
 
 def _no_color() -> QColor:
-    return QColor(_hex("text_secondary", "#5b6472"))
+    return QColor(_hex("text_secondary"))
 
 
 class SplitBar(QWidget):
@@ -103,9 +107,9 @@ class SplitBar(QWidget):
         # 數字寫在自己那一段裡面。塞不下就不寫 —— 一個被切一半的數字
         # 比沒有數字更糟（F19 學到的那一條）。
         font = p.font()
-        font.setPointSizeF(max(7.5, font.pointSizeF() - 1.5))
+        font.setPixelSize(theme.font_px("font_tiny"))
         p.setFont(font)
-        p.setPen(QPen(QColor("#ffffff")))
+        p.setPen(QPen(QColor(TOKENS["focus_ring_inverse"])))
         for x0, width, n in ((0.0, wy, self._yes), (wy, w - wy, self._no)):
             if n <= 0:
                 continue
@@ -245,11 +249,11 @@ class ThresholdHistogram(QWidget):
             p.drawRect(QRectF(x0 + 1.0, axis_y - bar_h, max(1.0, col_w - 2.0),
                               bar_h))
 
-        p.setPen(QPen(QColor(_hex("border_default", "#e3e6eb")), 1))
+        p.setPen(QPen(QColor(_hex("border_default")), 1))
         p.drawLine(QPointF(0, axis_y), QPointF(w, axis_y))
 
         # 門檻：一條線 ＋ 一個抓得住的把手。
-        accent = QColor(_hex("accent", "#3574d6"))
+        accent = QColor(_hex("accent"))
         p.setPen(QPen(accent, 2))
         p.drawLine(QPointF(xt, 0), QPointF(xt, axis_y))
         p.setPen(Qt.NoPen)
@@ -259,9 +263,9 @@ class ThresholdHistogram(QWidget):
         p.drawPath(handle)
 
         font = p.font()
-        font.setPointSizeF(max(7.0, font.pointSizeF() - 2.0))
+        font.setPixelSize(theme.font_px("font_tiny"))
         p.setFont(font)
-        p.setPen(QPen(QColor(_hex("text_secondary", "#5b6472"))))
+        p.setPen(QPen(QColor(_hex("text_secondary"))))
         p.drawText(QRectF(0, axis_y, w * 0.4, 12),
                    Qt.AlignLeft | Qt.AlignVCenter, _fmt(lo))
         p.drawText(QRectF(w * 0.6, axis_y, w * 0.4, 12),

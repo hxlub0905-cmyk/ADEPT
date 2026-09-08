@@ -460,7 +460,7 @@ class ResultsTableModel(QAbstractTableModel):
             if role == Qt.TextAlignmentRole:
                 return int(Qt.AlignCenter)
             if role == Qt.ForegroundRole and not row.get("ok", True):
-                return QColor(TOKENS.get("danger_text", "#a83f33"))
+                return QColor(TOKENS["danger_text"])
             return None
         if column == TRUTH_COLUMN:
             flag = self.truth_of(index.row())
@@ -502,7 +502,7 @@ class ResultsTableModel(QAbstractTableModel):
                         % ("bin %d" % int(was) if isinstance(was, int)
                            else "it could not bin this defect"))
             if role == Qt.ForegroundRole:
-                return QColor(TOKENS.get("accent", "#2f6fb2"))
+                return QColor(TOKENS["accent"])
 
         if role == Qt.DisplayRole:
             # ⚠ **算不出來的那一格留白，不是 0、也不是 NaN**（F19 那一條）——
@@ -517,7 +517,7 @@ class ResultsTableModel(QAbstractTableModel):
         if role == Qt.ForegroundRole and not row.get("ok", True):
             # 失敗的那一列整列是紅的 —— 它是使用者最需要先挑出來的那幾顆，
             # 而只有 error 那一欄變色的話，一張幾百列的表上找不到它。
-            return QColor(TOKENS.get("danger_text", "#a83f33"))
+            return QColor(TOKENS["danger_text"])
         if role == Qt.ToolTipRole and column == "error" and value:
             return str(value)
         return None
@@ -649,7 +649,7 @@ class TwoLevelHeader(QHeaderView):
         top = rect.adjusted(0, 0, 0, -(rect.height() - top_h))
         painter.save()
         painter.setClipRect(top)
-        painter.fillRect(top, QColor(TOKENS.get("bg_panel", "#fafbfc")))
+        painter.fillRect(top, QColor(TOKENS["bg_panel"]))
         names = self._column_names()
         vis = [(i, c) for i, c in enumerate(names)
                if not self.isSectionHidden(i)]
@@ -671,7 +671,7 @@ class TwoLevelHeader(QHeaderView):
                   + self.sectionSize(last_li))
             span_rect = QRect(x0 + 6, top.y(), max(0, x1 - x0 - 12),
                               top.height())
-            painter.setPen(QColor(TOKENS.get("text_primary", "#1f2430")))
+            painter.setPen(QColor(TOKENS["text_primary"]))
             painter.drawText(
                 span_rect, int(Qt.AlignLeft | Qt.AlignVCenter),
                 painter.fontMetrics().elidedText(

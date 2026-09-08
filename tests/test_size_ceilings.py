@@ -152,7 +152,13 @@ FILE_CEILINGS = {
     # 剩 76 px 的餘裕（`test_ui_small_screen` 抓到）。兩顆都搬走了：版面切換
     # 進畫布的縮放列（它控制的就是那塊畫布）、抽樣併進那個會變的字本身。
     # 加的行是**為什麼**（下一個人加鈕之前會讀到）。
-    "d4t/ui/studio.py": 7444,
+    # 2026-09-08（F99／F100）：7,444 → 7,560。**淨值 +116，而它換掉了一整段
+    # 版面**：`set_layout_mode` / `set_params_open` / `_sync_params_pane` 的
+    # 幾何搬進 `ui/workbench.py`（−56），進來的全是接線：右鍵／拖線到空白處的
+    # 兩支（內容在 `ui/card_menu.py`）、Ctrl+C/V/D 三支轉呼叫（內容在
+    # `ui/clipboard.py`）、Windows 下拉一支（`ui/windows_menu.py`）、Verdict
+    # 常駐列與「為什麼是破折號」那一句、儀表板淡掉那兩行、執行狀態一行。
+    "d4t/ui/studio.py": 7560,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     #
@@ -163,7 +169,9 @@ FILE_CEILINGS = {
     "d4t/core/pipeline/recipe.py": 3830,
     # 逐卡儀表板。這一支變長**通常是健康的**（加一張卡就多一個面板），所以
     # 這一格比其他四格更常需要調高 —— 那沒關係，重點是調高時有人看見。
-    "d4t/ui/inspectors.py": 3622,
+    # 2026-09-08（F99 P0-2）：3,622 → 3,660。`header_boxes` —— 共用 header 左右
+    # 兩段以前畫進同一個矩形而沒有一方讓寬度，面板窄到 200 px 時疊在一起。
+    "d4t/ui/inspectors.py": 3660,
     # 節點畫布。沒有被點名，只是它超過一般上限，凍住免得它安靜地漂。
     #
     # 2026-09-08（U18/U19/U20）：2,705 → 2,887（+182）。三件都長在畫布上，
@@ -172,7 +180,11 @@ FILE_CEILINGS = {
     #
     # 2026-09-08：2,887 → 2,900（+13）。`zoom_buttons()` ＋ 那顆「看全貌」鈕
     # 現在切換版面而不是開視窗的說明。
-    "d4t/ui/canvas.py": 2900,
+    # 2026-09-08（F99）：2,900 → 3,050。四件都長在畫布上：動畫殼的生命週期
+    # （`_stop_anim` / `_forget_anim`，P0-1 那個 RuntimeError）、空白處右鍵與
+    # 拖線到空白的兩個訊號（P1-1）、Region 卡標題帶區域名（P1-3）、每張卡的
+    # 執行狀態（`run_status_from` / `run_text`，P1-5）。
+    "d4t/ui/canvas.py": 3050,
 }
 
 #: 沒被列名的檔案共用的上限。
@@ -300,7 +312,10 @@ COUNT_CEILINGS = {
     ),
     # god object 的兩個投影。261 → 268（六天）。
     "studio_window_methods": (
-        287,
+        294,
+        # 2026-09-08（F99）：287 → 294。六支全是轉呼叫：`_on_add_menu` /
+        # `_on_link_dropped`（`card_menu`）、`copy_cards` / `paste_cards` /
+        # `duplicate_cards`（`clipboard`）、`_open_windows`（`windows_menu`）。
         # 2026-09-08（X3 收尾）：286 → 287。`_sample_line`（見上）。
         # 2026-09-08（U5 ＋ U8）：284 → 286。**淨值 +2，而它換掉了三支**：
         # 走的是 `open_canvas_window` / `_on_canvas_popout_closed` /
@@ -335,7 +350,12 @@ COUNT_CEILINGS = {
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[0],
     ),
     "studio_window_attributes": (
-        418,
+        430,
+        # 2026-09-08（F99／F100）：418 → 430。走的：`_layout_mode` / `_params_open`
+        # / `_SPLIT_KEYS`（進 `WorkbenchLayout`）；來的：`layout_modes` /
+        # `main_column` / `workbench` / `verdict_strip` / `verdict_note` /
+        # `gauge_note` / `empty_state_host` / `_card_clipboard`，每一個都是
+        # 畫面上一塊新東西的把手，內容在各自的模組。
         # 2026-09-08：420 → 418。`btn_layout` / `btn_sample` 兩顆工具列的鈕
         # 搬走了（見 `d4t/ui/studio.py` 那一格）。
         # 2026-09-08（X3 收尾）：419 → 420。

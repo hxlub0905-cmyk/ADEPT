@@ -39,7 +39,7 @@ from ..core.pipeline import chart_spec as cspec
 from ..core.pipeline import chart_style as cs
 from . import fit_screen
 from .uniformity_window import ChartView, chart_style_for
-from .theme import TOKENS
+from .theme import TOKENS, region_hex
 from .widgets import ChoiceChips, apply_button_cursors, small_button
 
 __all__ = ["ChartSettingsDialog", "ColourButton"]
@@ -182,7 +182,7 @@ class ColourButton(QWidget):
                else TOKENS["text_disabled"], self._FRAME))
 
     def _pick(self) -> None:
-        start = QColor(self._value) if self._value else QColor("#5fd0a0")
+        start = QColor(self._value) if self._value else QColor(region_hex(0))
         got = QColorDialog.getColor(start, self, "Pick a colour")
         if got.isValid():
             self.set_value(got.name())

@@ -27,6 +27,7 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..core.export.uniformity_charts import heat_hex as uc_heat_hex
 from .numbers import format_feature_value_short
+from . import theme
 from .theme import TOKENS, region_hex
 
 __all__ = [
@@ -597,7 +598,7 @@ class ImageView(QWidget):
             return
         lo, hi, label = self._heat_legend
         f = QFont(p.font())
-        f.setPointSizeF(max(7.0, f.pointSizeF() - 1.0))
+        f.setPixelSize(theme.font_px("font_small"))
         p.setFont(f)
         fm = QFontMetricsF(f)
         pad, w, h, line = 5.0, 150.0, 12.0, fm.height()
@@ -680,7 +681,7 @@ class ImageView(QWidget):
             return
         legend = self.overlay_legend()
         f = QFont(p.font())
-        f.setPointSizeF(max(7.0, f.pointSizeF() - 1.0))
+        f.setPixelSize(theme.font_px("font_small"))
         p.setFont(f)
         fm = QFontMetricsF(f)
         pad, sw, gap, line = 5.0, 8.0, 5.0, fm.height() + 3.0

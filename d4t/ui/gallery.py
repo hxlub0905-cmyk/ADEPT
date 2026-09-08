@@ -32,9 +32,10 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
+    QToolTip,
     QAbstractScrollArea,
     QComboBox,
     QFrame,
@@ -46,6 +47,7 @@ from PySide6.QtWidgets import (
 )
 
 from .numbers import format_feature_value
+from . import theme
 from .theme import TOKENS
 from .widgets import FilterChip, apply_button_cursors, to_uint8
 
@@ -295,6 +297,8 @@ class _GridView(QAbstractScrollArea):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setFrameShape(QFrame.NoFrame)
+        # 整面牆是一個自繪 widget，對輔具是一個空矩形 —— 至少說出它是什麼。
+        self.setAccessibleName("Thumbnail wall — one tile per defect")
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setFocusPolicy(Qt.StrongFocus)
@@ -593,7 +597,7 @@ class _GridView(QAbstractScrollArea):
             p.end()
             return
         small = QFont(p.font())
-        small.setPointSize(8)
+        small.setPixelSize(theme.font_px("font_tiny"))
         p.setFont(small)
         lo, hi = self._visible_range()
         for i in range(lo, hi):
@@ -665,6 +669,23 @@ class _GridView(QAbstractScrollArea):
                                               sub_rect.width()))
 
     # -- 互動 ---------------------------------------------------------------
+    def viewportEvent(self, e) -> bool:        # noqa: D102 - Qt hook
+        # **截掉的字要有地方讀全**（F99 P0-4）。一格 96 px 的縮圖底下裝
+        # 「more than one box is off」與「#4 · bin 2 · 35.506」，省略是對的
+        # （寬度不是免費的），但類別名是這一顆最重要的一句話 —— 停在上面就要
+        # 讀得到整句。tooltip 走 viewport 的事件，因為 tile 是畫的不是 widget。
+        if e.type() == QEvent.ToolTip:
+            idx = self.index_at(e.pos())
+            if idx is not None and 0 <= idx < len(self._items):
+                top, sub = caption_lines_of(self._items[idx],
+                                            self._sort_key or "score")
+                QToolTip.showText(e.globalPos(), "%s\n%s" % (top, sub),
+                                  self.viewport())
+            else:
+                QToolTip.hideText()
+            return True
+        return super().viewportEvent(e)
+
     def mousePressEvent(self, e) -> None:      # noqa: D102 - Qt hook
         if e.button() != Qt.LeftButton:
             return

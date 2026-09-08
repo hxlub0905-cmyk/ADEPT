@@ -42,8 +42,9 @@ FAILED_KEY = decide_tree.FAILED_KEY
 UNBINNED_KEY = decide_tree.UNBINNED_KEY
 
 
-def _hex(token: str, fallback: str) -> str:
-    return str(TOKENS.get(token, fallback))
+def _hex(token: str, fallback: str = "") -> str:
+    """缺鍵就 KeyError（F99 P2-2）：沒有測試的 fallback 是一份影子調色盤。"""
+    return str(TOKENS[token])
 
 
 # --------------------------------------------------------------------------- #
@@ -74,7 +75,7 @@ class _Bar(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._frac = 0.0
-        self._colour = "#3574d6"
+        self._colour = TOKENS["accent"]
         self.setFixedHeight(self.HEIGHT)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -91,7 +92,7 @@ class _Bar(QWidget):
         p.setRenderHint(QPainter.Antialiasing, True)
         w, h = float(self.width()), float(self.height())
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor(_hex("bg_page", "#f4f5f7")))
+        p.setBrush(QColor(_hex("bg_page")))
         p.drawRoundedRect(QRectF(0, 0, w, h), 3, 3)
         if self._frac > 0:
             # **最小 3px**：一顆的那一列仍然要看得見有東西

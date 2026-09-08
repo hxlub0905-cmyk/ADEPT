@@ -154,10 +154,16 @@ class WiringSlot(QWidget):
 
         self.text = QLabel("", self)
         self.text.setObjectName("wiringValue")
-        lay.addWidget(self.text, 0, Qt.AlignVCenter)
+        # **名字不准被切掉**（F99 P0-4）：`region_keys` 那一格裝的是
+        # 「on_pattern, between_columns, between_rows」，而這一格在工作台的
+        # 設定區裡只有三百多 px —— 以前它被容器直接切成「…between_columns, be」。
+        # 區域名是這張卡最重要的身分資訊，擠不下就換行，不是省略。
+        self.text.setWordWrap(True)
+        lay.addWidget(self.text, 2, Qt.AlignVCenter)
 
         self.note = QLabel("", self)
         self.note.setObjectName("paramHint")
+        self.note.setWordWrap(True)
         lay.addWidget(self.note, 1, Qt.AlignVCenter)
 
         self.button = QPushButton("", self)

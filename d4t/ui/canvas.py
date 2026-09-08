@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+import shiboken6
 from PySide6.QtCore import (
     QAbstractAnimation, QEasingCurve, QPointF, QRectF, Qt, QVariantAnimation,
     Signal,
@@ -40,6 +41,8 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QBrush,
     QColor,
+    QFont,
+    QFontMetricsF,
     QPainter,
     QPainterPath,
     QPainterPathStroker,
@@ -471,6 +474,46 @@ def _draw_port(p: QPainter, anchor: QPointF, kind: str, filled: bool,
     p.setBrush(QBrush(col if filled else QColor(TOKENS["bg_surface"])))
     p.drawEllipse(anchor, _PORT_R + grow, _PORT_R + grow)
 
+
+
+def run_status_from(results) -> Dict[str, Tuple[int, int, float]]:
+    """把一批試跑結果折成每張卡一行：``{node_id: (跑好幾顆, 失敗幾顆, 總毫秒)}``
+    （F99 P1-5）。吃 `result_to_json_dict` 那種 dict（``traces`` 是 dict 的
+    list），也吃 `DefectResult`。純函式，畫布與測試都用它。"""
+    out: Dict[str, List[float]] = {}
+    for r in (results or []):
+        traces = (r.get("traces") if isinstance(r, dict)
+                  else getattr(r, "traces", None)) or []
+        for t in traces:
+            get = (t.get if isinstance(t, dict)
+                   else (lambda k, _t=t: getattr(_t, k, None)))
+            nid = str(get("node_id") or "")
+            if not nid:
+                continue
+            row = out.setdefault(nid, [0, 0, 0.0])
+            row[0 if get("ok") else 1] += 1
+            try:
+                row[2] += float(get("ms") or 0.0)
+            except (TypeError, ValueError):
+                pass
+    return {k: (int(v[0]), int(v[1]), float(v[2])) for k, v in out.items()}
+
+
+def run_text(status) -> str:
+    """卡片右上角那一小句：``24 ok · 0.3 s`` 或 ``3 failed``。沒跑過是空字串。
+
+    失敗優先（那是使用者要先看的），時間是**這張卡在這一批的總耗時**——
+    「哪張卡是這批的瓶頸」以前只能去 traces 裡翻。"""
+    if not status:
+        return ""
+    ok, bad, ms = int(status[0]), int(status[1]), float(status[2])
+    if bad:
+        return "%d failed" % bad
+    if ok <= 0:
+        return ""
+    secs = ms / 1000.0
+    when = "<0.1 s" if secs < 0.1 else "%.1f s" % secs
+    return "%d ok · %s" % (ok, when)
 
 class _NodeItem(QGraphicsItem):
     """一張節點卡（自繪；顏色全部取自 ``theme.TOKENS``）。"""
@@ -938,11 +981,30 @@ class _NodeItem(QGraphicsItem):
         # 兩個東西都變得難讀。
         text_w = NODE_W - text_x - (8 if not self.problem() else 22)
 
+        # 這張卡在上一批跑得怎樣（F99 P1-5）：``24 ok · 0.3 s`` 或 ``3 failed``，
+        # 右上角、標題那一行。跑完一批之前畫布跟跑之前長得一模一樣，而 traces
+        # 裡早就有每張卡的成敗與耗時 —— n8n 在每個節點上標「✓ 24 items」
+        # 就是這一格。縮到 terse 時不畫（那時候連副標都收掉了）。
+        run = "" if terse else run_text(self.canvas.run_status_of(self.node_id))
+        if run:
+            p.save()
+            rf = QFont(p.font())
+            rf.setBold(False)
+            rf.setPixelSize(theme.font_px("font_tiny"))
+            p.setFont(rf)
+            run_w = QFontMetricsF(rf).horizontalAdvance(run) + 4.0
+            ok_run = "failed" not in run
+            p.setPen(QColor(TOKENS["success_text" if ok_run else "danger_text"]))
+            p.drawText(QRectF(text_x + text_w - run_w, 11, run_w, 16),
+                       int(Qt.AlignRight | Qt.AlignVCenter), run)
+            p.restore()
+            text_w -= run_w + 4.0
+
         fg = TOKENS["text_primary"] if enabled else TOKENS["text_disabled"]
         p.setPen(QColor(fg))
         f = p.font()
         f.setBold(True)
-        f.setPointSizeF(max(7.0, f.pointSizeF()))
+        f.setPixelSize(theme.font_px("font_body"))
         p.setFont(f)
         # 縮很小的時候**標題留著**（那是這張卡的身分，也是唯一還讀得出輪廓的
         # 一行），副標與設定摘要收掉 —— 見 `_LOD_TERSE`。
@@ -950,13 +1012,11 @@ class _NodeItem(QGraphicsItem):
             # 只剩一行的時候把它擺到卡片中線上，不然標題會孤零零貼在上緣、
             # 底下空一大塊，看起來像沒畫完。
             _draw_elided(p, QRectF(text_x, (min(NODE_H, self.body_height()) - 16) / 2.0,
-                                   text_w, 16),
-                         str(self.info.get("label", self.node_id)))
+                                   text_w, 16), self.title())
         else:
-            _draw_elided(p, QRectF(text_x, 11, text_w, 16),
-                         str(self.info.get("label", self.node_id)))
+            _draw_elided(p, QRectF(text_x, 11, text_w, 16), self.title())
             f.setBold(False)
-            f.setPointSizeF(max(6.0, f.pointSizeF() - 1.0))
+            f.setPixelSize(theme.font_px("font_small"))
             p.setFont(f)
             p.setPen(QColor(TOKENS["text_secondary"] if enabled
                             else TOKENS["text_disabled"]))
@@ -1030,12 +1090,29 @@ class _NodeItem(QGraphicsItem):
 
         f = p.font()
         f.setBold(False)
-        f.setPointSizeF(max(6.0, f.pointSizeF() - 1.0))
+        f.setPixelSize(theme.font_px("font_small"))
         f.setLetterSpacing(f.SpacingType.AbsoluteSpacing, 0.6)
         p.setFont(f)
         p.setPen(QColor(col if enabled else TOKENS["text_disabled"]))
         p.drawText(QRectF(8, body.bottom(), NODE_W - 16, _LOT_STRIP),
                    int(Qt.AlignLeft | Qt.AlignVCenter), LOT_STRIP_TEXT)
+
+    def title(self) -> str:
+        """標題：卡片名，**Region 卡再帶上它定義的區域名**（F99 P1-3）。
+
+        出貨的 recipe 有三張「ROI」，唯一的區別以前是第三行 9 px 灰字裡的
+        node id —— 三張卡在畫布上分不出來，而區域名（``on_pattern`` /
+        ``between_columns`` / ``between_rows``）正是那張卡的身分，也是下游
+        接線時真正指的東西。所以它上標題：``ROI · on_pattern``。
+        只有**真的定義區域**的卡才帶（``regions_produced``）；量測卡把接進來的
+        區域原樣送出去，那不是它的身分。影像卡不帶：``single → single`` 已經
+        在副標說了。標題太長會被省略（`_draw_elided`），卡片名永遠在前面。
+        """
+        label = str(self.info.get("label", self.node_id))
+        regs = [r for r in (self.info.get("regions_produced") or []) if r]
+        if regs:
+            return "%s · %s" % (label, regs[0])
+        return label
 
     def subtitle(self) -> str:
         """副標：**這張卡吃什麼、吐什麼**（F7-14）。
@@ -1118,10 +1195,10 @@ class _NodeItem(QGraphicsItem):
         p.setPen(QPen(QColor(TOKENS["bg_surface"]), 1.5))
         p.setBrush(QBrush(col))
         p.drawEllipse(centre, r, r)
-        p.setPen(QPen(QColor("#ffffff"), 1.0))
+        p.setPen(QPen(QColor(TOKENS["focus_ring_inverse"]), 1.0))
         f = p.font()
         f.setBold(True)
-        f.setPointSizeF(8.0)
+        f.setPixelSize(theme.font_px("font_tiny"))
         p.setFont(f)
         p.drawText(QRectF(centre.x() - r, centre.y() - r, 2 * r, 2 * r),
                    Qt.AlignCenter, "!")
@@ -1554,6 +1631,16 @@ class PipelineCanvas(QGraphicsView):
     edge_removed = Signal(str, str, str, str)
     #: 從卡片庫拖一張卡丟到畫布上：``(step_key, 場景 x, 場景 y)``（F7-22）。
     card_dropped = Signal(str, float, float)
+    #: 在**空白處**按右鍵：``(場景 x, 場景 y)``（F99 P1-1）。畫布自己不認得
+    #: 卡片庫，選單由 Studio 開；挑了一張就走 `card_dropped` 同一條路。
+    #: 這是所有節點編輯器最基本的手勢，而它以前是死的（`contextMenuEvent`
+    #: 只做 accept，右鍵放開只找 `_NodeItem`）。
+    add_menu_requested = Signal(float, float)
+    #: 把線拖到**空白處**放開：``(來源卡, 埠的型別 image/region, 那顆埠吐的
+    #: 名字, 場景 x, 場景 y)``（F99 P1-1）。以前 `_drop_link` 找不到目標就安靜
+    #: 地丟掉 —— 使用者的手勢是有意義的（「我要一張接在這後面的卡」），而那
+    #: 正是 n8n 建流程的主要方式。Studio 拿到型別就能只列**接得上**的卡。
+    link_dropped = Signal(str, str, str, float, float)
     #: 「在自己的視窗打開畫布」（F8-UI D 案）。畫布在主視窗只佔中上一塊
     #: （它會 zoom，不需要常駐大面積），要看全貌就彈出去。
     popout_requested = Signal()
@@ -1572,6 +1659,10 @@ class PipelineCanvas(QGraphicsView):
 
     def __init__(self, parent=None, popout_button: bool = True):
         super().__init__(parent)
+        # 還沒 `set_nodes` 之前就會被畫（空畫布也會 `drawForeground`）——
+        # `first_wire_hint` 讀 `_lines`，以前它在這裡不存在（F99 測試抓到的
+        # AttributeError，只在 stderr 上叫、不讓任何測試變紅）。
+        self._lines: List[Tuple[str, str, str, str]] = []
         #: 彈出視窗裡的那份畫布把這顆鈕關掉 —— 從彈出視窗再彈一個視窗，
         #: 沒有那種需求，只有無限套娃。
         self._popout_button = bool(popout_button)
@@ -2181,6 +2272,22 @@ class PipelineCanvas(QGraphicsView):
     def selected_node(self) -> Optional[str]:
         return self._selected
 
+    # ---- 上一批的執行狀態（F99 P1-5）----------------------------------------
+    def set_run_status(self, status) -> None:
+        """``{node_id: (ok, failed, total_ms)}``（`run_status_from` 產的）。
+        傳空的就是清掉。位置與選取都不動，只重畫。"""
+        self._run_status = dict(status or {})
+        for item in self._items.values():
+            item.update()
+
+    def run_status_of(self, node_id: str):
+        return (getattr(self, "_run_status", None) or {}).get(str(node_id))
+
+    def selected_ids(self) -> List[str]:
+        """現在選著的每一張卡（框選可以是好幾張；`selected()` 只回第一張）。"""
+        return [it.node_id for it in self._scene.selectedItems()
+                if isinstance(it, _NodeItem)]
+
     def selected(self) -> Optional[str]:
         """與舊 ``PipelinePanel.selected()`` 同名同義。"""
         return self._selected
@@ -2252,10 +2359,7 @@ class PipelineCanvas(QGraphicsView):
         start = self._view_state()
         apply_end()
         end = self._view_state()
-        anim = getattr(self, "_view_anim", None)
-        if anim is not None:
-            anim.stop()
-            self._view_anim = None
+        self._stop_anim("_view_anim")
         if not ANIMATE or not self.isVisible():
             return
         if (abs(end[0] - start[0]) < 1e-6
@@ -2281,10 +2385,43 @@ class PipelineCanvas(QGraphicsView):
         anim.valueChanged.connect(lambda v: step(float(v)))
         # 終點**照抄量到的那一組**，不靠動畫的最後一格算出來 —— 內插誤差與
         # 捲軸夾值都會讓最後一格差個一兩 px，而那一兩 px 是會累積的。
-        anim.finished.connect(lambda: self._set_view_state(end))
+        def done() -> None:
+            self._set_view_state(end)
+            self._forget_anim("_view_anim", anim)
+
+        anim.finished.connect(done)
         self._view_anim = anim
         step(0.0)                       # 先回到起點
         anim.start(QAbstractAnimation.DeleteWhenStopped)
+
+    # ---- 動畫的生命週期（F99 P0-1）------------------------------------------
+    #
+    # ⚠ **`DeleteWhenStopped` 的意思是「動畫自然跑完，C++ 那一邊就沒了」**，
+    # 而 Python 這一邊的 `self._view_anim` 還握著一個殼。下一次 `fit()` 對那個殼
+    # 呼叫 `stop()`，就是 F83 那句話的第三個實例：
+    # `RuntimeError: Internal C++ object (QVariantAnimation) already deleted`。
+    # 症狀是「按第二次 fit / 1:1 / 切 Build 模式會炸」——
+    # 而**沒有一條測試看得到**，因為 conftest 把 `ANIMATE` 關掉了。
+    # 修法有兩半：動畫結束時把殼放掉（`_forget_anim`），而停動畫之前先問殼還
+    # 在不在（`_stop_anim`）。第二半是保險 —— 第一半漏掉任何一條路（例如
+    # `stop()` 本身觸發的 deleteLater），保險接住。
+    # `tests/test_ui_canvas_animation.py` 現在有一條開著動畫、等它跑完、再按
+    # 一次的測試。
+    def _stop_anim(self, attr: str) -> None:
+        anim = getattr(self, attr, None)
+        setattr(self, attr, None)
+        if anim is None:
+            return
+        try:
+            alive = shiboken6.isValid(anim)
+        except Exception:               # noqa: BLE001 — 殼本身壞了就當沒有
+            alive = False
+        if alive:
+            anim.stop()
+
+    def _forget_anim(self, attr: str, anim) -> None:
+        if getattr(self, attr, None) is anim:
+            setattr(self, attr, None)
 
     def fit(self) -> None:
         """整張圖縮放到看得完（但不縮到看不懂、也不放大）。"""
@@ -2425,10 +2562,7 @@ class PipelineCanvas(QGraphicsView):
         （再按一次、或畫布重建）時停在哪裡都無所謂，因為 model 那一邊早就是
         終點了。
         """
-        anim = getattr(self, "_node_anim", None)
-        if anim is not None:
-            anim.stop()
-            self._node_anim = None
+        self._stop_anim("_node_anim")
         if not ANIMATE or not self.isVisible():
             return
         live = {nid: (a, b) for nid, (a, b) in moves.items()
@@ -2448,7 +2582,11 @@ class PipelineCanvas(QGraphicsView):
         anim.setEndValue(1.0)
         anim.setEasingCurve(QEasingCurve.OutCubic)
         anim.valueChanged.connect(lambda v: step(float(v)))
-        anim.finished.connect(lambda: step(1.0))
+        def done() -> None:
+            step(1.0)
+            self._forget_anim("_node_anim", anim)
+
+        anim.finished.connect(done)
         self._node_anim = anim
         step(0.0)
         anim.start(QAbstractAnimation.DeleteWhenStopped)
@@ -2503,6 +2641,12 @@ class PipelineCanvas(QGraphicsView):
                     src.node_id, item.node_id, self.stream_of(src, port),
                     item.in_param_at(item.mapFromScene(scene_pos)))
                 return
+        # 落在空白處：講出來，讓 Studio 開一張「接得上的卡」的選單。
+        specs = src.out_specs()
+        kind = (str(specs[port].get("kind") or "image")
+                if 0 <= port < len(specs) else "image")
+        self.link_dropped.emit(src.node_id, kind, self.stream_of(src, port),
+                               float(scene_pos.x()), float(scene_pos.y()))
 
     @staticmethod
     def stream_of(src: "_NodeItem", port: int) -> str:
@@ -2650,12 +2794,19 @@ class PipelineCanvas(QGraphicsView):
             self._pan_last = None
             if not moved:
                 # 原地放開 = 右鍵選單（拖了就是平移，不出選單）。
+                hit = None
                 for item in self.items(self._view_pos(e)):
                     if isinstance(item, _NodeItem):
-                        gp = (e.globalPosition().toPoint()
-                              if hasattr(e, "globalPosition") else e.globalPos())
-                        item.show_context_menu(gp)
+                        hit = item
                         break
+                if hit is not None:
+                    gp = (e.globalPosition().toPoint()
+                          if hasattr(e, "globalPosition") else e.globalPos())
+                    hit.show_context_menu(gp)
+                else:
+                    # 空白處：加一張卡（F99 P1-1）。
+                    sp = self.mapToScene(self._view_pos(e))
+                    self.add_menu_requested.emit(float(sp.x()), float(sp.y()))
             e.accept()
             return
         if self._link_from is not None:

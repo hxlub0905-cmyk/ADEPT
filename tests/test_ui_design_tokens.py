@@ -109,7 +109,8 @@ def test_the_scale_has_a_number_side_too():
                  "font_title"):
         assert theme.TOKENS[name].endswith("px")
         assert theme.font_px(name) == int(theme.TOKENS[name][:-2])
-    assert theme.font_px("no_such_token") == 12, "不認得的名字要有一個能用的退路"
+    assert theme.font_px("no_such_token") == theme.font_px("font_body"), \
+        "不認得的名字要有一個能用的退路（就是 body）"
 
 
 def test_the_scale_is_actually_a_scale():
@@ -119,3 +120,33 @@ def test_the_scale_is_actually_a_scale():
                                         "font_body", "font_title")]
     assert sizes == sorted(sizes), sizes
     assert len(set(sizes)) == len(sizes), ("兩個字級撞在一起了：%s" % sizes)
+
+
+# --------------------------------------------------------------------------- #
+# F99 P2-1：字級 token 定義了、測試了，然後被 theme.py 自己的 QSS 繞過
+# --------------------------------------------------------------------------- #
+def test_the_stylesheet_itself_uses_the_scale():
+    """`theme.py` 以前被上面那條測試**排除**，而它的 QSS 寫死了 17 個字級
+    （9/10/11/12/13/14）—— token 的尺是 {9,10,11,12,15}，兩把尺沒有一格對得上：
+    名字叫 `font_body` 的 12 不是 body（`*` 是 13），`font_title` 15 從沒被用過。
+    現在 QSS 只准寫 ``$font_*`` 與 ``$hairline``。"""
+    import re
+    src = (REPO / "d4t" / "ui" / "theme.py").read_text(encoding="utf-8")
+    qss = src[src.index("_QSS"):]
+    assert not re.search(r"font-size:\s*\d+px", qss), "QSS 裡還有寫死的字級"
+    assert "1px solid" not in qss, "線粗走 $hairline"
+    assert "$font_body" in qss and "$hairline" in qss
+
+
+def test_the_painted_half_uses_the_scale_too():
+    """自繪那一面以前有 26 處 ``setPointSizeF(max(6.0, pt - 1.0))`` —— 四種差值、
+    四種下限、單位是 pt（6 pt 在 96 DPI 是 8 px，低於 9 px 的 `font_micro`）。
+    同一個洩漏換一個出口。現在一律 ``setPixelSize(theme.font_px(...))``。"""
+    bad = []
+    for p in sorted((REPO / "d4t" / "ui").glob("*.py")):
+        if p.name == "theme.py":
+            continue
+        for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            if "setPointSize" in line:
+                bad.append("%s:%d: %s" % (p.name, i, line.strip()))
+    assert not bad, "\n".join(bad)
