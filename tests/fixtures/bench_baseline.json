@@ -1,0 +1,24 @@
+{
+  "cases": {
+    "die_to_die_basic__make_sample": {
+      "cache_bytes_per_defect": 37919.7,
+      "cache_files": 24,
+      "cache_speedup": 1.04,
+      "ms_per_defect_cache_cold": 197.37,
+      "ms_per_defect_cache_warm": 189.538,
+      "ms_per_defect_w1": 193.606,
+      "ms_per_defect_wn": 51.568,
+      "n": 24,
+      "parallel_speedup": 3.75,
+      "result_bytes_per_defect": 1953.6,
+      "workers": 4
+    }
+  },
+  "env": {
+    "cpu_count": 4,
+    "cv2": "5.0.0",
+    "numpy": "2.4.6",
+    "platform": "Linux",
+    "python": "3.11.15"
+  }
+}
