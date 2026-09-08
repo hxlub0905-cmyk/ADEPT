@@ -82,15 +82,15 @@ FILE_CEILINGS = {
     # 接線層（建 widget、接訊號、轉呼叫）。`CLAUDE.md` §4：新的面板一律開新
     # 模組，不要塞進這裡。這一格就是那句話的執行機構。
     #
-    # 2026-09-08（P0 那一批）：6,942 → 7,100（+158）。**七個新模組，
+    # 2026-09-08（P0 那一批）：6,942 → 7,108（+166）。**七個新模組，
     # 而這裡只加接線** —— 每一項的內容都在自己的檔案裡：
     #   `baseline.py`（X1）、`truth_marks.py`（X2）、`fit_screen.py`（U1）、
     #   `crashlog.py`（U3）、`autosave.py`（U4）、`problems_bar.py` ＋
     #   `status_log.py`（U2 的前後兩半）。
-    # 這 158 行是：三支新方法（`_publish_run_snapshot` / `_on_truth_marked` /
+    # 這 166 行是：三支新方法（`_publish_run_snapshot` / `_on_truth_marked` /
     # `_on_problem_activated`）、Problems 列／狀態列歷史／草稿的建構與掛勾、
     # 以及 `_refresh_pipeline` 改成只跑一次 lint。
-    "d4t/ui/studio.py": 7100,
+    "d4t/ui/studio.py": 7108,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     "d4t/core/pipeline/recipe.py": 3732,

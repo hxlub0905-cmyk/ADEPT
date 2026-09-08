@@ -1095,22 +1095,12 @@ class StudioWindow(QMainWindow):
         middle.setStretchFactor(1, 3)
         self.canvas_column = middle
 
-        # 「為什麼還不能跑」的常駐清單（U2）—— 中欄最下面一條，**不在 splitter
-        # 裡**：它是使用者在畫布上找不到路時唯一的答案，一個拖得掉的東西答不到
+        # 「為什麼還不能跑」的常駐清單（U2）—— **整個視窗最下面一條，橫跨三欄**
+        # （見下面 `setCentralWidget` 那一段）。它不在任何一個 splitter 裡：
+        # 它是使用者在畫布上找不到路時唯一的答案，而一個拖得掉的東西答不到
         # 那件事。
-        #
-        # ⚠ 包的是**整個中欄**，不是畫布：`canvas_column.widget(0)` 就是畫布
-        # 這件事有人靠著（`canvas.py::_build_header` 的說明、
-        # `test_ui_f8_ui_polish` 的版面斷言、彈出視窗的比例邏輯）。
-        # 第一版包在畫布外面，那條不變量當場就斷了。
         self.problems = ProblemsBar(self)
         self.problems.problem_activated.connect(self._on_problem_activated)
-        middle_block = QWidget(self)
-        mb = QVBoxLayout(middle_block)
-        mb.setContentsMargins(0, 0, 0, 0)
-        mb.setSpacing(0)
-        mb.addWidget(middle, 1)
-        mb.addWidget(self.problems)
         # **開窗時沒有選任何卡片，所以設定區是收起來的**（F13-1）。
         # 以前它一律攤開，於是畫面最大的一塊（中欄下半，1600×1000 上量到
         # 551px 高）裝的是一行灰字「(Pick a card from the library…)」——
@@ -1139,7 +1129,7 @@ class StudioWindow(QMainWindow):
 
         root = QSplitter(Qt.Horizontal, self)
         root.addWidget(self.library)
-        root.addWidget(middle_block)
+        root.addWidget(middle)
         root.addWidget(self.preview_pane)
         root.setStretchFactor(0, 0)
         root.setStretchFactor(1, 2)
@@ -1149,7 +1139,25 @@ class StudioWindow(QMainWindow):
         root.setSizes(_load_sizes(COLUMNS_KEY, 3) or list(COLUMN_SIZES))
         self.top_splitter = root
         self.root_splitter = root
-        self.setCentralWidget(root)
+
+        # Problems 列住在**三欄的下面、狀態列的上面**（U2）—— 橫跨整個視窗。
+        #
+        # ⚠ 位置換過兩次，而兩次都是**現有的不變量把它推到這裡**：
+        #   1. 包在畫布外面 → `canvas_column.widget(0)` 不再是畫布
+        #      （`canvas.py::_build_header` 的說明就寫著誰靠著它，
+        #      `test_ui_f8_ui_polish` 當場紅）；
+        #   2. 包住整個中欄 → `root_splitter` 的三個子項不再是
+        #      `[library, canvas_column, preview_pane]`
+        #      （`test_ui_results::test_main_window_keeps_only_the_editing_surface`）。
+        # 包 central widget 誰都不礙著 —— 而且**這一塊本來就是視窗層級的答案**
+        # （「這份 pipeline 現在能不能跑」不是中欄自己的事）。
+        host = QWidget(self)
+        hl = QVBoxLayout(host)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(0)
+        hl.addWidget(root, 1)
+        hl.addWidget(self.problems)
+        self.setCentralWidget(host)
 
     def _build_score_pane(self) -> QWidget:
         """判定段那一欄 —— 內容全部住在 `DecidePanel`（F22-UI）。
