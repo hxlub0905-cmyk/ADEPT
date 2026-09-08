@@ -2,7 +2,7 @@
 # d4t chart frame — authored 2026-09-07 (F88 第一刀).
 """**一張長表：一列一格框。**
 
-為什麼要它（`docs/plans/F88-graph-builder.md` §2）
+為什麼要它（`docs/history/plans/F88-graph-builder.md` §2）
 --------------------------------------------------
 `uniformity_charts.chart_series` 產的是「四張圖各自需要的形狀」
 （``groups[{name, colour, values, cx, cy, rects}]``）—— 也就是**資料的形狀
@@ -118,10 +118,6 @@ class Frame(object):
     def category_columns(self) -> List[str]:
         """可以放到 顏色 / 分組 上的那幾欄。"""
         return [c for c in self.columns if c in self.categories]
-
-    def label(self, name: str) -> str:
-        """一欄在畫面上叫什麼（見 `column_label`）。"""
-        return self.labels.get(str(name), str(name))
 
     def values(self, name: str) -> List[float]:
         """一欄裡**畫得出來的**那些數（跳過缺值與 NaN）。"""

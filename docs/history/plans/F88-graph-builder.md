@@ -477,7 +477,7 @@ F85 那份被使用者推翻過兩次（「是有必要新開卡嗎」、「不�
 
 **沒有動的兩種**：
 
-1. `SESSION_LOG.md` 與 `docs/plans/F85-uniformity.md` —— 那是**歷史紀錄**，
+1. `SESSION_LOG.md` 與 `docs/history/history/plans/F85-uniformity.md` —— 那是**歷史紀錄**，
    當時那張卡就叫那個名字。改掉等於竄改。
 2. 兩處**引用使用者原話**的註解（「右側 Uniformity folder 直接把預覽的圖放
    上來好像也很奇怪」）—— 那是他說過的一句話，不是一個標籤。
