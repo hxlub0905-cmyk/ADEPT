@@ -109,7 +109,7 @@ from d4t.core.pipeline.cellrois import region_names
 from d4t.core.pipeline.engine import (
     FEATURE_OWNER_KEY, feature_prefixes,
 )
-from d4t.core.pipeline.step import REGION_TYPES, REGISTRY, SCALE_DEFECT
+from d4t.core.pipeline.step import REGISTRY, SCALE_DEFECT
 from d4t.core.pipeline.recipe import is_region_edge, version_skew
 from d4t.core.pipeline import verdict_features
 from d4t.core.pipeline.verdict_trace import verdict_trace
@@ -117,6 +117,7 @@ from d4t.core.pipeline.verdict_trace import verdict_trace
 from . import autosave
 from . import baseline
 from . import fit_screen
+from . import edit_plan
 from .canvas import SUMMARY_SEP, PipelineCanvas
 from .inspectors import inspector_for
 from .problems_bar import ProblemsBar
@@ -2837,125 +2838,51 @@ class StudioWindow(QMainWindow):
         return ""
 
     def _producers_of(self, stream: str) -> List[str]:
-        """哪些卡片（用預設參數）會產出 ``stream``。"""
-        out: List[str] = []
-        for cls in visible_steps([s.describe() for s in list_steps()]) or []:
-            key = str(cls.get("key", ""))
-            try:
-                step_cls = get_step(key)
-                params = step_cls.validate_params({})
-                writes = step_cls.resolve_writes_for_kind(params, self.model.kind)
-            except Exception:              # noqa: BLE001 — 顯示用
-                continue
-            if stream in writes and step_cls.label:
-                out.append(str(step_cls.label))
-        return out
+        """哪些卡片（用預設參數）會產出 ``stream``。
+
+        ⚠ **實作住 `ui/edit_plan.py`**（U6）：它是圖編輯語意的一部分，而那一族
+        必須在沒有 QApplication 的情況下問得出來。這裡只是轉呼叫。
+        """
+        return edit_plan.producers_of(self.model, stream)
 
     def _unmet_needs(self, node_id: str) -> str:
-        """剛加的卡少了什麼上游 —— 講成一句可以照做的話（回傳含前導空白）。
+        """剛加的卡少了什麼上游 —— 講成一句可以照做的話（含前導空白）。
 
-        以前只有卡片庫上一個 ``needs diff`` 之類的灰字 badge。對不會寫 code
-        的人那句話沒有動作可做：他不知道那條流是誰產的，也不知道「不然還可以
-        怎麼辦」。例：Load 之後直接放 SNR map，它預設吃 ``diff``，一定缺
-        一張上游的 Compare。（Subtract 以前也是常客 —— 它曾預設吃
-        ``ref_aligned``；2026-08-14 起改吃 ``ref``，patch 本來就對齊。）
+        ⚠ 實作住 `ui/edit_plan.py`（同上）。
         """
-        node = self.model.nodes.get(str(node_id))
-        if node is None:
-            return ""
-        try:
-            step_cls = get_step(node.step)
-            needs = list(step_cls.resolve_reads(node.params))
-            # F10：剛加進來的卡**沒有來源**，所以 ``resolve_reads`` 是空的 ——
-            # 照字面走的話這裡會說「什麼都不缺」，而它其實什麼都還沒接。
-            #
-            # 那一句話不能只講「這一格是空的」：對不寫 code 的使用者，「還缺
-            # diff」跟「先加一張 Compare two streams」才是**做得下去**的話。
-            # 卡片的 ``default`` 正好就是「這張卡本來預期吃哪一條流」，拿它來
-            # 講那句話 —— 值被清掉了，但宣告還在。
-            for name in step_cls.missing_inputs(node.params):
-                spec = next((sp for sp in step_cls.params if sp.name == name),
-                            None)
-                want = str(getattr(spec, "default", "") or "")
-                if want and want not in needs:
-                    needs.append(want)
-        except KeyError:
-            return ""
-        # 「上游有哪些流」有兩個來源，兩個都要算（F9-11）：
-        #
-        # 1. ``available_streams`` —— 照 route 的**線性順序**累加。這是沒有埠的
-        #    線（既有 recipe）唯一的依據。
-        # 2. **接進這張卡的線自己帶的流名。** F9 之後資料是照線走的，而線可以
-        #    從執行順序上「後面」的節點接過來（分支的兩支各自往前接）。
-        #    只看第 1 點的話，明明畫布上有線，這裡卻說「還缺 ref」——
-        #    使用者照著那句話再加一張卡，就多了一張沒有用的卡。
-        have = set(self.model.available_streams(before_node=str(node_id)))
-        have |= {e.src_out for e in self.model.edges
-                 if e.dst == str(node_id) and e.src_out
-                 # 區域線帶的是**區域名**，不是影像流（F42 B2）。算進來的話
-                 # 一張接了 `epi` 的卡會被當成「它已經有一條叫 epi 的流」。
-                 and not is_region_edge(e, self.model.nodes)}
-        missing = [s for s in needs if s and s not in have]
-        if not missing:
-            return ""
-        bits = []
-        for s in missing:
-            makers = self._producers_of(s)
-            bits.append("“%s” (add %s first)" % (s, " or ".join(makers))
-                        if makers else "“%s”" % s)
-        return (" — but it still needs the image stream %s, or point it at one "
-                "of: %s." % (", ".join(bits), ", ".join(sorted(have)) or "(none)"))
+        return edit_plan.unmet_needs(self.model, node_id)
 
     def _drop_conflicting_edges(self, src: str, dst: str, stream: str,
                                 param: str) -> str:
         """拿掉「跟這條新線搶同一個輸入」的舊線；回一句給狀態列的話。
 
-        什麼叫搶同一個輸入
-        ------------------
-        引擎是用 ``(下游節點, 流名)`` 去查資料從哪來的（``_explicit_bindings``），
-        所以同一個 key 只能有一個來源。兩條線落在同一個 key 上時，**dict 後寫
-        的贏** —— 也就是「``recipe.edges`` 裡排在後面的那條」，而那個順序在畫布
-        上完全看不出來。
-
-        - ``image_key``（``subtract`` 的 ``a``／量測卡的 ``source``）：一個參數
-          就是一個角色，同一個參數上的舊線一律讓位。
-        - ``image_keys``（Enhance 卡的 ``streams``，可以同時做好幾條）：只有
-          **同一條流名**才算搶 —— 一條給 test、一條給 ref 是兩個 key，本來就
-          該並存。
+        ⚠ **判準住 `edit_plan.conflicting_edges`**（U6）—— 那是引擎正確性的
+        一半（F9-7「一個輸入埠只能有一條線」），而它現在問得起來而不必開視窗。
+        這裡只剩「真的拿掉」與「說一句話」。
         """
-        node = self.model.nodes.get(str(dst))
-        if node is None or not param:
-            return ""
-        try:
-            spec = {p.name: p for p in get_step(node.step).params}.get(param)
-        except KeyError:                       # pragma: no cover
-            return ""
-        if spec is None:
-            return ""
-        # 「不是剛拉的這一條」而不是「來源不同的那些」（F10 修）：從**同一張卡**
-        # 先拉 test 再拉 ref 到同一顆角色埠時，來源相同 —— 舊的判準把它放過去，
-        # 於是參數換成了 ref、而畫布上兩條線都還在，同一個輸入埠上有兩條線。
-        # 那正是 F9-7 擋下來的東西（引擎只認其中一條，而畫面上看不出是哪條）。
-        # F10 之前這個洞碰不到，因為 a / b 這種角色埠上根本不會有線。
-        losers = [e for e in list(self.model.edges)
-                  if e.dst == str(dst) and e.dst_in == param
-                  and not (e.src == str(src) and e.src_out == str(stream))
-                  and (spec.type == "image_key" or e.src_out == str(stream))]
+        return self._drop_edges(
+            edit_plan.conflicting_edges(self.model, src, dst, stream, param))
+
+    def _drop_edges(self, losers: Sequence[Any]) -> str:
+        """把讓位的那幾條線真的拿掉；回一句給狀態列的話（沒有就回空字串）。
+
+        ⚠ **兩個埠都要指名**（B1，2026-08-24）。兩張卡之間可以有好幾條並排的
+        線（F9-9），而它們可能落在**不同的輸入格**上 —— 只帶 `src_out` 的話
+        `remove_edge` 的語意是「符合這個 src_out 的**全部**」，於是剪一條會剪掉
+        一整排。
+
+        實測：`load.test → subtract.a` 與 `load.test → subtract.b` 兩條並存時，
+        把別的卡接到 `b` 會**連 `a` 那條一起剪掉** —— 沒有人碰過 `a`，而 `a` 的
+        參數還留著 `test`：畫布上沒有線、卡片卻還指著那條流，於是引擎退回
+        「執行順序上最後一個寫它的人」用猜的。線性時猜得中、分岔時猜錯，
+        而且跑得完、有數字（F9／F10 整整兩輪在防的形狀）。
+
+        ⚠ **不可以寫 `e.src_out or None`。** 空字串在 `remove_edge` 裡本來就是
+        「精確比對空埠」，`or None` 會把它變成「全部」—— 那正是上面那個洞的
+        第二階。
+        """
+        losers = list(losers or [])
         for e in losers:
-            # **兩個埠都要指名**（B1，2026-08-24）。兩張卡之間可以有好幾條並排
-            # 的線（F9-9），而它們可能落在**不同的輸入格**上 —— 只帶 `src_out`
-            # 的話 `remove_edge` 的語意是「符合這個 src_out 的**全部**」，
-            # 於是剪一條會剪掉一整排。
-            #
-            # 實測：`load.test → subtract.a` 與 `load.test → subtract.b` 兩條
-            # 並存時，把別的卡接到 `b` 會**連 `a` 那條一起剪掉** —— 沒有人碰過
-            # `a`，而 `a` 的參數還留著 `test`：畫布上沒有線、卡片卻還指著那條
-            # 流，於是引擎退回「執行順序上最後一個寫它的人」用猜的。線性時猜得
-            # 中、分岔時猜錯，而且跑得完、有數字（F9／F10 整整兩輪在防的形狀）。
-            #
-            # ⚠ **不可以寫 `e.src_out or None`。** 空字串在 `remove_edge` 裡
-            # 本來就是「精確比對空埠」，`or None` 會把它變成「全部」——
-            # 那正是上面那個洞的第二階。
             self.model.remove_edge(e.src, e.dst, src_out=e.src_out,
                                    dst_in=e.dst_in)
         if not losers:
@@ -3003,51 +2930,38 @@ class StudioWindow(QMainWindow):
 
     def _connect(self, src: str, dst: str, stream: str,
                  dst_in: str = "") -> None:
-        # 這條線會落在下游卡的哪個參數上（F9-9：**先算出來**，才有辦法把埠跟
-        # 線一起加進去）。以前是「先加一條沒有埠的線，再回頭補埠」，而補埠只
-        # 找得到一對節點之間的第一條 —— 兩條並排的線就補錯了。
-        # 這條線落在哪個輸入參數上：**使用者放開滑鼠的地方說了算**（F10）。
-        # 以前是 Studio 依 streams → target → source 的固定順序挑第一個 ——
-        # 那在「一張卡只有一個輸入在用」的年代猜得中，但 ``subtract`` 的
-        # a / b 兩顆輸入永遠只挑得到同一個，於是畫布上接哪一顆都一樣。
-        param = dst_in or self._param_for_stream(dst)
-        # **區域線走的是同一條路，只是守門的話不一樣**（F42 B2）。
-        # F12 當時它不存進 `recipe.edges`（``roi="epi"`` 那個參數是唯一的
-        # 儲存），而這一輪反過來：線才是儲存，參數是它的呈現 —— 理由是那個
-        # 決定的前提在 F17-① 就失效了（`docs/history/plans/F42-region-edges-plan-b.md`）。
-        # `_connect_region` 現在也走 `model.add_edge`，差別只在它擋得住的
-        # 那三件事（型別不合、來源在下游、這張卡沒有區域可接）。
-        if self._is_region_param(dst, param) or self._line_kind(src, stream) == "region":
-            self._connect_region(src, dst, stream, param)
+        """使用者拉了一條線 —— **決定住 `edit_plan`，這裡只負責做與說**（U6）。
+
+        ⚠ **順序有意義，所以它留在這裡**：`add_edge` 會因為成環而失敗，而
+        失敗的那條線**不該留下任何痕跡** —— 尤其不是「那張卡安靜地改成做 ref
+        了」。把 mutation 也包進計畫裡就得在那邊把 model 模擬一遍，那是把一個
+        難的東西換成兩份會漂的東西。
+        """
+        plan = edit_plan.plan_connect(self.model, src, dst, stream, dst_in)
+        if plan.kind == edit_plan.REJECT:
+            self._status(plan.reject, "error")
             return
-        # **這一格上已經有線了嗎** —— 有就是累加（多連一），沒有就是設定它。
-        #
-        # 以前的判準是「這一對節點之間已經有線了嗎」，那在 F10 之前是對的：
-        # 卡片的輸入帶著規格預設值（``streams="test"``），第一條線的意思是
-        # 「改成這個」而不是「再加一個」。現在新卡的輸入本來就是空的，那個理由
-        # 不成立了 —— 而舊判準還會漏掉「兩條線來自**不同**上游卡」這種多連一，
-        # 那正是量測卡最常見的接法（一條 diff、一條 test）。
-        accumulate = any(e.dst == dst and e.dst_in == param
-                         for e in self.model.edges)
-        if self.model.has_line(src, dst, stream, param):
-            self._status("%s → %s is already connected on %s."
-                         % (src, dst, stream or "that stream"))
+        # **「已經接過了」兩側共用一關**（U6）：以前影像那一側問的是
+        # `has_line`、區域那一側問的是「這個名字在不在那一格裡」，兩句話寫在
+        # 兩個地方。現在兩個都由 `plan.already` 回答 —— 而它們本來就是同一個
+        # 問題（使用者剛做的這個動作有沒有改變任何東西）。
+        if plan.already:
+            self._status(plan.already)
             return
-        if not self.model.add_edge(src, dst, src_out=stream, dst_in=param):
+        if plan.kind == edit_plan.REGION:
+            self._connect_region(src, dst, stream, plan)
+            return
+        if not self.model.add_edge(src, dst, src_out=stream,
+                                   dst_in=plan.param):
             self._status("Cannot connect %s → %s — that would make the "
                          "pipeline loop back on itself." % (src, dst), "error")
             return
-        # 影像流在**線真的接起來之後**才改。會成環的那條線沒有落地，
-        # 它不該留下任何痕跡 —— 尤其不是「那張卡安靜地改成做 ref 了」。
-        # 同一對節點的第二條線是「這條也接上」（累加），不是「改接別的」。
-        note = self._point_at_stream(dst, stream, accumulate=accumulate,
-                                     param=param)
+        # 影像流在**線真的接起來之後**才改（見上面那段 ⚠）。同一對節點的第二
+        # 條線是「這條也接上」（累加），不是「改接別的」。
+        note = self._point_at_stream(dst, stream, accumulate=plan.accumulate,
+                                     param=plan.param)
         # **一個輸入埠只能有一條線**：新的這條贏，舊的那條拿掉（F9-7）。
-        # 留著兩條的話引擎只會照其中一條送資料（``recipe.validate`` 會報
-        # ambiguous-input），而畫面上看不出是哪一條 —— 使用者剛拉的那一條
-        # 有可能根本不算數。**同一個輸入**指的是同一個參數上的同一條流名，
-        # 所以一條給 test、一條給 ref 不算搶（F9-9 的「多連一」）。
-        dropped = self._drop_conflicting_edges(src, dst, stream, param)
+        dropped = self._drop_edges(plan.conflicts)
         # **接完線就把這張卡填到「看得到結果」為止**（F11 Region-3 第五輪）。
         # 加卡的時候也跑過一次，但那時候還沒有線 —— 而「接上 layout labels」
         # 正是使用者期待畫面上出現東西的那一刻。
@@ -3057,68 +2971,33 @@ class StudioWindow(QMainWindow):
 
     # ---- 區域線（F12）-----------------------------------------------------
     def _is_region_param(self, node_id: str, param: str) -> bool:
-        """``node_id`` 的 ``param`` 那一格吃的是具名區域嗎。"""
-        node = self.model.nodes.get(str(node_id))
-        if node is None or not param:
-            return False
-        try:
-            specs = get_step(node.step).region_input_specs()
-        except KeyError:                       # pragma: no cover
-            return False
-        return any(sp.name == str(param) for sp in specs)
+        """``node_id`` 的 ``param`` 那一格吃的是具名區域嗎。
+
+        ⚠ 實作住 `ui/edit_plan.py`（U6）—— 這裡只是轉呼叫。
+        """
+        return edit_plan.is_region_param(self.model, node_id, param)
 
     def _line_kind(self, node_id: str, name: str) -> str:
         """從 ``node_id`` 的哪一顆埠拉出來的 —— 影像還是區域。
 
-        判準是**那顆埠是哪一種**，而且讀的就是畫布畫埠用的那一份
-        （`RecipeModel.region_outputs`，含原樣送出的）—— 畫的跟判的分家的話，
-        使用者會拉得到一條「看起來接上了、其實沒有」的線。
+        ⚠ 實作住 `ui/edit_plan.py`（同上）。
         """
-        if not name:
-            return "image"
-        return ("region" if str(name) in self.model.region_outputs(str(node_id))
-                else "image")
+        return edit_plan.line_kind(self.model, node_id, name)
 
     def _connect_region(self, src: str, dst: str, name: str,
-                        param: str) -> None:
+                        plan: Any) -> None:
         """把 ``dst`` 的區域那一格接上 ``src`` 定義的區域 ``name``。
 
-        三件事會被擋下來，而每一件都講得出可以照做的下一句話：
-
-        1. **型別不合**（把影像線拉進區域埠，或反過來）。放行的話那一格會變成
-           一個沒有人定義的區域名 —— 跑起來是 `unknown-region`，而畫面上那條線
-           看起來完全正常。
-        2. **這張卡沒有區域可接**：講出它吃的是什麼，不要靜靜地什麼都不做。
-        3. **會成環**（`add_edge` 擋的）—— 那是事實，不是排版。
-
-        F12 還擋第四件事：「來源排在下游」。**F42 B2 拿掉了**，理由見下面
-        那段註解 —— 它現在擋的是使用者唯一修得好順序的那個動作。
+        **擋得住什麼、哪幾條舊線讓位，全部由 `edit_plan.plan_connect` 決定**
+        （U6）—— 這裡只剩「真的動 model」與「說一句話」，而那兩件事的順序
+        有意義（見 `_connect` 那段 ⚠）。
         """
-        if not param or not self._is_region_param(dst, param):
-            self._status("“%s” has no region input — that line carries a "
-                         "region, and this card takes an image there."
-                         % dst, "error")
-            return
-        if self._line_kind(src, name) != "region":
-            self._status("“%s” is an image stream, not a region. Drag from a "
-                         "Region card's diamond port instead." % (name or "that "
-                         "port"), "error")
-            return
-        # ⚠ **「來源排在下游就擋下來」那一條拿掉了**（F42 B2）。
-        # F12 §4 擋它的理由是「那個區域在這張卡跑到的時候還不存在」，而那句話
-        # 在當時是真的：區域線不進 `recipe.edges`，所以順序只能靠卡片的左右
-        # 位置。**這一輪它進去了**，於是那條線自己就是順序（`execution_order`
-        # 只看線）—— 擋下來等於不讓使用者做那個唯一能修好順序的動作，而那正是
-        # 這一輪要修的 bug（`docs/history/plans/F42-region-edges-plan-b.md` §1）。
-        # 真正會壞的那一種（成環）由 `add_edge` 擋，而且它擋的是事實不是排版。
+        param = plan.param
         node = self.model.nodes.get(dst)
         spec = next((sp for sp in get_step(node.step).region_input_specs()
                      if sp.name == param), None)
         current = str(node.params.get(param, "") or "")
         keys = [k.strip() for k in current.split(",") if k.strip()]
-        if name in keys:
-            self._status("“%s” already measures %s." % (dst, name))
-            return
         # **從一個變成兩個時，把自動填的那個名字收回**（F13-⑥）。
         # 接第一條線時 `_autofill_output_prefix` 會把輸出名填成那個區域
         # （F7-11），而第二條線一來，每個數字本來就會帶自己的區域名 ——
@@ -3140,15 +3019,9 @@ class StudioWindow(QMainWindow):
                          "pipeline loop back on itself." % (src, dst), "error")
             return
         # **單一角色的區域埠一條線**（F12 §7-②）：`region_key` 那一格只放得下
-        # 一個名字，所以第二條線是「改接別的」不是「這個也算」。影像那邊同一條
-        # 規矩由 `_drop_conflicting_edges` 執行，區域這邊的判準更簡單 ——
-        # 同一格上的舊線全部讓位。（`region_keys` 是清單，第二條是累加。）
-        if not multi:
-            for e in [e for e in self.model.edges
-                      if e.dst == dst and e.dst_in == param
-                      and not (e.src == src and e.src_out == name)]:
-                self.model.remove_edge(e.src, dst, src_out=e.src_out,
-                                       dst_in=param)
+        # 一個名字，所以第二條線是「改接別的」不是「這個也算」。判準住
+        # `edit_plan.region_conflicts`。
+        self._drop_edges(plan.conflicts)
         value = str(self.model.nodes[dst].params.get(param, "") or "")
         # 挑了區域就順手把輸出名填成區域的名字（F7-11）—— 拉線跟在設定區挑
         # 是同一個動作，所以走同一條路。
@@ -3298,62 +3171,25 @@ class StudioWindow(QMainWindow):
         （`streams=test,ref` 一個字都沒變）。這是 F9-7「接線時參數跟著改」的
         另一半。
 
-        F10 之前這裡有兩個保留條款，現在**兩個都拿掉了**：
-
-        * 「單一角色的輸入（``image_key``）值就留著」—— 那時候那一格的值是
-          唯一的紀錄，清了就沒有東西講「這張卡本來要做什麼」。現在線才是唯一
-          的來源，值留著等於畫布上沒有線、卡片卻還指著一條流。
-        * 「最後一條不拿掉」—— 理由是 ``MultiStreamStep`` 對空字串會退回
-          ``test``。那個 ``or`` 在 F10 拿掉了，所以這個保留條款也沒有存在的
-          理由；留著反而讓「剪掉最後一條線」變成畫面與實際不一致的那一步。
-
-        剪完之後那張卡回到「還沒接線」的狀態 —— 跟剛加進來的卡一模一樣：
-        沒有輸出埠、lint 報 ``not-connected``、引擎不放行。
+        ⚠ **「那一格會變成什麼」住 `edit_plan.plan_unpoint`**（U6）—— 含那兩個
+        F10 拿掉的保留條款、以及「區域那一格不歸這裡管」。這裡只剩寫值與說話。
         """
-        node = self.model.nodes.get(str(node_id))
-        param = str(param or "")
-        if node is None:
+        plan = edit_plan.plan_unpoint(self.model, node_id, stream, param)
+        if not plan.change:
             return ""
         try:
-            specs = {p.name: p for p in get_step(node.step).params}
-        except KeyError:                       # pragma: no cover
-            return ""
-        spec = specs.get(param)
-        if spec is None or not spec.is_input():
-            return ""
-        # **區域那一格不歸這裡管**（F42 B2）。它的值是從線水合出來的，所以
-        # 在這裡動它 = 在線還在的時候讓參數跟線說不同的話。剪區域線走
-        # `remove_edge`，那一格由 `RecipeModel._hydrate_regions` 空出來。
-        if spec.type in REGION_TYPES:
-            return ""
-        if spec.type == "image_keys":
-            keys = [k.strip() for k
-                    in str(node.params.get(param, "") or "").split(",")
-                    if k.strip()]
-            if stream and stream in keys:
-                keys.remove(stream)
-            elif len(keys) > 1:
-                return ""          # 指不出剪的是哪一條，寧可不動
-            else:
-                keys = []
-            value = ",".join(keys)
-        else:
-            value = ""                         # 角色埠：那條線就是它的全部來源
-        if value == str(node.params.get(param, "") or ""):
-            return ""
-        try:
-            says = self.model.set_param(str(node_id), param, value)
+            says = self.model.set_param(str(node_id), plan.param, plan.value)
         except ParamError:                     # pragma: no cover — 值就是流名
             return ""
         # 影像流那一側同理（接第二條流也會把名字加上流名前綴）。這一支回的是
         # 一段**接在成功訊息後面**的字，所以連帶影響也接在同一句話上 ——
         # 而不是另外開一個要有人記得去消費的欄位。
         tail = ("  " + " ".join(says)) if says else ""
-        if not value:
+        if not plan.value:
             return " — “%s” has no input on “%s” now%s" % (
-                node_id, spec.label or param, tail)
+                node_id, plan.label, tail)
         return " — “%s” now works on %s%s" % (node_id, " and ".join(
-            value.split(",")), tail)
+            plan.value.split(",")), tail)
 
     def _on_remove_requested(self, node_id: str) -> None:
         node_id = str(node_id)
@@ -3574,7 +3410,10 @@ class StudioWindow(QMainWindow):
         if spec.is_region_input():
             src = self.model.region_producer(name, before_node=nid)
             if src:
-                self._connect_region(src, nid, name, str(param))
+                # **走 `_connect` 那條共用的路**（U6）：以前這裡直接呼叫
+                # `_connect_region`，於是「已經接過了」與型別守門那幾關在這條
+                # 路上是缺的 —— 同一個動作兩個入口，而只有一個有守門。
+                self._connect(src, nid, name, str(param))
             return
         src = self.model.stream_producer(name, before_node=nid)
         if src:
