@@ -15,10 +15,13 @@ d4t 的存在意義是讓**不會寫 code 的製程／設備工程師**把一個
 2. **開啟我自己的 KLARF** —— 關掉自己，交給 Studio 的「開啟 KLARF…」。
 3. **看範例 recipe** —— 打開 :class:`RecipeLibraryDialog`（範例 recipe 庫）。
 
-⚠ **2026-08-16 起，第 1 與第 3 顆是隱藏的**（``scope.SHOW_SAMPLE_ENTRIES``）：
-使用者決定把範例 recipe 全部拿掉，``examples/`` 已移除，那兩顆按下去都是死路。
-程式碼原封不動留著 —— 範例庫回來的那一天，改一個常數就整組回來。
-上面那句「全產品最重要的一顆鈕」仍然成立，只是它現在沒有東西可載。
+⚠ **第 1 顆仍然是隱藏的**（``scope.SHOW_SAMPLE_DATA``）：它產得出一批合成
+資料，但**不載 pipeline** —— 使用者按完看到的是資料配一張空白畫布。
+上面那句「全產品最重要的一顆鈕」仍然成立，只是這條路還少一半。
+
+**第 3 顆 2026-09-08 回來了**（F91 X4，``scope.SHOW_TEMPLATE_LIBRARY``）：
+`recipes/` 有出貨的 recipe 了，而且逐份有測試跑過。兩顆從此看**兩個**旗標
+—— 它們是兩件事，而混在一個旗標裡會讓打開其中一個順手把另一個也放回畫面上。
 
 **對話框不自己驅動 app**：三顆鈕都只 emit 訊號，真正的動作由
 :class:`~d4t.ui.studio.StudioWindow` 執行。這樣對話框可以單獨測，
@@ -53,7 +56,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import fit_screen
-from .scope import SHOW_SAMPLE_ENTRIES, recipe_is_supported
+from .scope import SHOW_SAMPLE_DATA, SHOW_TEMPLATE_LIBRARY, recipe_is_supported
 from .theme import SEG_LABELS, TOKENS, seg_hex
 from .widgets import apply_button_cursors
 
@@ -69,8 +72,16 @@ __all__ = [
 #: repo 根目錄（本檔在 ``<repo>/d4t/ui/welcome.py``）。
 _REPO = Path(__file__).resolve().parents[2]
 
-#: 範例 recipe 庫的位置（``RecipeLibraryDialog`` 的預設來源）。
-RECIPES_DIR = _REPO / "examples" / "recipes"
+#: 範本庫的位置（``RecipeLibraryDialog`` 的預設來源）。
+#:
+#: **2026-09-08（F91 X4）：``examples/recipes`` → ``recipes``。** 前者
+#: 2026-08-16 就整個刪掉了，所以在這之前這個常數指著一個**不存在的資料夾**
+#: —— 那正是「範本庫開起來是空的」那句話的機制。現在指的是出貨的那一份，
+#: 而 `tests/test_shipped_recipes.py` 逐份真的跑一次。
+#:
+#: ⚠ 資料夾不在的時候 `list_recipe_files` 回空清單（pip 裝出來的 d4t 沒有
+#: `recipes/` —— 它不在 `packages.find` 裡）。跟 `DOCS_DIR` 同一個約定。
+RECIPES_DIR = _REPO / "recipes"
 
 #: 快速參考卡 PDF 找這個資料夾。
 DOCS_DIR = _REPO / "docs"
@@ -99,13 +110,17 @@ _INTRO = (
     "pipeline works it out."
 )
 
-#: 導覽底下那句提示。**它必須描述畫面上真的看得到的鈕** —— 範例資料那顆收起來
-#: 之後（見 ``scope.SHOW_SAMPLE_ENTRIES``），「按左邊那顆，一分鐘就看得到分數」
-#: 指的會是「開啟我自己的資料」，而那顆給不出那個結果。
+#: 導覽底下那句提示。**它必須描述畫面上真的看得到的鈕**。
+#:
+#: 三種狀態三句話（範例資料那顆收著的時候，「按左邊那顆，一分鐘就看得到分數」
+#: 指的會是「開啟我自己的資料」，而那顆給不出那個結果）：
 _FOOTER_HINT = (
     "First time here? Press the button on the left — you will be looking "
     "at scored results in about a minute."
-    if SHOW_SAMPLE_ENTRIES else
+    if SHOW_SAMPLE_DATA else
+    "Open your own data, then press “Templates…” — do not start from an "
+    "empty pipeline; every template is a complete, runnable one."
+    if SHOW_TEMPLATE_LIBRARY else
     "Close this window and Studio shows you the four kinds of data it reads, "
     "one entry each; then build the pipeline card by card from the library on "
     "the left."
@@ -155,7 +170,7 @@ def set_welcome_disabled(disabled: bool) -> None:
 # recipe 庫的讀取（全部從 JSON 讀，一個字都不寫死）
 # --------------------------------------------------------------------------- #
 def list_recipe_files(directory: Any = None) -> List[Path]:
-    """``examples/recipes/*.json`` 依檔名排序（資料夾不在就回空清單）。"""
+    """``recipes/*.json`` 依檔名排序（資料夾不在就回空清單）。"""
     d = Path(str(directory)) if directory is not None else RECIPES_DIR
     if not d.is_dir():
         return []
@@ -356,15 +371,16 @@ class WelcomeDialog(QDialog):
         for b in (self.btn_demo, self.btn_open, self.btn_library):
             b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             row.addWidget(b, 1)
-        # 範例 recipe 庫移除之後（``examples/`` 已不存在），這兩顆都是死路：
-        # 範本庫開起來是空的，demo 產得出資料卻載不到 pipeline。導覽是**第一次
-        # 用的人看到的第一個畫面**，上面不能有按了撞牆的鈕。
+        # 導覽是**第一次用的人看到的第一個畫面**，上面不能有按了撞牆的鈕。
+        # 兩顆各看自己的旗標（F91 X4 拆開的 —— 它們的死法不一樣，見
+        # `scope.SHOW_SAMPLE_DATA` 的說明）：範本庫 2026-09-08 回來了，
+        # 範例資料仍然收著（產得出資料，但不載 pipeline）。
         # 收起來的是入口不是能力 —— ``click_demo`` / ``click_library`` 與訊號
-        # 一行都沒動，測試照樣直接呼叫得到；開關在 ``scope.SHOW_SAMPLE_ENTRIES``。
-        if not SHOW_SAMPLE_ENTRIES:
-            self.btn_demo.setVisible(False)
-            self.btn_library.setVisible(False)
-            # 只剩一顆鈕的時候，它就是主要動作。
+        # 一行都沒動，測試照樣直接呼叫得到。
+        self.btn_demo.setVisible(bool(SHOW_SAMPLE_DATA))
+        self.btn_library.setVisible(bool(SHOW_TEMPLATE_LIBRARY))
+        if not (SHOW_SAMPLE_DATA and SHOW_TEMPLATE_LIBRARY):
+            # 少了幾顆之後，「開自己的資料」就是主要動作。
             self.btn_open.setObjectName("primary")
         root.addLayout(row)
 
@@ -464,7 +480,11 @@ class RecipeLibraryDialog(QDialog):
 
     清單上顯示的每一個字（名稱、說明、route、步驟數、分數表達式）**都是從
     JSON 讀出來的**，沒有任何一份 recipe 被寫死在程式裡 —— 之後往
-    ``examples/recipes/`` 丟一份新的 JSON，這裡就會自己多一列。
+    ``recipes/`` 丟一份新的 JSON，這裡就會自己多一列。
+
+    ⚠ 「這份在做什麼」那一句就是 recipe JSON 的 ``description`` 欄位
+    （`read_recipe_info` 讀它）。加一份新的 recipe 而沒有寫那一欄的話，
+    使用者在這裡看到的是一個檔名 —— 而他要決定的正是「哪一份最接近我的層」。
 
     訊號：``recipe_chosen(path)``（雙擊或按「載入」）。
     """
@@ -551,7 +571,11 @@ class RecipeLibraryDialog(QDialog):
         if self._entries:
             self.list.setCurrentRow(0)
         else:
-            self.detail.setText("No recipe JSON in `examples/recipes/` yet.")
+            # **講出找過哪裡**：一句「沒有範本」答不出「那我要把檔案放哪」。
+            self.detail.setText(
+                "No recipe JSON in %s yet.\n\nDrop one in there (or use "
+                "“Save recipe…” on a pipeline you like) and it shows up here."
+                % self.directory)
             self.btn_load.setEnabled(False)
         return len(self._entries)
 

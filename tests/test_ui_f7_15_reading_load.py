@@ -117,9 +117,11 @@ def test_the_empty_panel_offers_what_you_can_actually_do(window):
     """沒有資料時，最大的那一塊要說得出下一步 —— **而且只說得出真的做得到的**。
 
     這條以前叫「the two things you can do」，第二件是「用範例資料試一次」。
-    範例 recipe 2026-08-16 全部拿掉之後那顆鈕收起來了
-    （``scope.SHOW_SAMPLE_ENTRIES``），所以現在只剩一條路 —— 而畫面上那句話
-    也不能再提它。鈕本身還在（只是隱形），光看 ``.text()`` 看不出差別。
+    那顆鈕 2026-08-16 收起來了，現在的開關是 ``scope.SHOW_SAMPLE_DATA``
+    （F91 X4 從 ``SHOW_SAMPLE_ENTRIES`` 拆出來 —— 範本庫那一半回來了，
+    這一半沒有：它產得出資料卻不載 pipeline）。所以空白狀態上仍然只剩一條路，
+    而畫面上那句話也不能再提它。鈕本身還在（只是隱形），光看 ``.text()``
+    看不出差別。
 
     問的是 ``isHidden()`` 不是 ``isVisible()``：視窗還沒 ``show()`` 的時候
     **每一個 widget 的 ``isVisible()`` 都是 False**（docs/PITFALLS.md 那一列），
@@ -132,7 +134,7 @@ def test_the_empty_panel_offers_what_you_can_actually_do(window):
     assert window.btn_empty_open.text() == "Open KLARF…"
     assert window.btn_empty_open.isHidden() is False
 
-    if scope.SHOW_SAMPLE_ENTRIES:
+    if scope.SHOW_SAMPLE_DATA:
         assert "sample data" in window.btn_empty_sample.text()
         assert window.btn_empty_sample.isHidden() is False
     else:

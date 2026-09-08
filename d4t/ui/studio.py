@@ -120,6 +120,7 @@ from . import fit_screen
 from .canvas import SUMMARY_SEP, PipelineCanvas
 from .inspectors import inspector_for
 from .problems_bar import ProblemsBar
+from .why_panel import WhyPanel
 from .status_log import StatusHistory
 from .gallery import make_thumb
 from .region_check import MAX_CHECK, RegionCheckWindow, regions_of_node
@@ -204,8 +205,12 @@ _SCORE_LIBRARY_ENTRY = {
 #: ``examples/`` 2026-08-16 整個移除（使用者：「範例 recipe 都先全部拿掉」），
 #: 所以這個檔案**現在不存在** —— :meth:`StudioWindow.load_template` 會在狀態列
 #: 說「Built-in template not found」並回 ``False``，不會炸。路徑刻意留著：
-#: 範例庫回來的那一天，把 JSON 放回這個位置、
-#: 把 :data:`d4t.ui.scope.SHOW_SAMPLE_ENTRIES` 改成 ``True`` 就整組回來。
+#: ⚠ **這一份跟範本庫是兩件事**（F91 X4）：範本庫 2026-09-08 回來了
+#: （`recipes/`，`scope.SHOW_TEMPLATE_LIBRARY`），而**這一支還是死的** ——
+#: 它是「用範例資料試一次」那條路的後半段，而那條路產的是一批合成的
+#: ``ebi_patch`` lot，出貨的兩份 recipe 沒有 ``ebi_patch`` route。
+#: 所以 `scope.SHOW_SAMPLE_DATA` 仍然是 ``False``：**要打開它得先有一份
+#: 出貨的 ebi_patch recipe**，不是翻一個旗標。
 TEMPLATE_RECIPE = Path(__file__).resolve().parents[2] / "examples" / "recipes" \
     / "cross_regions.json"
 
@@ -688,11 +693,11 @@ class StudioWindow(QMainWindow):
             "Open the template library — every entry is a complete, runnable "
             "pipeline. Start here rather than from an empty pipeline.",
             self.open_recipe_library, icon="templates")
-        # 範本庫目前是空的（``examples/`` 已移除），所以這顆鈕按下去只會開一個
-        # 空對話框 —— 對不會寫 code 的目標使用者，那比沒有這顆鈕更糟。
-        # **建出來再藏**，不是不建：版面量測、``_update_action_states``、既有測試
-        # 都還指得到它，回復只要改 ``scope.SHOW_SAMPLE_ENTRIES``。
-        self.btn_examples.setVisible(bool(scope.SHOW_SAMPLE_ENTRIES))
+        # **2026-09-08（F91 X4）：這顆鈕回來了。** 它收起來的理由是「範本庫是
+        # 空的」（``examples/`` 已移除），而 `recipes/` 現在有出貨的 recipe、
+        # 逐份有測試跑過 —— 那個理由到期了。開關在
+        # ``scope.SHOW_TEMPLATE_LIBRARY``。
+        self.btn_examples.setVisible(bool(scope.SHOW_TEMPLATE_LIBRARY))
         # ⚠ **這裡以前還有一顆「Run all & write」**，而它跟 `Run trial ▾` 選單
         # 裡的「跑整批」是**同一支函式**（兩邊都是 `run_all()`，一個位元的
         # 差別都沒有）。兩個決定各自都對，只是沒有互相看到：M7 把「全跑」收進
@@ -741,8 +746,9 @@ class StudioWindow(QMainWindow):
 
         # 一段 = 一種事情；段與段之間一條分隔線。
         #
-        # ⚠ **整段都看不見的時候不要放那條分隔線。** 「Templates…」平常是藏著的
-        # （`scope.SHOW_SAMPLE_ENTRIES`），而它那一段以前還有「Run all & write」
+        # ⚠ **整段都看不見的時候不要放那條分隔線。** 「Templates…」曾經是藏著的
+        # （`scope.SHOW_TEMPLATE_LIBRARY`，2026-09-08 打開），而它那一段以前
+        # 還有「Run all & write」
         # 撐著；那顆鈕 2026-08-24 拿掉之後，那一段變成空的 —— 工具列上因此出現
         # 兩條連在一起的分隔線，中間夾著什麼都沒有。分隔線講的是「這裡換一種
         # 事情」，而一條隔開空氣的線只是雜訊。
@@ -1285,7 +1291,7 @@ class StudioWindow(QMainWindow):
         # 「or try the tool with generated sample data」，使用者會去找一顆不在
         # 畫面上的鈕。
         why = QLabel("d4t reads four kinds of data. Pick the one you have."
-                     if not scope.SHOW_SAMPLE_ENTRIES else
+                     if not scope.SHOW_SAMPLE_DATA else
                      "d4t reads four kinds of data. Pick the one you have, "
                      "or try the tool with generated sample data first.",
                      self.empty_state)
@@ -1360,9 +1366,10 @@ class StudioWindow(QMainWindow):
         self.btn_empty_sample = QPushButton("Try it with sample data",
                                             self.empty_state)
         self.btn_empty_sample.setProperty("variant", "secondary")
-        # 見 btn_examples：demo 會產出資料卻載不到 pipeline（範本庫已移除），
-        # 所以整個入口先收起來。同一個開關管兩顆。
-        self.btn_empty_sample.setVisible(bool(scope.SHOW_SAMPLE_ENTRIES))
+        # ⚠ **這顆跟 `btn_examples` 看的不是同一個旗標了**（F91 X4）：
+        # demo 產得出資料，但**不載 pipeline** —— 按完看到的是一批資料配一張
+        # 空白畫布。範本庫那個理由修好了，這個沒有。
+        self.btn_empty_sample.setVisible(bool(scope.SHOW_SAMPLE_DATA))
         brow.addWidget(self.btn_empty_sample)
         brow.addStretch(1)
         estack.addSpacing(8)
@@ -1442,7 +1449,7 @@ class StudioWindow(QMainWindow):
         # Pipeline 時 ADC 不會放到第一個」—— 而在那段時間裡，這一塊永遠是一個
         # 寫著 `—` 的 chip 加一片空白。它不是壞的，它是**什麼都沒說**，而那塊
         # 面積正好是量測卡最需要的地方（同 F7-15「空白狀態要說得出下一步」、
-        # 以及 scope.SHOW_SAMPLE_ENTRIES 那條「按了撞牆的鈕比沒有那顆鈕更糟」
+        # 以及 scope.SHOW_SAMPLE_DATA 那條「按了撞牆的鈕比沒有那顆鈕更糟」
         # 的鏡像 —— 這裡是「說不出話的那一格比沒有那一格更佔位」）。
         self.verdict_live = QWidget(pane)
         vrow = QHBoxLayout(self.verdict_live)
@@ -1460,11 +1467,33 @@ class StudioWindow(QMainWindow):
         self.verdict_score = QLabel("", self.verdict_live)
         self.verdict_score.setStyleSheet("font-weight:700;")
         vrow.addWidget(self.verdict_score)
+        # **那一行點得下去**（U11）：走過的路旁邊沒有別的入口，而回溯以前只有
+        # 「跑一整批 → Results → 點 score/bin」那一條路 —— 使用者手上明明就有
+        # 這一顆的每一個數字。做成連結而不是另加一顆鈕：這一列已經有三樣東西
+        # （Verdict、score、路徑），而底線本來就是「這個字可以點」的意思。
         self.decide_path = QLabel("", self.verdict_live)
         self.decide_path.setObjectName("paramHint")
         self.decide_path.setWordWrap(False)
+        self.decide_path.setTextFormat(Qt.RichText)
+        self.decide_path.setOpenExternalLinks(False)
+        self.decide_path.linkActivated.connect(
+            lambda _href: self.toggle_preview_why())
         vrow.addWidget(self.decide_path, 1)
         lay.addWidget(self.verdict_live)
+
+        # 這一顆為什麼判成這樣（U11）—— **跟 Results 那一份是同一個 widget**
+        # （`why_panel.WhyPanel`），只是住在單顆預覽這一欄。跑整批之前它就答得
+        # 出來，因為 `verdict_trace` 吃的是特徵、不是一批結果。
+        #
+        # ⚠ 高度有上限：它是回答一個問題的東西，不是這一欄的主角 ——
+        # 把影像擠掉的話，使用者為了讀它得先關掉它。
+        self.why_preview = WhyPanel(pane)
+        self.why_preview.setMaximumHeight(220)
+        self.why_preview.hide()
+        self.why_preview.item_activated.connect(
+            lambda name: self._on_why_item(self.why_preview.defect_id(),
+                                           str(name)))
+        lay.addWidget(self.why_preview)
 
         # 還沒有判定的時候換成**一句可以照做的話 ＋ 那顆鈕**（推廣鐵則：
         # 講得出下一步，而那一步就在旁邊）。
@@ -4780,6 +4809,8 @@ class StudioWindow(QMainWindow):
 
         decide = getattr(self.model, "decide", None)
         text, hl = "", None
+        # 這一顆的判定重放（U11）—— 那一行點下去就是把它交給回溯面板。
+        self._preview_trace = None
         feats = dict(getattr(result, "features", {}) or {})
         ran = (decide is not None and getattr(result, "ok", False)
                and getattr(result, "bin", None) is not None)
@@ -4789,6 +4820,7 @@ class StudioWindow(QMainWindow):
                                       self.model.kind, feats)
             except Exception:              # noqa: BLE001 — 顯示層
                 trace = None
+            self._preview_trace = trace
             if trace is not None and trace.mode == "tree" and trace.path:
                 hl = trace.path
                 tree = display_tree(decide)
@@ -4800,9 +4832,65 @@ class StudioWindow(QMainWindow):
                 text = "Path:  rule %d matched" % (trace.rule_index + 1)
                 if trace.leaf_label:
                     text += " (%s)" % trace.leaf_label
-        self.decide_path.setText(text)
+        self.decide_path.setText(self._decide_path_markup(text))
+        self.decide_path.setToolTip(
+            "Click to see why this defect got this verdict - every question "
+            "the decision asked, and the number it compared."
+            if text else "")
         for view in self._canvases():
             view.set_tree_highlight(hl)
+        # 面板開著的時候換一顆 defect ＝ 換一份回溯（開著卻停在上一顆的話，
+        # 畫面上那幾個數字跟旁邊的影像不是同一顆 —— 這個 repo 最怕的形狀）。
+        # **講不出來就收起來**，不是留著上一顆的答案：拿掉判定、或這一顆算到
+        # 一半就失敗了，那幾列數字會變成一份沒有主人的說明。
+        # ⚠ 問 `isHidden()` 不是 `isVisible()`：視窗還沒 `show()` 的時候
+        # 每一個子元件的 `isVisible()` 都是 False（docs/PITFALLS.md 那一列），
+        # 於是「面板開著嗎」在那之前永遠答「沒有」。
+        if not self.why_preview.isHidden() and not self._fill_preview_why():
+            self.why_preview.dismiss()
+
+    @staticmethod
+    def _decide_path_markup(text: str) -> str:
+        """把那一行變成一個連結（空的就留空 —— 不放一個點了沒事的連結）。
+
+        ⚠ **要跳脫**：路徑裡有 ``>``（``contrast > 120``）與 ``&``，而這個
+        QLabel 現在是 RichText —— 不跳脫的話那一段會被當成標籤吃掉，
+        使用者看到的是一句少了半截的話。
+        """
+        raw = str(text or "")
+        if not raw:
+            return ""
+        esc = (raw.replace("&", "&amp;").replace("<", "&lt;")
+               .replace(">", "&gt;"))
+        return '<a href="#why" style="text-decoration:underline;">%s</a>' % esc
+
+    def _fill_preview_why(self) -> bool:
+        """把目前這一顆的回溯餵給預覽欄的面板；沒有東西可講回 ``False``。"""
+        trace = getattr(self, "_preview_trace", None)
+        if trace is None or getattr(trace, "mode", "none") == "none":
+            return False
+        item = self._current_item()
+        self.why_preview.set_trace(
+            str(getattr(item, "defect_id", "") or ""), trace)
+        return True
+
+    def toggle_preview_why(self) -> bool:
+        """單顆預覽的回溯面板：開／關（U11）。回傳現在開著沒有。
+
+        **不必先跑整批** —— 那正是這件事的重點：`verdict_trace` 吃的是這一顆
+        的特徵，而預覽已經把它們算出來了。以前唯一的入口是
+        「跑一批 → Results → 點 score/bin」，而使用者手上明明就有這一顆的
+        每一個數字。
+        """
+        if not self.why_preview.isHidden():     # 見 `_show_decide_path` 的 ⚠
+            self.why_preview.dismiss()
+            return False
+        if not self._fill_preview_why():
+            self._status("This recipe has no score and no decision — "
+                         "there is nothing to replay.")
+            return False
+        self.why_preview.present()
+        return True
 
     #: 會產生投影曲線的那一支（面板只在編輯它的時候出現）。
     #:
@@ -6552,11 +6640,11 @@ class StudioWindow(QMainWindow):
         return dlg
 
     def open_recipe_library(self, directory: Optional[Any] = None) -> Optional[Any]:
-        """開範例 recipe 庫；選了哪份就直接載進流程面板。
+        """開範本庫；選了哪份就直接載進流程面板。
 
-        ``directory`` 只給測試用（正式路徑一律走 ``welcome.RECIPES_DIR``）——
-        `examples/` 移除之後，「照資料夾內容列出來」這件事需要一個真的有東西的
-        資料夾才測得到，而那個資料夾不該是 repo 的一部分。
+        ``directory`` 給測試用（正式路徑一律走 ``welcome.RECIPES_DIR``，
+        F91 X4 起就是 repo 的 `recipes/`）—— 要驗「壞掉的檔案不會讓整個庫開
+        不起來」那種情境時，得餵一個自己造的資料夾。
         """
         dlg = self.library_dialog
         if dlg is not None and directory is not None:
@@ -6569,7 +6657,9 @@ class StudioWindow(QMainWindow):
         else:
             dlg.reload()
         if dlg.count() == 0:
-            self._status("No templates found — the sample recipe library is empty.")
+            # **講出找過哪裡**（同對話框裡那一句）：使用者的下一個問題是
+            # 「那我要把檔案放哪」，而「是空的」答不出來。
+            self._status("No templates found in %s." % dlg.directory)
         dlg.show()
         dlg.raise_()
         return dlg

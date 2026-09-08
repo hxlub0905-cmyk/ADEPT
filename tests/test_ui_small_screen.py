@@ -198,3 +198,37 @@ def test_no_window_hard_codes_a_size_any_more():
     assert not bad, (
         "這幾行寫死了視窗尺寸，小螢幕上會超出畫面：\n  %s\n"
         "  改用 fit_screen.fit(widget, w, h)。" % "\n  ".join(bad))
+
+
+# --------------------------------------------------------------------------- #
+# 工具列裝不裝得進那台機器
+# --------------------------------------------------------------------------- #
+def test_the_toolbar_still_fits_the_machine_beside_the_tool(qapp, fake_screen):
+    """**主視窗的預設寬度是工具列決定的，而螢幕決定得了它**（U1 ＋ X4）。
+
+    `_build_toolbar` 那一段記著一次踩過的：加「Results」那顆鈕之後，Qt 把放不下
+    的最後一顆收進右邊那個 » 溢位選單 —— 而使用者要的正是「按一顆鈕就叫得出
+    Results」，一顆藏在兩層選單底下的鈕不算數。
+
+    2026-09-08 X4 把「Templates…」放回去，工具列從 997 px 變成 1,153 px，而
+    1366×768 上視窗只有 1,229 px 寬 —— **只剩 76 px**。下一顆鈕會把它推過去，
+    而症狀是「某一顆鈕在那台機器上不見了」，開發機（1920 寬）上看不到。
+
+    所以這一條把那個餘裕**量出來**：不是「不准再加鈕」，是**加之前會有人看見**。
+    """
+    from d4t.ui.studio import StudioWindow
+
+    rect = fake_screen(*SCREENS[0])              # 1366×768，驗收條件寫的那一台
+    win = StudioWindow(show_welcome_on_start=False)
+    try:
+        need = win.toolbar.sizeHint().width()
+        have = int(rect.width() * fit_screen.SCREEN_FRACTION)
+        assert need <= have, (
+            "工具列要 %d px，而 %d×%d 的螢幕上視窗只有 %d px 寬 —— 尾巴那幾顆"
+            "會被收進 » 溢位選單。\n"
+            "  要嘛把某顆鈕收起來／縮短它的字（`scope.INPUT_SOURCES` 的 short），"
+            "要嘛在這裡說明為什麼那幾顆躲進選單是可以接受的。"
+            % (need, rect.width(), rect.height(), have))
+    finally:
+        win.close()
+        win.deleteLater()

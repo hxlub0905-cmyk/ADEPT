@@ -195,12 +195,21 @@ def test_no_separator_fences_off_an_empty_stretch_of_toolbar(window):
     """分隔線講的是「這裡換一種事情」—— 隔開空氣的那一條只是雜訊。
 
     這一條是**拿掉重複那顆鈕時自己種的**：「Templates…」平常是藏著的
-    （`scope.SHOW_SAMPLE_ENTRIES`），而它那一段本來還有「Run all & write」
+    （`scope.SHOW_TEMPLATE_LIBRARY`），而它那一段本來還有「Run all & write」
     撐著。那顆走了之後那一段變成空的，工具列上就出現兩條連在一起的分隔線。
     """
     # ⚠ 這一條**一定要先 `show()`**：沒有顯示過的視窗底下，每一個子元件的
     # 可見性都答不準（第一版量出來是「三條分隔線、一個元件都沒有」）。
     # 而這裡問的正是「畫出來長什麼樣」—— 那就得真的畫一次。
+    #
+    # ⚠ 而且要**先給工具列它要的寬度**（2026-09-08，F91 X4 把「Templates…」
+    # 放回去之後）。工具列放不下的時候 Qt 把尾巴收進右邊那個 » 溢位選單，
+    # 於是最後一條分隔線後面「什麼都沒有」—— 但那不是這一條在問的事：
+    # **它問的是我們建出來的版面**（哪一段空了卻還配一條線），不是 Qt 在窄
+    # 螢幕上的收納行為。溢位那件事有自己的守門人：`test_ui_small_screen` 的
+    # `test_the_toolbar_still_fits_the_machine_beside_the_tool`。
+    window.resize(max(window.toolbar.sizeHint().width() + 40, window.width()),
+                  window.height())
     window.show()
     QApplication.instance().processEvents()
     kinds = []

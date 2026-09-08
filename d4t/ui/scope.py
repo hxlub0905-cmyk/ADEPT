@@ -38,8 +38,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, NamedTuple, Sequence, Tuple
 
 __all__ = [
-    "SUPPORTED_KINDS", "HIDDEN_STEPS", "DEFAULT_KIND", "SHOW_SAMPLE_ENTRIES",
-    "SHOW_ROUTE_BY",
+    "SUPPORTED_KINDS", "HIDDEN_STEPS", "DEFAULT_KIND",
+    "SHOW_TEMPLATE_LIBRARY", "SHOW_SAMPLE_DATA", "SHOW_ROUTE_BY",
     "INPUT_SOURCES", "ATTACHMENTS", "InputSource",
     "is_supported_kind", "visible_steps", "recipe_is_supported",
     "unsupported_kind_message",
@@ -116,20 +116,38 @@ HIDDEN_STEPS: Sequence[str] = ("align",)
 #: 沒有資料集時 ``RecipeModel`` 用的 route 名稱。
 DEFAULT_KIND: str = SUPPORTED_KINDS[0]
 
-#: 「範例 recipe」的兩個入口要不要出現在畫面上：工具列的 ``Templates…``、
-#: 導覽與空白狀態上的「用範例資料試一次」。
+#: 工具列的 ``Templates…`` 與導覽上的範本庫要不要出現。
 #:
-#: 2026-08-16：使用者定調「範例 recipe 都先全部拿掉」，``examples/`` 整個移除
-#: （原本五份在 39b9fea 就因為依賴被拿掉的卡片而刪了，剩下的一份也不留）。
-#: 沒有 recipe 可以載，這兩個入口就是**按了會撞牆的東西**：範本庫開起來是空的，
-#: 「用範例資料試一次」產得出資料卻載不到 pipeline。對不會寫 code 的目標使用者，
-#: 那比沒有這顆鈕更糟（推廣鐵則）—— 所以連入口一起收起來。
+#: **2026-09-08（F91 X4）：回來了。** 它 2026-08-16 收起來的理由是
+#: 「範例 recipe 都先全部拿掉」（使用者定調，``examples/`` 整個移除）——
+#: 沒有 recipe 可以載，那顆鈕按下去只會開一個空對話框，而**按了撞牆的鈕比
+#: 沒有那顆鈕更糟**（推廣鐵則）。
 #:
-#: 收起來的是**入口，不是能力**：``StudioWindow.run_demo()`` /
-#: ``generate_demo_lot()`` / :class:`~d4t.ui.welcome.RecipeLibraryDialog`
-#: 一行都沒動，測試照樣直接呼叫得到。範例 recipe 庫回來的那一天，
-#: 把這個常數改成 ``True`` 就整組回來 —— 跟 ``SUPPORTED_KINDS`` 同一套辦法。
-SHOW_SAMPLE_ENTRIES: bool = False
+#: 那個理由**到期了**：`recipes/` 現在有出貨的 recipe，而且
+#: `tests/test_shipped_recipes.py` 逐份真的跑一次（舊的 ``examples/`` 就是
+#: 因為沒人測而爛掉的 —— 那支測試存在的理由）。而對著空白畫布，
+#: 「我該放哪張卡」是一個沒有答案的問題。
+#:
+#: ⚠ 這是「收起來的成本是零、回復的成本是改一個字串」那個判斷第三次被驗證
+#: （前兩次是 `SUPPORTED_KINDS` 與 `align`）。
+SHOW_TEMPLATE_LIBRARY: bool = True
+
+#: 「用範例資料試一次」那個入口（導覽上那顆、空白狀態上那顆）。
+#:
+#: **仍然收著**，而且跟上面那一個**是兩件事** —— 這一格 2026-09-08 才拆開，
+#: 因為在那之前一個旗標管兩顆鈕，而它們的死法不一樣：
+#:
+#: * 範本庫：庫是空的 → **`recipes/` 填回來就活了**（上面那一格）。
+#: * 範例資料：``run_demo()`` 產得出一批合成資料，**但它不載 pipeline** ——
+#:   使用者按完看到的是一批資料配一張空白畫布，而畫面上沒有下一步。
+#:   那不是「庫空了」，是這條路本來就少一半。
+#:
+#: 混在一個旗標裡的代價是具體的：X4 那一輪要把範本庫打開，而翻那個旗標會
+#: 順手把一顆仍然撞牆的鈕一起放回畫面上。**一個旗標描述一個決定。**
+#:
+#: 收起來的是入口不是能力：``StudioWindow.run_demo()`` / ``generate_demo_lot()``
+#: 一行都沒動，測試照樣直接呼叫得到。
+SHOW_SAMPLE_DATA: bool = False
 
 #: `route_by`（「分流／pre-filter」）的畫布徽章與編輯器入口要不要出現。
 #:
