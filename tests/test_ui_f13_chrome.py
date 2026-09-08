@@ -27,6 +27,10 @@ import pytest
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
+# 段落的順序、標題、副標只有一個家（U9，2026-09-08）——
+# `LibraryPanel.GROUPS` 那個常數不存在了。這裡不 import Qt，放模組層。
+from d4t.core.pipeline.step import GROUPS as STAGE_GROUPS  # noqa: E402
+
 pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QLabel     # noqa: E402
@@ -77,7 +81,7 @@ def test_every_stage_count_is_readable_in_every_theme(qapp, theme_name):
     theme_mod.apply_theme(qapp, theme_name)
     bg = theme_mod.TOKENS["bg_panel"]
     bad = []
-    for gid, _title, _sub in widgets_mod.LibraryPanel.GROUPS:
+    for gid, _title, _sub in STAGE_GROUPS:
         ratio = theme_mod.contrast_ratio(theme_mod.count_color(gid), bg)
         if ratio < theme_mod.AA_SMALL:
             bad.append("%s %.2f" % (gid, ratio))
