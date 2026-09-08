@@ -110,7 +110,9 @@ from d4t.core.pipeline.engine import (
     FEATURE_OWNER_KEY, feature_prefixes,
 )
 from d4t.core.pipeline.step import REGISTRY, SCALE_DEFECT
-from d4t.core.pipeline.recipe import is_region_edge, version_skew
+from d4t.core.pipeline.recipe import (
+    describe_migration, is_region_edge, version_skew,
+)
 from d4t.core.pipeline import verdict_features
 from d4t.core.pipeline.verdict_trace import verdict_trace
 
@@ -122,6 +124,7 @@ from .canvas import SUMMARY_SEP, PipelineCanvas
 from .inspectors import inspector_for
 from .problems_bar import ProblemsBar
 from .why_panel import WhyPanel
+from .status_action import StatusAction, open_folder
 from .status_log import StatusHistory
 from .gallery import make_thumb
 from .region_check import MAX_CHECK, RegionCheckWindow, regions_of_node
@@ -563,6 +566,10 @@ class StudioWindow(QMainWindow):
         # 上面的東西就跟著不見了，而畫面上沒有任何錯誤（第一版就是這樣，
         # 那顆鈕的 parent 是一個已經沒有人看得到的 QStatusBar）。
         self.status_history = StatusHistory(self)
+        # 那一句話的「下一步」（X5／X6）。它掛在歷史鈕**左邊** —— 它講的是
+        # 剛才那一句，所以要挨著訊息，不是挨著工具。
+        self.status_action = StatusAction(self)
+        self.statusBar().addPermanentWidget(self.status_action)
         self.statusBar().addPermanentWidget(self.status_history)
         self._build_progress()
 
@@ -735,6 +742,10 @@ class StudioWindow(QMainWindow):
             "Results", "Open the Results window - score distribution, "
                        "thumbnails and the per-defect table (Ctrl+Shift+R)",
             self.show_gallery, icon="popout")
+        # **這顆鈕以前不會說裡面有沒有東西**（U21）。`ResultsWindow` 是先建好、
+        # 跑完才 show，關掉不丟結果 —— 機制是對的，但使用者的心智模型裡「關掉
+        # 視窗」通常等於「丟掉」，而鈕上沒有任何東西反駁那個猜測。
+        self._refresh_results_button()
         self.btn_help = self._tool_button(
             "Help", "Reopen the getting-started tour (includes “Try it with "
                     "sample data”)",
@@ -1665,9 +1676,46 @@ class StudioWindow(QMainWindow):
         bar.style().unpolish(bar)
         bar.style().polish(bar)
         bar.showMessage(str(msg))
+        # **下一句話一定把上一句的「下一步」收起來**（X5／X6 那顆鈕的第一條
+        # 規矩）。一顆停在那裡的「復原」按鈕，在使用者做了三件別的事之後按
+        # 下去，復原的不是他以為的那一件。收在這裡而不是在每個呼叫端，是因為
+        # 「忘了收」這件事這樣就不會發生。
+        self.status_action.disarm()
         # 說過的話留得住（U2 後半）—— 下一句就把這一句蓋掉了，而這一句可能
         # 正是唯一講出「那件事沒成功」的地方。
         self.status_history.add(str(msg), level)
+
+    def _refresh_results_button(self) -> None:
+        """Results 那顆鈕要說出**裡面現在有幾顆**（U21）。
+
+        兩件事一起做，因為它們是同一句話的兩半：
+
+        * **有結果** → 鈕上帶計數（``Results · 200``）。使用者關掉那個視窗之後
+          唯一的線索就是這個數字 —— 沒有它，「關掉」跟「丟掉」在畫面上長得
+          一模一樣。
+        * **沒跑過** → 鈕 disabled，而 tooltip 講**下一步**（推廣鐵則：
+          「還沒有結果」對使用者沒有動作可做，「先按 Run trial」才有）。
+
+        ⚠ 計數用的是 `trial_results` 的長度，不是「成功幾顆」—— 那個視窗裡本來
+        就列著失敗的顆（鐵則 7：單顆出錯不殺整批，而那幾顆要看得到）。
+        """
+        n = len(self.trial_results or [])
+        self.btn_results.setEnabled(n > 0)
+        self.btn_results.setText("Results · %d" % n if n else "Results")
+        self.btn_results.setToolTip(
+            "Open the Results window - score distribution, thumbnails and the "
+            "per-defect table (Ctrl+Shift+R)" if n else
+            "No results yet - run the pipeline first (Run trial)")
+
+    def _status_next_step(self, msg: str, label: str, callback: Any,
+                          level: str = "info", tip: str = "") -> None:
+        """一句話 ＋ 它旁邊那顆「接下來能做什麼」的鈕。
+
+        順序有意義：**先講話再掛鈕** —— `_status` 自己會把上一顆收掉，反過來
+        寫的話新掛的那一顆會被它自己的訊息收走。
+        """
+        self._status(msg, level)
+        self.status_action.arm(label, callback, tip)
 
     def status_text(self) -> str:
         """目前狀態列文字（測試用）。"""
@@ -3049,7 +3097,12 @@ class StudioWindow(QMainWindow):
         會被下一個動作蓋掉，而那正是它不能是唯一防線的理由。
         """
         if says:
-            self._status(" ".join(says), "error")
+            # **誤操作後的三秒鐘，是使用者最不想去找 Ctrl+Z 的三秒鐘**（X6）。
+            # 他正在讀這句話，所以反悔的路要在這句話旁邊。Ctrl+Z 照樣在 ——
+            # 這顆鈕只是把已經做得到的事縮短成一次點擊。
+            self._status_next_step(
+                " ".join(says), "Undo", self.undo, "error",
+                "Undo that change (Ctrl+Z)")
         elif otherwise:
             self._status(otherwise)
 
@@ -4173,6 +4226,7 @@ class StudioWindow(QMainWindow):
         self._items_by_id = {str(getattr(it, "defect_id", "")): it for it in items}
         # 換資料集 = 舊的結果與縮圖全部作廢
         self.trial_results = []
+        self._refresh_results_button()
         self.trial_scores = []
         self._score_filter = None
         self.gallery.set_items([])
@@ -4374,6 +4428,10 @@ class StudioWindow(QMainWindow):
         except Exception as e:          # noqa: BLE001 — UI 邊界
             self._status("Could not load recipe: %s: %s" % (type(e).__name__, e), "error")
             return False
+        # 舊格式**升級了就要說**（U17）：畫布上多出來的線與拆開的卡是遷移補的，
+        # 而使用者只會看到「這跟我上次存的不一樣」。讀原始 JSON 再比一次是為了
+        # 拿到 `Recipe.load` 已經丟掉的那一半（版本號與原本的線）。
+        upgraded = self._describe_upgrade(path, recipe)
         kind = None
         ds_kind = str(getattr(self.dataset, "kind", "")) if self.dataset else ""
         if ds_kind and ds_kind in recipe.routes:
@@ -4397,6 +4455,15 @@ class StudioWindow(QMainWindow):
             self._status("Loaded recipe “%s” (%d steps). Its threshold is now "
                          "the first question of the decision tree on the "
                          "canvas." % (self.model.recipe_id, n))
+        elif upgraded:
+            # **一句常駐訊息 ＋ 一個看細節的入口**（U17）。存檔會把它寫成新
+            # 格式，所以這句話要在存檔之前出現，不是之後。
+            self._status_next_step(
+                "Loaded recipe “%s” (%d steps) — this file is an older format "
+                "and was upgraded: %s. Saving will write the new format."
+                % (self.model.recipe_id, n, ", ".join(upgraded)),
+                "What changed", lambda: self._show_upgrade_detail(upgraded),
+                tip="List what the upgrade changed on the canvas")
         else:
             self._status("Loaded recipe “%s” (%d steps, route %s)"
                          % (self.model.recipe_id, n, self.model.kind))
@@ -4409,6 +4476,41 @@ class StudioWindow(QMainWindow):
                          % (self.model.recipe_id, ds_kind))
         self.refresh_preview(sync=sync, force=False)
         return True
+
+    @staticmethod
+    def _describe_upgrade(path: Any, recipe: Any) -> List[str]:
+        """這份檔案被升級了什麼。讀不到原始 JSON 就回空 —— **不准擋載入**。
+
+        recipe 已經載好了；這裡只是為了說一句話而多讀一次檔。所以任何失敗都
+        安靜地退成「沒話說」，而不是把一個載得起來的 recipe 變成一個錯誤。
+        """
+        import json
+
+        try:
+            with open(str(path), "r", encoding="utf-8") as fh:
+                raw = json.load(fh)
+        except Exception:          # noqa: BLE001 — 只是一句提示
+            return []
+        try:
+            return list(describe_migration(raw, recipe))
+        except Exception:          # noqa: BLE001 — 同上
+            return []
+
+    def _show_upgrade_detail(self, upgraded: List[str]) -> None:
+        """「改了什麼」點開來的細節。
+
+        用 `QMessageBox` 而不是一塊新面板：這是**讀完就走**的東西，而
+        `docs/ARCHITECTURE.md` 那條視窗規則說得很清楚 —— 不需要一邊看著它一邊
+        動主視窗的，就是 modal。
+        """
+        QMessageBox.information(
+            self, "Recipe upgraded",
+            "This recipe was saved by an older version of d4t. Opening it "
+            "upgraded the file's shape to the current one:\n\n  · %s\n\n"
+            "Nothing about what it measures changed — the canvas now draws "
+            "connections that used to be implied. Saving writes the new "
+            "format; the file on disk is untouched until you do."
+            % "\n  · ".join(upgraded))
 
     def save_recipe_path(self, path: Any) -> bool:
         """把目前的 model 寫成一份 recipe JSON。回「真的存下去了嗎」。
@@ -4601,8 +4703,14 @@ class StudioWindow(QMainWindow):
         highlight = self._highlight_features(result)
         self.feature_panel.set_model(self._feature_model(result, highlight))
         score = getattr(result, "score", None)
-        self.verdict.set_verdict(getattr(result, "bin", None)
-                                 if score is not None else None)
+        # 判定的**名字**（recipe 自己取的）比 `bin 1` 有意義得多 —— 廠內講的是
+        # real / nuisance 或某個 class name（X7）。名字住在 `Rule.label` /
+        # `TreeLeaf.label` / `otherwise_label`，`bin_labels()` 把它們收成一張表。
+        verdict_bin = getattr(result, "bin", None) if score is not None else None
+        decide = getattr(self.model, "decide", None)
+        names = decide.bin_labels() if decide is not None else {}
+        self.verdict.set_verdict(verdict_bin,
+                                 label=names.get(verdict_bin, ""))
         self.verdict_score.setText("" if score is None
                                    else "score %s" % format_feature_value(score))
         self._show_decide_path(result)
@@ -6012,6 +6120,11 @@ class StudioWindow(QMainWindow):
         if outputs:
             # **列出路徑**：使用者要去那裡找檔案。
             bits.append("Wrote %s" % ", ".join(outputs))
+        # 路徑寫出來還不夠 —— 使用者得自己開檔案總管、自己把它貼進去（X5：
+        # 流程的終點沒有出口）。`QDesktopServices` 這個 repo 只用過一次，
+        # 那條路一直在，只是沒有接上這裡。**留在 bits 裡的路徑不動**：
+        # 這顆鈕是補充，開不起來的時候路徑照樣讀得到。
+        where = str(outputs[0]) if outputs else ""
         for w in warnings:
             bits.append(str(w))
         if errors:
@@ -6019,7 +6132,26 @@ class StudioWindow(QMainWindow):
             first = sorted(errors.items())[0]
             more = ("  (and %d more)" % (len(errors) - 1)) if len(errors) > 1 else ""
             bits.append("Output card “%s” failed: %s%s" % (first[0], first[1], more))
-        self._status("  ·  ".join(bits), "error" if errors else None)
+        msg = "  ·  ".join(bits)
+        level = "error" if errors else None
+        if where:
+            self._status_next_step(
+                msg, "Open the folder",
+                lambda: self._open_output_folder(where), level or "info",
+                "Show %s in the file browser" % where)
+        else:
+            self._status(msg, level)
+
+    def _open_output_folder(self, where: str) -> None:
+        """帶使用者去那個資料夾。開不起來就**說出來**，不要安靜地沒反應。
+
+        按了一顆鈕、什麼都沒發生，使用者第一個念頭是「這個工具有沒有壞」——
+        `undo()` 那句「Nothing to undo.」是同一條規矩。
+        """
+        if not open_folder(where):
+            self._status("Could not open %s — the path is in the message "
+                         "above, copy it into the file browser." % where,
+                         "error")
 
     def _on_outputs_failed(self, msg: str) -> None:
         self._status("Writing outputs failed: %s" % msg, "error")
@@ -6112,6 +6244,7 @@ class StudioWindow(QMainWindow):
         results = list(results or [])
         self._progress_done()
         self.trial_results = results
+        self._refresh_results_button()
         self.trial_scores = [r["score"] for r in results
                              if r.get("ok") and r.get("score") is not None]
         # ⚠ **判定段要先算**：分布圖的分段染色讀的是它算好的「哪一類是哪幾顆」

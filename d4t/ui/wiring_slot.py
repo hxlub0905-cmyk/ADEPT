@@ -179,8 +179,9 @@ class WiringSlot(QWidget):
                                      required=self._required)
         self.text.setText(main)
         self.text.setStyleSheet(
-            "font-size:12px;%s"
-            % (" color:%s; font-weight:600;" % TOKENS["danger_text"] if bad
+            "font-size:%s;%s"
+            % (TOKENS["font_body"],
+               " color:%s; font-weight:600;" % TOKENS["danger_text"] if bad
                else (" color:%s;" % TOKENS["text_hint"] if not self._value
                      else " color:%s; font-weight:600;" % TOKENS["text_primary"])))
         self.note.setText(("· " + note) if note else "")

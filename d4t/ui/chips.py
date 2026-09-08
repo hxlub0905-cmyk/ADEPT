@@ -561,8 +561,8 @@ class MetricChips(QWidget):
             # 「這個字裝得下嗎」的答案跟畫面不一致（膠囊那邊踩過同一個坑）。
             lbl.setFont(gf)
             lbl.setFixedWidth(label_w)
-            lbl.setStyleSheet("color:%s; font-size:10px; padding-top:8px;"
-                              % TOKENS["text_hint"])
+            lbl.setStyleSheet("color:%s; font-size:%s; padding-top:8px;"
+                              % (TOKENS["text_hint"], TOKENS["font_tiny"]))
             flow = _ChipFlow(self)
             for mid in members:
                 c = _MetricChip(mid, colour, mid in picked, flow)

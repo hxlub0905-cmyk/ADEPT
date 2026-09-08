@@ -49,6 +49,7 @@ __all__ = [
     "RouteBy", "resolve_route", "route_miss_message",
     "Issue", "execution_order", "validate", "is_region_edge",
     "region_edge_values", "hydrate_regions", "RECIPE_VERSION",
+    "describe_migration",
     "referenced_features",
 ]
 
@@ -368,6 +369,49 @@ class DecideSpec:
     #: （鏈狀樹，見 :func:`rules_to_tree`），所以舊寫法照讀不誤。
     tree: Any = None
 
+    def bin_labels(self) -> Dict[int, str]:
+        """``bin`` → 使用者給它的名字（沒取名的不在裡面）。
+
+        **廠內講的是 real / nuisance 或某個 class name，不是 ``bin 1``**（X7）。
+        那些名字本來就存得下來 —— `Rule.label`、`TreeLeaf.label`、
+        `otherwise_label` 三個欄位從 F21-D／F24 起就在，只是**沒有人拿它們去
+        畫**：判定 chip 上顯示的一直是 ``bin 1 · ≥ threshold``。這一支就是那條
+        缺的路。
+
+        同一個 bin 被取了兩個名字時**第一個贏**（由上往下讀，跟判定本身同一個
+        方向）—— 不是挑最長的、也不是接起來：那兩種都會讓畫面上的字隨著一條
+        不相干的規則改動而變，而使用者記住的是他自己打的第一個名字。
+
+        ⚠ 這一支不 import Qt，也不該（鐵則 1）—— 它回一個 dict，UI 拿去畫。
+        """
+        out: Dict[int, str] = {}
+
+        def _take(b: Any, label: Any) -> None:
+            text = str(label or "").strip()
+            if not text:
+                return
+            try:
+                key = int(b)
+            except (TypeError, ValueError):
+                return
+            out.setdefault(key, text)
+
+        def _walk(node: Any) -> None:
+            if node is None:
+                return
+            if isinstance(node, TreeLeaf):
+                _take(node.bin, node.label)
+                return
+            _walk(getattr(node, "yes", None))
+            _walk(getattr(node, "no", None))
+
+        # 順序＝使用者由上往下讀的順序：樹（有的話）→ 規則 → otherwise。
+        _walk(self.tree)
+        for rule in self.rules:
+            _take(rule.bin, rule.label)
+        _take(self.otherwise_bin, self.otherwise_label)
+        return out
+
 
 @dataclass(frozen=True)
 class RouteBy:
@@ -659,6 +703,60 @@ def _region_producer(name: str, route: List[str], upto: int,
         return found
 
     return owner_in(route[:upto]) or owner_in(route)
+
+
+def describe_migration(raw: Any, recipe: Any) -> List[str]:
+    """載入一份舊 recipe 的時候，**畫布上多了什麼／換了什麼**，講成人話。
+
+    為什麼需要它（U17，2026-09-08）
+    ------------------------------
+    舊版 recipe 開起來會靜默升級 —— 補區域線（F42）、拆載入卡（F11 Input-4）、
+    換掉改過名的卡。畫布上因此多了東西，而**沒有任何一句話說明**；接著存檔
+    就寫成新格式。這是「畫布不說謊」唯一還沒守到的角落：畫面是對的，但使用者
+    不知道它為什麼跟他上次存的不一樣，而他手上那份檔案已經被改寫了。
+
+    為什麼是「比對前後」而不是讓每一道遷移自己回報
+    ----------------------------------------------
+    有 19 道 ``_migrate_*``，而讓每一道多回一個「我做了什麼」是 19 個要維護
+    的字串 —— 而且**第 20 道一定會忘**（這個 repo 的 `ALLOWED_ERRORS` 學到的
+    同一課：靠人記得的東西會漂）。原始 dict 與載好的 `Recipe` 兩邊都在手上，
+    差在哪裡是**算得出來**的，所以新加一道遷移不必改這裡。
+
+    代價講明：它說得出「多了 2 條線」，說不出「那是 F42 那一道補的」。對使用者
+    來說前者才是他要知道的事 —— 後者是我們的事。
+
+    回一串句子（空的 = 什麼都沒變，那時候不要講話）。
+    """
+    says: List[str] = []
+    if not isinstance(raw, dict):
+        return says
+    try:
+        old_version = _as_int(raw.get("version", 1), "recipe 'version'")
+    except Exception:              # noqa: BLE001 — 只是一句提示，不准擋載入
+        return says
+    if old_version >= RECIPE_VERSION:
+        return says
+
+    raw_edges = raw.get("edges") or []
+    added = len(getattr(recipe, "edges", []) or []) - len(raw_edges)
+    if added > 0:
+        says.append("added %d wire%s" % (added, "" if added == 1 else "s"))
+
+    raw_nodes = raw.get("nodes") or {}
+    if isinstance(raw_nodes, dict):
+        new_nodes = getattr(recipe, "nodes", {}) or {}
+        extra = len(new_nodes) - len(raw_nodes)
+        if extra > 0:
+            says.append("split %d card%s" % (extra, "" if extra == 1 else "s"))
+        swapped = sorted(
+            {str((raw_nodes.get(nid) or {}).get("step", ""))
+             for nid, node in new_nodes.items()
+             if nid in raw_nodes
+             and str((raw_nodes.get(nid) or {}).get("step", ""))
+             not in ("", str(getattr(node, "step", "")))})
+        if swapped:
+            says.append("renamed %s" % ", ".join("“%s”" % k for k in swapped))
+    return says
 
 
 def _migrate_region_params_into_edges(

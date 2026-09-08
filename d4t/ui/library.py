@@ -6,9 +6,10 @@ U7 那一刀：它跟 `widgets.py` 裡其餘 20 幾個類別沒有任何共用 �
 
 這一份是**純搬移**：每一行都是原封搬過來的，一個字都沒有改。
 
-⚠ **階段的順序與標題不住在這裡**（U9 還沒做）：`LibraryPanel.GROUPS` 是
-`pipeline/step.py::GROUP_ORDER` 的第二份，靠 `test_ui_f16_stages.py` 綁著。
-那是下一刀的事，這一刀不改行為。
+⚠ **階段的順序、標題與副標都不住在這裡**（U9，2026-09-08）：三樣東西的家是
+`pipeline/step.py::GROUPS`，這一份只是把它接過來畫。`LibraryPanel.GROUPS`
+那個常數已經不存在 —— 它曾經是 `GROUP_ORDER` 的第二份，靠
+`test_ui_f16_stages.py` 綁著不漂，而一條測試是補丁不是解法。
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from ..core.pipeline.step import GROUPS as STAGE_GROUPS
 from . import theme
 from .buttons import small_button
 from .icons import restyle
@@ -97,7 +99,7 @@ def draw_group_icon(p: QPainter, group: str, color: str, size: float) -> None:
     # ⚠ **這裡以前還有一顆 ``g == "algo"`` 的 Σ 圖示，2026-08-28 刪掉了**（F48）。
     # 它畫的是卡片庫的 Algo 那一段，而那一段 F24 §5 就從 `GROUPS` 拿掉、
     # F48 連 `GROUP_ALGO` 這個常數一起刪了 —— `GroupIcon` 只被兩個地方叫
-    # （rail 的 StageButton 與區塊標題），兩邊的 gid 都來自 `LibraryPanel.GROUPS`，
+    # （rail 的 StageButton 與區塊標題），兩邊的 gid 都來自 `step.GROUPS`，
     # 所以那一支 `elif` 再也走不到。**不是把它留成便利貼**：這個檔案裡的
     # 圖示是一段一顆，而「有圖示、沒有那一段」正好是下一個人會照著加卡的形狀。
     elif g == "adc":                    # 標籤：給這顆 defect 一個 bin
@@ -189,7 +191,10 @@ class _LibraryItem(QFrame):
 
         self.dot = QFrame()
         self.dot.setFixedSize(5, 5)
-        self.dot.setStyleSheet("background:%s; border-radius:2px;" % color)
+        # 5×5 的點：圓角是它自己的一半，不是 `radius_sm`（4px 會把它畫成一顆
+        # 幾乎全圓的球）。半徑跟著上面那個 setFixedSize 走。
+        self.dot.setStyleSheet("background:%s; border-radius:%dpx;"
+                               % (color, 5 // 2))
         lay.addWidget(self.dot)
 
         self.label = QLabel(str(describe.get("label") or self.step_key))
@@ -324,7 +329,8 @@ class StageButton(QFrame):
 
         self.label = QLabel(title, self)
         self.label.setAlignment(Qt.AlignHCenter)
-        self.label.setStyleSheet("font-size:9px; font-weight:600;")
+        self.label.setStyleSheet("font-size:%s; font-weight:600;"
+                                 % TOKENS["font_micro"])
         lay.addWidget(self.label)
 
         self.count = QLabel("", self)
@@ -345,8 +351,8 @@ class StageButton(QFrame):
         畫布上那塊圖示磚是同一個。
         """
         self.count.setStyleSheet(
-            "background:transparent; color:%s; font-size:9px; font-weight:600;"
-            % theme.count_color(self.group))
+            "background:transparent; color:%s; font-size:%s; font-weight:600;"
+            % (theme.count_color(self.group), TOKENS["font_micro"]))
 
     def set_count(self, n: int) -> None:
         self.count.setText("" if n <= 0 else str(int(n)))
@@ -413,23 +419,16 @@ class LibraryPanel(QWidget):
     #: 收起來時整欄只留 rail，工作區才真的變寬。
     panel_toggled = Signal(bool)
 
-    #: 顯示順序與標題。id 對應 ``pipeline/step.py`` 的 ``GROUP_*``，而**順序必須
-    #: 與那邊的 ``GROUP_ORDER`` 逐項相同** —— 兩份表是同一件事的兩半（這裡多帶
-    #: 給人看的標題與副標），而它們漂開的話卡片庫的順序會跟引擎講的不一樣。
-    #: ``tests/test_ui_f16_stages.py`` 鎖著。
-    GROUPS = (
-        ("input", "Input", "Load this defect's images"),
-        ("enhance", "Enhance", "Image in, image out"),
-        ("region", "ROI", "Decide where to look"),
-        ("measure", "Measure", "Image + region in, numbers out"),
-        # Algo 那一列拿掉了（F24 §5，使用者 2026-08-24 點頭）：算式、補值、
-        # 跨顆換算全部住進判定（working numbers），這一段清空之後留著只是
-        # 一個永遠空白的抽屜。
-        ("compare", "Compare", "Two images in, difference out"),
-        ("adc", "ADC", "Numbers in, score and bin out"),
-        ("output", "Output", "The end of the line - write it somewhere"),
-    )
-    _ORDER = tuple(g for g, _t, _s in GROUPS)
+    #: 顯示順序、標題與副標 —— **一份都不住在這裡**（U9，2026-09-08）。
+    #:
+    #: 它以前是這個類別上一個叫 ``GROUPS`` 的常數，跟
+    #: ``pipeline/step.py::GROUP_ORDER`` 是同一件事的兩半（那邊排順序、這邊多帶
+    #: 給人看的標題與副標），靠 ``tests/test_ui_f16_stages.py`` 綁著不漂。
+    #: **而一條測試是補丁不是解法**：它擋得住「兩份不一致」，擋不住「改的人
+    #: 根本不知道有第二份」。現在三樣東西都在 `step.py` 的 ``GROUPS`` 上，
+    #: 這裡只是把它接過來的一個別名，UI 只讀不寫。
+    _GROUPS = STAGE_GROUPS
+    _ORDER = tuple(g for g, _t, _s in STAGE_GROUPS)
     _EMPTY_TEXT = "(no cards in this section)"
     _NO_MATCH_TEXT = "(no card matches)"
 
@@ -472,7 +471,7 @@ class LibraryPanel(QWidget):
         rail_lay.setContentsMargins(2, 6, 2, 6)
         rail_lay.setSpacing(2)
         self.stage_buttons: Dict[str, StageButton] = {}
-        for gid, title, subtitle in self.GROUPS:
+        for gid, title, subtitle in self._GROUPS:
             btn = StageButton(gid, title, subtitle, theme.group_hex(gid),
                               self.rail)
             btn.clicked.connect(self.toggle_group)
@@ -523,7 +522,7 @@ class LibraryPanel(QWidget):
         self._body.setContentsMargins(6, 2, 8, 6)
         self._body.setSpacing(2)
 
-        for gid, title, subtitle in self.GROUPS:
+        for gid, title, subtitle in self._GROUPS:
             self._body.addWidget(self._make_header(gid, title, subtitle))
             # 卡片列裝在**一個自己的 widget 裡**，而不是直接 addLayout 一個
             # QVBoxLayout（F17）。收起來的那七段要真的不佔位置：
@@ -568,8 +567,8 @@ class LibraryPanel(QWidget):
         lbl = QLabel(title, head)
         lbl.setObjectName("libSectionTitle")
         lbl.setToolTip(subtitle)
-        lbl.setStyleSheet("color:%s; font-weight:700; font-size:11px;"
-                          % TOKENS["text_secondary"])
+        lbl.setStyleSheet("color:%s; font-weight:700; font-size:%s;"
+                          % (TOKENS["text_secondary"], TOKENS["font_small"]))
         lay.addWidget(lbl)
         lay.addStretch(1)
         self._headers[gid] = head
@@ -633,8 +632,8 @@ class LibraryPanel(QWidget):
                 if lbl.objectName() == "libSectionTitle"]
 
     def visible_section_titles(self) -> List[str]:
-        """搜尋之後還有卡片的區塊標題（順序同 :data:`GROUPS`）。"""
-        return [title for gid, title, _sub in self.GROUPS
+        """搜尋之後還有卡片的區塊標題（順序同 `step.GROUPS`）。"""
+        return [title for gid, title, _sub in self._GROUPS
                 if gid in self._shown_groups]
 
     # -- 展開 / 收合（F7-7）--------------------------------------------------
@@ -694,8 +693,8 @@ class LibraryPanel(QWidget):
     def _empty_label(self, text: str) -> QLabel:
         lbl = QLabel(text)
         lbl.setObjectName("libEmpty")
-        lbl.setStyleSheet("color:%s; font-size:11px; padding-left:12px;"
-                          % TOKENS["text_disabled"])
+        lbl.setStyleSheet("color:%s; font-size:%s; padding-left:12px;"
+                          % (TOKENS["text_disabled"], TOKENS["font_small"]))
         return lbl
 
     def _on_search(self, text: str) -> None:

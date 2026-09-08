@@ -7,8 +7,10 @@
 
 U7 那一刀。這一份是**純搬移**：每一行都是原封搬過來的，一個字都沒有改。
 
-⚠ `VerdictChip` 的紅綠**會反轉**（``is_real_style``）—— 同一個綠色 chip 在兩份
-recipe 裡意思相反。那是外部檢視清單的 U13，還沒做；這一刀不改行為。
+⚠ `VerdictChip` 的紅綠以前**會反轉**（``is_real_style``）而 chip 上沒有任何字
+說得出差別 —— 同一個綠色 chip 在兩份 recipe 裡意思相反。U13／X7（2026-09-08）
+把意思搬到**字**上：判定的名字（recipe 自己取的）排第一，``bin 1`` 退成後面
+的補充，顏色降為輔助，而 tone 另外帶一個**不靠顏色**的通道（框線的樣式）。
 """
 from __future__ import annotations
 
@@ -273,12 +275,42 @@ def _escape(text: str) -> str:
 # **沒人認領的特徵仍然要出現**（最後這一條在搬的過程裡救回一個真的 bug）。
 
 
-class VerdictChip(QLabel):
-    """判定 chip：``bin 1 · ≥門檻`` / ``bin 0 · <門檻`` / ``—``。
+#: tone → 框線的樣式。**顏色以外的第二個通道**（U13）。
+#:
+#: 紅綠對約 8% 的男性是不可分辨的，而這張 chip 以前把「好消息／壞消息」整個
+#: 押在色相上。字是主要的通道（見 :meth:`VerdictChip.set_verdict`），這一張表
+#: 是給掃視用的第二個：**實線 = 有結論、虛線 = 還沒有**，而壞消息的框更粗。
+#:
+#: ⚠ 為什麼不用一個圖示字元（`●` / `○`）：那兩個在 Geometric Shapes 區，廠內
+#: 那台 Windows 的 Segoe UI 要退到 Segoe UI Symbol 才畫得出來
+#: （`tests/test_ui_f7_23_buttons.py` 那條規則的同一個理由）—— 退字型的下場是
+#: 大小與 baseline 都不一樣，最壞是豆腐框。框線是 QSS 畫的，跟字型無關。
+_TONE_BORDER = {
+    "good": ("solid", 1),
+    "bad": ("solid", 2),
+    "neutral": ("dashed", 1),
+}
 
-    ``is_real_style=True`` 時色彩語意反轉：bin 1 代表「這是真缺陷」，是壞消息
-    （紅），bin 0 是乾淨（綠）。預設（False）則照「過門檻 = 好」來配色。
-    文字兩種模式都一樣，只有顏色換邊。
+
+class VerdictChip(QLabel):
+    """判定 chip：**這一顆被判成什麼** —— 名字排第一，``bin N`` 是補充。
+
+    為什麼名字要排第一（X7，2026-09-08）
+    ------------------------------------
+    廠內講的是 real / nuisance 或某個 class name，不是 ``bin 1``。而那些名字
+    **本來就存得下來**（`Rule.label` / `TreeLeaf.label` / `otherwise_label`
+    從 F21-D／F24 起就在），只是沒有人拿去畫。所以這不是新功能，是把一條已經
+    鋪好的路接上。
+
+    為什麼顏色不能是唯一的通道（U13，同日）
+    ---------------------------------------
+    ``is_real_style=True`` 時紅綠**對調**（bin 1 = 抓到真缺陷 = 壞消息）。
+    以前兩種模式的**文字一模一樣、只有顏色換邊** —— 於是同一個綠色 chip 在兩份
+    recipe 裡意思相反，而畫面上沒有任何東西講得出是哪一種。現在那個模式會讓
+    chip 自己說出 ``real`` / ``nuisance``：**顏色翻面的時候，字跟著翻面**。
+
+    加上紅綠對色覺缺陷者不可分辨（男性約 8%），所以 tone 還有第三個通道 ——
+    框線的樣式（:data:`_TONE_BORDER`）。
     """
 
     def __init__(self, parent: Optional[QWidget] = None):
@@ -289,31 +321,55 @@ class VerdictChip(QLabel):
         self._bin: Optional[int] = None
         self.set_verdict(None)
 
+    @staticmethod
+    def _wording(b: Optional[int], is_real_style: bool, label: str) -> str:
+        """chip 上那一行字。**名字 → 語意詞 → 門檻關係**，第一個有的贏。
+
+        三層各自的理由：recipe 取了名字就用那個名字（使用者自己的字彙）；
+        沒取名但知道 bin 1 是真缺陷，就講 real / nuisance（那是顏色翻面時
+        唯一講得出差別的東西）；兩個都沒有才退回門檻關係 —— 那時候
+        ``≥ threshold`` 是**真的**唯一知道的事，不該假裝知道更多。
+        """
+        if b is None:
+            return "—"
+        named = str(label or "").strip()
+        if named:
+            return "%s · bin %d" % (named, b)
+        if is_real_style and b in (0, 1):
+            return "%s · bin %d" % ("real" if b == 1 else "nuisance", b)
+        if b == 1:
+            return "bin 1 · ≥ threshold"
+        if b == 0:
+            return "bin 0 · < threshold"
+        return "bin %d" % b
+
     def set_verdict(self, bin_value: Optional[Any] = None,
-                    is_real_style: bool = False) -> None:
+                    is_real_style: bool = False, label: str = "") -> None:
         try:
             b = None if bin_value is None else int(bin_value)
         except (TypeError, ValueError):
             b = None
         self._bin = b
         if b is None:
-            text, tone = "—", "neutral"
+            tone = "neutral"
         elif b == 1:
-            text = "bin 1 · ≥ threshold"
             tone = "bad" if is_real_style else "good"
         elif b == 0:
-            text = "bin 0 · < threshold"
             tone = "good" if is_real_style else "bad"
         else:
-            text, tone = "bin %d" % b, "neutral"
+            tone = "neutral"
+        text = self._wording(b, is_real_style, label)
         bg = TOKENS["chip_%s_bg" % tone]
         fg = TOKENS["chip_%s_text" % tone]
         border = TOKENS["chip_%s_border" % tone]
+        style, width = _TONE_BORDER[tone]
         self.setText(text)
         self.setProperty("tone", tone)
+        self.setToolTip(text)
         self.setStyleSheet(
-            "background:%s; color:%s; border:1px solid %s; border-radius:8px;"
-            "padding:4px 12px; font-weight:700;" % (bg, fg, border))
+            "background:%s; color:%s; border:%dpx %s %s;"
+            " border-radius:%s; padding:4px 12px; font-weight:700;"
+            % (bg, fg, width, style, border, TOKENS["radius_md"]))
 
     def verdict(self) -> Optional[int]:
         return self._bin

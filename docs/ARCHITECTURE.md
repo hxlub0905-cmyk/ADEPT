@@ -190,6 +190,38 @@ Path 行都建在它上面。
 
 ---
 
+## 什麼時候可以開一個新視窗（U15，2026-09-08）
+
+在這一條寫下來之前，`d4t/ui` 有**十一個頂層視窗**，而沒有任何一條規則說什麼
+時候該開一個。結果是「要不要開新視窗」變成逐次的手感，而使用者付的錢是：
+工作列上多一個看不出屬於誰的東西、Alt-Tab 之後找不到路回來、以及**主視窗被
+蓋住而使用者以為程式當了**。
+
+**規則：只有「要跟主視窗並排對照」的才開頂層視窗，其餘一律主視窗裡的 modal
+對話框或一頁。**
+
+判準是一句話：**使用者需不需要一邊看著它、一邊動主視窗？**
+
+| 開頂層視窗 | 為什麼 |
+|---|---|
+| `StudioWindow` | 主視窗本人 |
+| `ResultsWindow` | 一邊看結果表、一邊在畫布上改參數 —— 那正是調 recipe 的迴圈 |
+| `RegionCheckWindow` | 一邊看區域畫在很多顆上、一邊改那張 Region 卡 |
+| `GcGeneratorWindow` | 產模擬資料是一件**跟主視窗無關**的事（它自己是一個小工具，不吃目前的 recipe）|
+
+其餘一律 modal（`WelcomeDialog`、`TemplateDialog`、`ChartSettingsDialog`、
+`GraphBuilderDialog`、`CurveDialog`、`StatusHistoryDialog`、
+`RecipeLibraryDialog`）—— 它們都是「進去做完一件事再出來」，而在那段時間裡
+主視窗沒有東西可看。
+
+⚠ **`UniformityWindow` 不在上面兩張表裡**，因為它不是頂層視窗 —— 它是
+`inspectors` 那顆 `Preview charts…` 開出來的一塊。這條規則問的是
+「`QMainWindow` 或無父視窗的 `QDialog`」，不是「畫面上有沒有一塊新東西」。
+
+**加第十二個之前先回答那句話。** `tests/test_ui_window_policy.py` 把這兩張表
+釘住：新增一個頂層視窗類別而沒有列進去的話，那支測試會叫 —— 它擋不住你做出
+錯的決定，但它擋得住**沒有人做過那個決定**。
+
 ## 目錄結構
 
 ⚠ **這一段有測試守著**（`tests/test_doc_file_tree.py`）：下面每一個條目要真的存在，
