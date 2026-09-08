@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from . import fit_screen
 from . import region_words
+from . import strings
 from . import theme
 from .buttons import small_button
 from .icons import draw_glyph_icon
@@ -81,7 +82,13 @@ class _HintLabel(QLabel):
         return self._full
 
     def set_full_text(self, text: str) -> None:
-        self._full = str(text)
+        # 翻譯層擺在共用的那一支（U14）：**每一句參數說明都流過這裡**
+        # （`ParamSpec.help` 那一句、卡片自己的一行說明、「不生效」註記），
+        # 所以包這一次就涵蓋整個設定區，而呼叫端一個字都不用改。
+        #
+        # 組出來的句子（`"⚠ " + msg`）在 catalog 裡查不到 → 回原句，
+        # 那正是要的行為：漏翻的代價是「那句話沒有被翻譯」。
+        self._full = strings.tr(str(text))
         self._sync()
 
     def set_expanded(self, expanded: bool) -> None:
@@ -195,7 +202,7 @@ class _ParamRow(QFrame):
             top.addWidget(editor, 1)
         lay.addLayout(top)
 
-        self.hint = _HintLabel(str(spec.get("help", "")), self)
+        self.hint = _HintLabel(strings.tr(str(spec.get("help", ""))), self)
         self.hint.setProperty("error", "false")
         # 出現的時候一定是「必須讀完的一句話」（錯誤／不生效註記），
         # 所以永遠整段攤開；平常整列收起來只有一行高。
@@ -204,7 +211,7 @@ class _ParamRow(QFrame):
         lay.addWidget(self.hint)
 
         # 說明全文住在 tooltip：整列（含名稱與空白處）都感應得到。
-        tip = str(spec.get("help", ""))
+        tip = strings.tr(str(spec.get("help", "")))
         if tip:
             self.setToolTip(tip)
             self.name_label.setToolTip(tip)

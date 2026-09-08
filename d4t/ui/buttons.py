@@ -17,6 +17,8 @@ from typing import Optional
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QPushButton, QSizePolicy, QWidget
 
+from . import strings
+
 __all__ = ["small_button", "FilterChip", "clear_layout_parked"]
 
 
@@ -35,6 +37,11 @@ def small_button(text: str, tip: str = "", parent: Optional[QWidget] = None,
     ``kind="icon"`` 給浮在畫布或影像上的那幾顆一個自己的底：那裡沒有卡片當
     底色，透明的按鈕要滑到才看得出是按鈕（同 F7-13 給工具列加邊框的理由）。
     """
+    # 翻譯層擺在共用的那一支（U14）—— 卡片控制、畫布縮放、換 defect、
+    # Card/Features 全部流過這裡。**卡片名不走這條路**：它是 `Step.label`，
+    # 由 ParamForm 與畫布自己畫（見 `ui/strings.py` 的「不翻譯的兩類」）。
+    text = strings.tr(text)
+    tip = strings.tr(tip) if tip else tip
     b = QPushButton(text, parent)
     b.setObjectName("cardButton")
     b.setProperty("shape", str(shape))

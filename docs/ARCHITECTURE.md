@@ -298,6 +298,9 @@ d4t/
 │   │   ├── decide_tree.py    #   判定樹怎麼走 —— 引擎與 UI 共用同一支
 │   │   ├── verdict_features.py verdict_trace.py  #   判定問了哪幾個數字／重放一顆的判定（F45）
 │   │   ├── engine.py batch.py cache.py  #   單顆執行／ProcessPool 批次／影像段 checkpoint 快取
+│   │   ├── sampling.py      #   試跑抽哪幾顆（F98 X3）：first / random / strata。
+│   │   │                    #     「前 N 顆」在 wafer 上是統計陷阱 —— KLARF 照掃描
+│   │   │                    #     順序排，前 200 顆常擠在少數幾個 die。種子進 run 紀錄
 │   │   ├── channels.py       #   這一顆的第幾張圖 → 叫什麼流名
 │   │   ├── cellrois.py       #   標在 Golden Cell 上的具名區域（一個名字、好幾個矩形）
 │   │   ├── curve.py          #   tone curve 控制點的字串編碼（parse／format）
@@ -401,6 +404,11 @@ d4t/
     │                         #     一份點得開的清單，點一項就選中那張卡。
     │                         #     ⚠ 不自己算 lint —— 跟畫布的警示點吃同一次
     │                         #     `validate()`（兩邊各算一次＝畫布是紅的而清單說沒事）
+    ├── status_action.py      #   那一句話旁邊的「下一步」（F95 X5＋X6）：跑完開報表
+    │                         #     資料夾、剪錯線就地復原。**下一句話一定把它收起來**
+    ├── strings.py locales/zh_TW.json  #  使用者面的字只有一個進出口（F98 U14）。鍵就是英文
+    │                         #     原句，所以翻譯層擺在共用的那幾支就涵蓋幾百句
+    │                         #     ⚠ 卡片名與階段名**不翻**（recipe JSON 的鄰居）
     ├── status_log.py         #   狀態列說過的話（F91 U2 後半）—— 下一句就把上一句
     │                         #     蓋掉，而那一句常常是唯一講出「沒成功」的地方
     ├── baseline.py           #   跟上一次比差多少（F91 X1）：把一次跑壓成一小塊、

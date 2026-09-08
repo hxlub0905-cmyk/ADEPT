@@ -130,7 +130,12 @@ FILE_CEILINGS = {
     # 要把「模式」跟「設定區攤開沒有」講清楚（第一版把它們合成一個狀態，
     # 而那是錯的：模式是使用者選的，攤開是選到卡片時的自動行為）。
     # U8 的 `_build_params_row` 是新的一支，加上儀表從右欄搬過來的接線。
-    "d4t/ui/studio.py": 7390,
+    #
+    # 2026-09-08（U14）：7,390 → 7,404（+14）。翻譯層只包了兩個**繞過
+    # `_tool_button` 的地方**（`_refresh_results_button` 與 `_sync_layout_button`
+    # 自己改寫 text/tooltip）—— 整條工具列與狀態列各只加一行，因為那兩支本來
+    # 就是共用的入口。那正是 U14 的整個賣點：翻譯不必改 38 個檔案。
+    "d4t/ui/studio.py": 7404,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     #
