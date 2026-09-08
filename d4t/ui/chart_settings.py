@@ -81,6 +81,10 @@ _TIPS: Dict[str, str] = {
                   "is wide enough to hold it.",
     "ramp": "Which colour scale is used wherever colour stands for a number - "
             "the heat map's cells and a scatter coloured by a statistic.",
+    "ref_lines": "Spec limits, drawn as dashed lines across the chart. One "
+                 "or more numbers separated by commas; give one a name with "
+                 "USL=132. They land on the value axis, so the heat map "
+                 "does not have them.",
     "lock": "Pin the value scale to the range below, so two runs can be put "
             "side by side. Off means every chart picks its own range - which "
             "is right for one run and misleading for two.",
@@ -746,6 +750,9 @@ class ChartSettingsDialog(QDialog):
                   box, _chips("map_values"))
         self._row(grid, 10, "ramp", "When colour means a number",
                   box, _chips("ramp"))
+        refs = QLineEdit(box)
+        refs.setPlaceholderText("none - e.g. USL=132, LSL=112")
+        self._row(grid, 11, "ref_lines", "Spec limits", box, refs)
         box.layout().addLayout(grid)
         return box
 

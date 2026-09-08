@@ -554,7 +554,14 @@ def test_every_editor_moves_the_preview(qapp):
 
     for name, w in editors:
         before = {k: v.svg() for k, v in dlg.views.items()}
-        if isinstance(w, ColourButton):
+        if name == "ref_lines":
+            # ⚠ 這一格**不能塞任意字串**（雖然它是個 QLineEdit）：它有格式，
+            # 而壞掉的值會被 `_coerce` 擋下來 → 預覽不動 → 這支測試會說它沒
+            # 接上，而那正是它接對了的證據。要給一個**落在樣本範圍裡**的數字
+            # （樣本的 value 大約 112–132）—— 落在範圍外的那條線刻意不畫
+            # （`draw_refs` 的規矩）。
+            w.setText("USL=125")
+        elif isinstance(w, ColourButton):
             w.set_value("#123456")
         elif isinstance(w, (QCheckBox, BoolChips)):
             w.setChecked(not w.isChecked())
@@ -879,7 +886,7 @@ def test_no_setting_has_two_controls(qapp):
     assert not (in_grid & set(BOOL_CHIPS)), sorted(in_grid & set(BOOL_CHIPS))
     # 而每一格都要有**一個**家
     homed = in_grid | set(BOOL_CHIPS) | {
-        "value_name", "bins", "xticks", "yticks", "lo", "hi"}
+        "value_name", "bins", "xticks", "yticks", "lo", "hi", "ref_lines"}
     assert homed == set(cs.GLOBAL_KEYS), sorted(homed ^ set(cs.GLOBAL_KEYS))
 
 

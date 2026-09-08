@@ -148,6 +148,9 @@ GLOBAL_APPLIES: Dict[str, Tuple[str, ...]] = {
     "yticks": (CHART_BOX, CHART_HIST, CHART_PROFILE, CHART_CUSTOM),
     # 色階只有「顏色代表大小」的那兩張用得到
     "ramp": (CHART_MAP, CHART_CUSTOM),
+    # ⚠ **規格線畫在「值那一軸」上，而熱圖沒有那條軸** —— 那張圖的值是顏色。
+    # 硬畫的話那條線會落在一條位置軸上，讀起來是「規格在畫面的這個位置」。
+    "ref_lines": (CHART_BOX, CHART_HIST, CHART_PROFILE, CHART_CUSTOM),
 }
 
 #: `CHART_CUSTOM` 那一張**還要看它畫成哪一種記號** —— ``鍵 -> 哪幾種記號真的
@@ -162,6 +165,8 @@ GLOBAL_APPLIES: Dict[str, Tuple[str, ...]] = {
 #: 測試：列出來的每一對（鍵, 記號）必須真的改變 SVG，而**沒**列出來的那幾對
 #: 必須不改變。少一邊的話這張表就只是一段註解。
 CUSTOM_BY_MARK: Dict[str, Tuple[str, ...]] = {
+    # 格子的兩條軸都是類別 —— 「132 在哪裡」在那張圖上沒有答案。
+    "ref_lines": ("point", "line", "bar", "box"),
     "whiskers": ("box",),
     "map_values": ("cell",),
     "points": ("line", "box"),
@@ -524,6 +529,76 @@ def _ylabels(o: List[str], ticks: Sequence[float], lo: float, hi: float,
                  % (x - 6, ty + size * 0.3, size, weight, ink, _esc(_fmt(t))))
 
 
+#: 參考線的顏色 —— **不是任何一個區域色，也不是趨勢線那個炭黑**。
+#:
+#: 它講的既不是「哪一群」也不是「資料的走向」，而是**一條外面來的界線**。
+#: 磚紅是這個介面裡「注意」的語彙（`theme.danger` 那一族），而規格線正是
+#: 那個意思 —— 但它比 `danger` 淡，因為它是**背景上的一條參考**，不是一個
+#: 警報：超規的是資料，不是那條線。
+REF_COLOUR = "#b4544a"
+
+
+def draw_refs(o: List[str], style: Dict[str, Any], lo: float, hi: float,
+              px: float, py: float, pw: float, ph: float,
+              vertical: bool = True) -> None:
+    """把規格線畫上去（F89-3）。**每一張有「值那一軸」的圖共用這一支。**
+
+    ``vertical=True``（預設）＝值在 Y 軸上（盒鬚圖、profile、自己配的那張）；
+    ``False`` ＝值在 X 軸上（直方圖）。
+
+    ⚠ **超出範圍的那一條不畫。** 一條貼在圖框邊上的線讀起來是「規格剛好在
+    這裡」，而真相是「規格在畫面外」—— 那兩件事差很多。反過來說，如果使用者
+    鎖了尺度（`lock`），線就會落在他鎖的那個範圍裡，那是對的。
+
+    ⚠ 這一支**不畫圖例**：每一條線自己帶著名字（或值）貼在右端，那比一個要
+    對照的圖例少一次跳視。
+    """
+    from ..pipeline.chart_style import parse_refs
+
+    try:
+        refs = parse_refs(style.get("ref_lines", ""))
+    except Exception:                  # noqa: BLE001 — 畫圖不准被一格擋下來
+        return
+    if not refs or hi <= lo:
+        return
+    size, weight, _ink = _text_attrs(style, "tick", _TEXT)
+    for name, value in refs:
+        t = (float(value) - lo) / (hi - lo)
+        if not (0.0 <= t <= 1.0):
+            continue
+        said = "%s %s" % (name, _fmt(float(value))) if name \
+            else _fmt(float(value))
+        if vertical:
+            y = py + ph - t * ph
+            o.append("<line x1='%.1f' y1='%.1f' x2='%.1f' y2='%.1f' "
+                     "stroke='%s' stroke-width='1.2' stroke-dasharray='6 3'/>"
+                     % (px, y, px + pw, y, REF_COLOUR))
+            o.append("<text x='%.1f' y='%.1f' font-size='%g' "
+                     "font-weight='%s' fill='%s' text-anchor='end'>%s</text>"
+                     % (px + pw - 3, y - 3, size, weight, REF_COLOUR,
+                        _esc(said)))
+        else:
+            x = px + t * pw
+            o.append("<line x1='%.1f' y1='%.1f' x2='%.1f' y2='%.1f' "
+                     "stroke='%s' stroke-width='1.2' stroke-dasharray='6 3'/>"
+                     % (x, py, x, py + ph, REF_COLOUR))
+            # ⚠ **字要留在圖區裡**，而且靠邊的時候要換錨點：`middle` 的
+            # 標籤在最右邊那條線上會有一半跑到框外（render 出來才看到的）。
+            # 這裡不量字寬 —— 換錨點就夠了，而且它在任何字級下都成立。
+            near = (x - px) / pw if pw else 0.5
+            if near > 0.82:
+                anchor, tx = "end", x - 3
+            elif near < 0.18:
+                anchor, tx = "start", x + 3
+            else:
+                anchor, tx = "middle", x
+            o.append("<text x='%.1f' y='%.1f' font-size='%g' "
+                     "font-weight='%s' fill='%s' text-anchor='%s'>"
+                     "%s</text>"
+                     % (tx, py + size + 2, size, weight, REF_COLOUR, anchor,
+                        _esc(said)))
+
+
 def _xlabels(o: List[str], ticks: Sequence[float], to_x, y: float,
              style: Optional[Dict[str, Any]] = None) -> None:
     """X 軸上的刻度數字（三張圖共用 —— 各寫一份的那份會漂）。"""
@@ -629,6 +704,8 @@ def _svg_histogram(series: Dict[str, Any], style: Dict[str, Any],
     _xlabels(o, _nice_ticks(lo, hi, int(style.get("xticks") or 5)),
              lambda t: pad_l + (t - lo) / (hi - lo) * pw, pad_t + ph + 11,
              style)
+    # ⚠ 直方圖的**值在 X 軸上** —— 規格線因此是直的，不是橫的。
+    draw_refs(o, style, lo, hi, pad_l, pad_t, pw, ph, vertical=False)
     _legend(o, groups, pad_l, pad_t + ph + 32)
     _axis_names(o, style, width, height, pad_l, pad_t, pw, ph,
                 str(series.get("metric") or "value"),
@@ -746,6 +823,7 @@ def _svg_profile(series: Dict[str, Any], style: Dict[str, Any],
                          % (sx(a), sy(b), r, face, dot))
     _xlabels(o, _nice_ticks(plo, phi, int(style.get("xticks") or 5)),
              sx, pad_t + ph + 11, style)
+    draw_refs(o, style, lo, hi, pad_l, pad_t, pw, ph)
     o.append("<text x='%.1f' y='%.1f' font-size='10' fill='%s'>slope %s</text>"
              % (pad_l, pad_t + ph + 32, _TREND, _esc("; ".join(notes))))
     _axis_names(o, style, width, height, pad_l, pad_t, pw, ph,

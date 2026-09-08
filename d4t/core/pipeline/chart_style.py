@@ -34,6 +34,7 @@ JSON 物件，鍵是**扁平的字串**，而且**只存跟預設不一樣的那
 from __future__ import annotations
 
 import json
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 __all__ = [
@@ -128,11 +129,29 @@ _TEXT: Dict[str, str] = {
     #: wafer map 慣例就是彩虹 —— **兩種都留，預設單色**
     #: （使用者 2026-09-07：「兩種都可 預設單色」）。
     "ramp": AUTO,
+    #: **規格線／參考線**（F89-3，2026-09-08）。一串用逗號分開的值，每一條
+    #: 可以帶一個名字：``"USL=132, 120, LSL=112"``。
+    #:
+    #: 為什麼這一格值得存在：製程工程師看任何一張圖的第一個問題是
+    #: **「有沒有超規」**，而在這之前這個工具一條線都畫不了 —— 他得把數字
+    #: 抄下來自己比。一條畫在圖上的線把那件事變成一眼。
+    #:
+    #: ⚠ 它畫在**值那一軸**上，而那一軸在每一張圖上是不同的一條
+    #: （盒鬚圖是 Y、直方圖是 X、profile 是 Y）。熱圖上「值」是顏色不是軸，
+    #: 所以那張圖沒有這一格（`GLOBAL_APPLIES`）。
+    #:
+    #: ⚠ 名字是**選填**的：只打數字就只畫線加一個值。名字裡不能有逗號或
+    #: 等號（那是分隔符），這一條在 `parse_refs` 擋。
+    "ref_lines": "",
     #: 值那一軸要叫什麼（`glv_mean` → `Gray level`）。四張圖共用 ——
     #: 它在盒鬚圖是 Y、直方圖是 X、profile 是 Y、熱圖是色條，而那正是使用者
     #: 會想改的那一個。**其餘的軸名是每張圖自己的**（見 PER_CHART_KEYS）。
     "value_name": "",
 }
+
+#: 一張圖上最多幾條參考線。**不是技術限制** —— 五條以上的橫線會把圖蓋掉，
+#: 而那時候該問的是「這張圖是不是問錯了問題」。
+MAX_REFS = 4
 
 #: 全域的鍵（不帶圖名前綴）。
 GLOBAL_KEYS: Tuple[str, ...] = tuple(sorted(
@@ -197,6 +216,56 @@ def _split(key: str) -> Tuple[str, str]:
     return "", key.strip()
 
 
+def parse_refs(text: object) -> List[Tuple[str, float]]:
+    """``"USL=132, 120"`` → ``[("", 120.0), ("USL", 132.0)]``。
+
+    **照值排序**，所以兩個人打同一組線得到逐字相同的字串。名字空的那幾條
+    在圖上只印數字。
+    """
+    if isinstance(text, (list, tuple)):
+        items: List[Any] = list(text)
+    else:
+        s = "" if text is None else str(text).strip()
+        items = [p for p in s.split(",") if p.strip()] if s else []
+    out: List[Tuple[str, float]] = []
+    for item in items:
+        if isinstance(item, (list, tuple)) and len(item) == 2:
+            name, raw = str(item[0]).strip(), item[1]
+        else:
+            got = str(item)
+            name, _, raw = got.rpartition("=") if "=" in got else ("", "", got)
+            name, raw = name.strip(), raw.strip()
+        if "," in name or "=" in name:
+            raise ChartStyleError(
+                "a reference line's name cannot contain ',' or '=' (%r)"
+                % name)
+        try:
+            v = float(raw)
+        except (TypeError, ValueError):
+            raise ChartStyleError(
+                "'%s' is not a number - a reference line looks like 132 or "
+                "USL=132" % raw) from None
+        if not math.isfinite(v):
+            raise ChartStyleError("a reference line has to be a real number")
+        out.append((name, round(v, 4)))
+    if len(out) > MAX_REFS:
+        raise ChartStyleError(
+            "that is %d reference lines; %d is the most that stays readable"
+            % (len(out), MAX_REFS))
+    return sorted(out, key=lambda t: t[1])
+
+
+def format_refs(refs: object) -> str:
+    """``[("USL", 132.0)]`` → ``"USL=132"``（**排序過，round-trip 穩定**）。"""
+    got = refs if isinstance(refs, list) else parse_refs(refs)
+    bits = []
+    for name, value in got:
+        v = round(float(value), 4)
+        num = "%g" % (int(v) if float(v).is_integer() else v)
+        bits.append("%s=%s" % (name, num) if name else num)
+    return ", ".join(bits)
+
+
 def _coerce(name: str, value: Any, where: str) -> Any:
     """一個值 → 正規化過的值（不合法就是一句白話）。"""
     if name in _NUM:
@@ -219,6 +288,10 @@ def _coerce(name: str, value: Any, where: str) -> Any:
             return value
         raise ChartStyleError("%s should be true or false, not %r"
                               % (where, value))
+    if name == "ref_lines":
+        # 擋在打字的當下並**正規化**（同 `curve` / `cell_rois`）：排序、
+        # 統一小數、去掉多餘空白，好讓 round-trip 是 identity（鐵則 9）。
+        return format_refs(parse_refs(value))
     if name == "ramp":
         text = "" if value is None else str(value).strip()
         if text not in ("", "rainbow"):
