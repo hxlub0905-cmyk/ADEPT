@@ -473,7 +473,8 @@ HIDDEN_STEPS = ("align",)        # 收起來（引擎照認、舊 recipe 照跑�
                                  # **刪掉**了（功能進了 `decide.let`）——
                                  # 先收起來、使用者確定之後再刪，那張對照表
                                  # 第一次跑完全程
-SHOW_SAMPLE_ENTRIES = False      # 範例入口（見下）
+SHOW_TEMPLATE_LIBRARY = True     # 工具列的 Templates…（F91 X4 打開）
+SHOW_SAMPLE_DATA = False         # 「用範例資料試一次」（仍是死路，見下）
 INPUT_SOURCES = (...)            # 三顆 Open 的字、圖示、一句白話說明
 ATTACHMENTS = (...)              # 掛在已載入 lot 上的附加檔（GLAS 匯出）
 ```
@@ -483,10 +484,20 @@ ATTACHMENTS = (...)              # 掛在已載入 lot 上的附加檔（GLAS �
 各自寫死的文字，於是工具列有三顆 Open、空白狀態卻只講 KLARF —— 帶著一個資料夾
 的圖片進來的人，在整個畫面最大的那一塊上找不到自己那條路。
 
-`SHOW_SAMPLE_ENTRIES`（2026-08-16）管兩個入口：導覽與空白狀態上的
-**「用範例資料試一次」**、工具列的 **「Templates…」**。範例 recipe 全部拿掉之後
-它們都是死路（庫是空的、demo 產得出資料卻載不到 pipeline），而**按了撞牆的鈕
-比沒有那顆鈕更糟**（推廣鐵則）。`run_demo` / `RecipeLibraryDialog` 一行都沒動。
+`SHOW_TEMPLATE_LIBRARY` / `SHOW_SAMPLE_DATA`（F91 X4，2026-09-08 從一個叫
+`SHOW_SAMPLE_ENTRIES` 的旗標拆開）管兩個入口。**拆開是因為它們的死法不一樣**，
+而一個共用旗標會讓打開其中一個順手把另一個也放回畫面上：
+
+* **`Templates…`（`SHOW_TEMPLATE_LIBRARY = True`）** —— 2026-08-16 收起來的
+  理由是「庫是空的」，而那是真的有機制：`welcome.RECIPES_DIR` 指的是
+  ``examples/recipes``，一個同一天刪掉的路徑。現在它指 `recipes/`，那裡有出貨
+  的 recipe 而且 `test_shipped_recipes.py` 逐份跑過 —— 理由到期，入口回來。
+* **「用範例資料試一次」（`SHOW_SAMPLE_DATA = False`）** —— 仍然是死路，
+  而且**修不掉旗標**：`run_demo` 產的是合成的 `ebi_patch` lot，而
+  `TEMPLATE_RECIPE` 指的那份不存在、出貨的兩份是 `rsem` 與 `folder` route。
+  要打開它得先有一份出貨的 ebi_patch recipe。有一支反向測試守著這句話。
+
+`run_demo` / `RecipeLibraryDialog` 一行都沒動 —— 收起來的是入口不是能力。
 
 `tests/test_ui_input_kinds.py`（原 `test_ui_patch_only.py`）鎖住四種都進得來、
 沒有 KLARF 的兩種會講出來、而**「暫時收起來」的機制還在**。

@@ -127,7 +127,7 @@ def shown(qapp):
 
     2026-08-28 使用者把分流收起來了（`scope.SHOW_ROUTE_BY = False`）——
     收起來的是入口，不是能力，所以下面那幾條徽章／編輯器的測試**留著**，
-    只是要先把開關扳開。這正是 `SHOW_SAMPLE_ENTRIES` 那套辦法的重點：
+    只是要先把開關扳開。這正是 `SHOW_TEMPLATE_LIBRARY` 那套辦法的重點：
     **機制還在，而且證明得出來還在。**（開關現在是什麼值由
     `test_the_route_by_entries_are_shelved_not_deleted` 守著。）
     """

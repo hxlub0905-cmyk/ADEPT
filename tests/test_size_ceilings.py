@@ -82,15 +82,19 @@ FILE_CEILINGS = {
     # 接線層（建 widget、接訊號、轉呼叫）。`CLAUDE.md` §4：新的面板一律開新
     # 模組，不要塞進這裡。這一格就是那句話的執行機構。
     #
-    # 2026-09-08（P0 那一批）：6,942 → 7,108（+166）。**七個新模組，
-    # 而這裡只加接線** —— 每一項的內容都在自己的檔案裡：
+    # 2026-09-08（P0 那一批 ＋ X4/U11）：6,942 → 7,198（+256）。
+    # **七個新模組，而這裡只加接線** —— 每一項的內容都在自己的檔案裡：
     #   `baseline.py`（X1）、`truth_marks.py`（X2）、`fit_screen.py`（U1）、
     #   `crashlog.py`（U3）、`autosave.py`（U4）、`problems_bar.py` ＋
     #   `status_log.py`（U2 的前後兩半）。
-    # 這 166 行是：三支新方法（`_publish_run_snapshot` / `_on_truth_marked` /
-    # `_on_problem_activated`）、Problems 列／狀態列歷史／草稿的建構與掛勾、
-    # 以及 `_refresh_pipeline` 改成只跑一次 lint。
-    "d4t/ui/studio.py": 7108,
+    # P0 那一批的 166 行：三支新方法（`_publish_run_snapshot` /
+    # `_on_truth_marked` / `_on_problem_activated`）、Problems 列／狀態列歷史／
+    # 草稿的建構與掛勾、以及 `_refresh_pipeline` 改成只跑一次 lint。
+    # X4 的 0 行（只換了旗標的名字）＋ U11 的 90 行：把 Results 那個
+    # `WhyPanel` **同一個 widget** 掛進單顆預覽這一欄，加上讓路徑那一行變成
+    # 連結（三支：`_decide_path_markup` / `_fill_preview_why` /
+    # `toggle_preview_why`）。
+    "d4t/ui/studio.py": 7198,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     "d4t/core/pipeline/recipe.py": 3732,
@@ -226,8 +230,12 @@ COUNT_CEILINGS = {
     ),
     # god object 的兩個投影。261 → 268（六天）。
     "studio_window_methods": (
-        271,
-        # 2026-09-08：268 → 271。三支，每一支都是**接線**：
+        274,
+        # 2026-09-08（X4/U11）：271 → 274。U11 的三支：`_decide_path_markup`
+        # （把路徑跳脫成連結）、`_fill_preview_why`（餵目前這一顆）、
+        # `toggle_preview_why`（那一行點下去）。
+        #
+        # 之前那一批 268 → 271。三支，每一支都是**接線**：
         # `_publish_run_snapshot`（X1 把一批壓成一塊交給 Results）、
         # `_on_truth_marked`（X2 寫答案卷 —— 只有主視窗知道資料在哪）、
         # `_on_problem_activated`（U2 點清單 → 選中那張卡）。
@@ -236,10 +244,10 @@ COUNT_CEILINGS = {
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[0],
     ),
     "studio_window_attributes": (
-        398,
-        # 2026-09-08：393 → 398。`autosave`（草稿）、`problems`（Problems 列）、
-        # `status_history`（狀態列說過的話）三個新的元件，加上它們用到的
-        # 既有名字。
+        403,
+        # 2026-09-08：393 → 403。`autosave`（草稿）、`problems`（Problems 列）、
+        # `status_history`（狀態列說過的話）、`why_preview`（單顆回溯面板）與
+        # `_preview_trace`（那一顆的判定重放），加上它們用到的既有名字。
         "StudioWindow 的 self.* 名字數（2026-09-02 是 386）",
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[1],
     ),
