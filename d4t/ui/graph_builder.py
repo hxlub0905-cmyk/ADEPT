@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.export import chart_draw
+from ..core.export.chart_frame import COLUMNS_FIXED, column_label
 from ..core.export import uniformity_charts as uc
 from ..core.pipeline import chart_spec as cspec
 from .uniformity_window import ChartView, chart_style_for
@@ -119,9 +120,14 @@ class SpecEditor(QWidget):
             box = QComboBox(self)
             box.setToolTip(cspec.ROLE_HELP[role])
             for text in self._choices(role):
-                box.addItem(text)
+                # ⚠ **看到的是白話，存回去的是欄名**（`itemData`）。
+                # 顯示的字直接當值的話，`Box centre X (px)` 會被寫進 recipe。
+                # 那兩個佔位符的值是**空字串** —— 「還沒挑」與「不用」在
+                # `chart_spec` 那一側本來就都是空的。
+                box.addItem(_shown(text),
+                            "" if text in (NONE_WORD, PICK_WORD) else text)
             want = str(got.get(role) or "")
-            box.setCurrentIndex(max(0, box.findText(want) if want else 0))
+            box.setCurrentIndex(max(0, box.findData(want) if want else 0))
             self.boxes[role] = box
             grid.addWidget(lab, row, 0)
             grid.addWidget(box, row, 1)
@@ -151,6 +157,16 @@ class SpecEditor(QWidget):
             if lab is not None:
                 lab.setVisible(on)
 
+    def _ordered(self, pool: Sequence[str]) -> List[str]:
+        """**量出來的東西排最上面**，位置與大小那幾格幾何欄排後面。
+
+        混在同一張字母序清單裡的話，`glv_median`（他要的）跟 `w`（框有多寬，
+        幾乎沒有人要畫）長得一樣重要 —— 而清單愈長，那件事愈貴。
+        """
+        mine = [c for c in pool if c not in COLUMNS_FIXED]
+        rest = [c for c in pool if c in COLUMNS_FIXED]
+        return mine + rest
+
     def _choices(self, role: str) -> List[str]:
         """這一個角色挑得到哪幾欄。
 
@@ -158,8 +174,8 @@ class SpecEditor(QWidget):
         必填的那幾個角色講的是「還沒挑」，選填的講的是「不用」。
         """
         pool = (self._numeric if role in NUMERIC_ONLY else self._cols)
-        need = role in cspec.REQUIRED.get(self._mark, ())
-        return [PICK_WORD if need else NONE_WORD] + list(pool)
+        return ([PICK_WORD if role in cspec.REQUIRED.get(self._mark, ())
+                 else NONE_WORD] + self._ordered(pool))
 
     def set_spec(self, text: str) -> None:
         """整份換掉（預設那一排按下去走這裡）。**發一次 `changed`**，不是
@@ -176,7 +192,9 @@ class SpecEditor(QWidget):
             for role, box in self.boxes.items():
                 want = str(got.get(role) or "")
                 if want:
-                    at = box.findText(want)
+                    # ⚠ **`findData` 不是 `findText`** —— 顯示的是白話
+                    # （`Box centre X (px)`），存的是欄名（`x`）。
+                    at = box.findData(want)
                     if at >= 0:
                         box.setCurrentIndex(at)
                         continue
@@ -187,15 +205,36 @@ class SpecEditor(QWidget):
         self._sync_roles()
         self.changed.emit()
 
+    def set_role(self, role: str, column: str) -> bool:
+        """把一個角色指到某一欄上（**用欄名，不是畫面上那個字**）。
+
+        呼叫端（與測試）要的是「把 Y 指到 `glv_mean`」，而畫面上那一格寫的
+        可能是 `Box centre X (px)` —— 兩者的橋只有這一支。
+        """
+        box = self.boxes.get(str(role))
+        if box is None:
+            return False
+        at = box.findData(str(column))
+        if at < 0:
+            return False
+        box.setCurrentIndex(at)
+        return True
+
     def spec(self) -> str:
         out: Dict[str, Any] = {"mark": self._mark}
         for role, box in self.boxes.items():
             # 用不到的角色由 `format_spec` 丟掉（規則只有一份，住在那裡）——
             # 這裡照樣把每一格填進去，那是「收起來不等於清掉」的另一半：
             # 換回散點時原本挑的「大小」還在畫面上。
-            text = str(box.currentText())
-            out[role] = "" if text in (NONE_WORD, PICK_WORD) else text
+            out[role] = str(box.currentData() or "")
         return cspec.format_spec(out)
+
+
+def _shown(name: str) -> str:
+    """一欄在下拉裡顯示的字。那兩個佔位符原樣顯示。"""
+    if name in (NONE_WORD, PICK_WORD):
+        return name
+    return column_label(name)
 
 
 def _role_word(role: str) -> str:
@@ -253,6 +292,9 @@ class GraphBuilderDialog(QDialog):
 
     #: 預覽那一塊的高度（跟 `ChartSettingsDialog.PREVIEW_H` 同一個尺度）。
     PREVIEW_H = 260
+    #: 長寬比 —— **跟 `ChartSettingsDialog` 同一個數字**（`ChartView.ASPECT`）。
+    #: 兩個對話框畫的是同一種東西，比例不一樣的話同一張圖在兩邊長得不一樣。
+    PREVIEW_ASPECT = 4.0 / 3.0
 
     def __init__(self, spec: str = "", frame: Any = None,
                  parent: Optional[QWidget] = None, look: str = "",
@@ -260,7 +302,7 @@ class GraphBuilderDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Chart")
         self.setModal(True)
-        self.resize(560, 620)
+        self.resize(720, 780)
         self._frame = frame
         self._look = str(look or "")
         self._metric = str(metric or "")
@@ -292,9 +334,11 @@ class GraphBuilderDialog(QDialog):
         # 換記號也要重畫 —— 那顆膠囊改的是整張圖的長相，不只是一格。
         self.editor.changed.connect(self.refresh_preview)
 
-        self.view = ChartView(uc.CHART_CUSTOM, self)
+        self.view = ChartView(uc.CHART_CUSTOM, self,
+                              aspect=self.PREVIEW_ASPECT)
         self.view.setMinimumHeight(self.PREVIEW_H)
-        root.addWidget(self.view, 1)
+        root.addWidget(self.view, 0)
+        root.addStretch(1)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)

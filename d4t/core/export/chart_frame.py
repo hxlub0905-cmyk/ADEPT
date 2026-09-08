@@ -49,6 +49,35 @@ COL_ROW, COL_COL = "row", "col"
 COLUMNS_FIXED: Tuple[str, ...] = (COL_REGION, COL_BOX, COL_X, COL_Y,
                                   COL_W, COL_H, COL_ROW, COL_COL)
 
+#: 欄名 → **給人看的字**（F89-2，2026-09-08）。
+#:
+#: 為什麼要有這一層（使用者問「工程師會不會看不懂」）：選單裡以前是原始欄名
+#: —— `region, box, x, y, w, h, row, col, glv_median…`。其中 **`x` / `y` 是
+#: 框中心的座標**，但它們擺在「Across the bottom」旁邊，讀起來就是「X 軸」；
+#: 挑 `y` 想畫「數值」的人會拿到位置，而那張圖畫得出來、有數字、而且答錯了
+#: 問題。卡片的參數早就有這一層（`ParamSpec.label`，`range_from` →
+#: `Borrow range from`），長表的欄一直沒有。
+#:
+#: ⚠ **只加顯示的字，鍵一個都不動** —— `spec` 裡存的還是 `x`，所以 recipe
+#: 一個位元都沒變。沒列的欄（使用者量出來的統計量）就顯示它自己的名字：
+#: `glv_median` 對製程工程師**本來就是**一句話，翻譯它反而是多的。
+COLUMN_LABELS: Dict[str, str] = {
+    COL_REGION: "Region",
+    COL_BOX: "Box number",
+    COL_X: "Box centre X (px)",
+    COL_Y: "Box centre Y (px)",
+    COL_W: "Box width (px)",
+    COL_H: "Box height (px)",
+    COL_ROW: "Which row of boxes",
+    COL_COL: "Which column of boxes",
+}
+
+
+def column_label(name: str) -> str:
+    """一欄在畫面上叫什麼。沒登記的（量出來的統計量）就是它自己的名字。"""
+    return COLUMN_LABELS.get(str(name), str(name))
+
+
 #: 這幾欄是**類別**（可以放到「顏色」「分組」上），其餘是數值。
 #:
 #: ⚠ ``row`` / ``col`` 是整數，但它們是**類別**不是量 —— 「第 3 列」比

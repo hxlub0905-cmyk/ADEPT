@@ -62,14 +62,17 @@ def frame():
 def test_the_menus_are_built_from_the_data(qapp, frame):
     """寫死一份的那天，使用者的欄位在選單上找不到。"""
     ed = SpecEditor("", frame.columns, numeric=frame.numeric_columns())
-    got = [ed.boxes["x"].itemText(i) for i in range(ed.boxes["x"].count())]
+    # ⚠ 值是欄名（`itemData`），畫面上是白話（`itemText`）—— 兩個都要問。
+    got = [ed.boxes["x"].itemData(i) for i in range(ed.boxes["x"].count())]
     assert "glv_mean" in got and "glv_std" in got and "region" in got
+    shown = [ed.boxes["x"].itemText(i) for i in range(ed.boxes["x"].count())]
+    assert "Box centre X (px)" in shown, "欄名還是原始的鍵"
 
 
 def test_size_only_offers_numbers(qapp, frame):
     """「region B 比 region A 大」沒有意義。"""
     ed = SpecEditor("", frame.columns, numeric=frame.numeric_columns())
-    got = [ed.boxes["size"].itemText(i)
+    got = [ed.boxes["size"].itemData(i)
            for i in range(ed.boxes["size"].count())]
     assert "region" not in got and "row" not in got
     assert "glv_mean" in got
@@ -93,13 +96,14 @@ def test_nothing_is_picked_until_the_user_picks_it(qapp, frame):
     assert ed.spec() == ""
     assert ed.boxes["x"].currentText() == PICK_WORD
     assert ed.boxes["color"].currentText() == NONE_WORD
+    assert not ed.boxes["x"].currentData()
 
 
 def test_what_the_recipe_says_is_what_the_menus_show(qapp, frame):
     text = '{"color":"region","mark":"point","x":"glv_mean","y":"glv_std"}'
     ed = SpecEditor(text, frame.columns, numeric=frame.numeric_columns())
-    assert ed.boxes["x"].currentText() == "glv_mean"
-    assert ed.boxes["color"].currentText() == "region"
+    assert ed.boxes["x"].currentData() == "glv_mean"
+    assert ed.boxes["color"].currentData() == "region"
     assert ed.spec() == text, "round-trip 不是 identity（鐵則 9 的 UI 側）"
 
 
@@ -132,7 +136,7 @@ def test_picking_a_column_moves_the_preview(qapp, frame):
     # y」了 —— 起點是一張畫得出來的圖，而改一格要看得出差別。
     dlg = GraphBuilderDialog("", frame)
     before = dlg.view.svg()
-    dlg.editor.boxes["y"].setCurrentText("w")
+    assert dlg.editor.set_role("y", "w")
     after = dlg.view.svg()
     assert after != before
 
@@ -281,3 +285,73 @@ def test_bars_draw_from_the_same_dialog(qapp, frame):
     dlg = GraphBuilderDialog(
         '{"mark":"bar","x":"region","y":"glv_mean"}', frame)
     assert "fill-opacity" in dlg.view.svg()
+
+
+# --------------------------------------------------------------------------- #
+# 6. 預覽讀得動（F89-1）
+# --------------------------------------------------------------------------- #
+def test_the_preview_is_never_taller_than_it_is_wide(qapp, frame):
+    """SVG 是**照那一格的尺寸產的** —— 那一格被拉成直條，圖就被畫成直條。
+    圖表要的是寬 > 高（`ChartView.ASPECT` 的說明）。"""
+    for w, h in ((720, 780), (600, 1200), (1000, 900)):
+        dlg = GraphBuilderDialog("", frame)
+        dlg.resize(w, h)
+        dlg.show()
+        qapp.processEvents()
+        view = dlg.view
+        assert view.width() >= view.height(), (w, h, view.width(),
+                                               view.height())
+
+
+def test_both_dialogs_agree_on_the_shape_of_a_preview(qapp):
+    """兩個對話框畫的是同一種東西 —— 比例不一樣的話，同一張圖在兩邊長得
+    不一樣，而使用者會以為其中一邊壞了。"""
+    from d4t.ui.chart_settings import ChartSettingsDialog
+
+    assert (GraphBuilderDialog.PREVIEW_ASPECT
+            == ChartSettingsDialog.PREVIEW_ASPECT)
+
+
+# --------------------------------------------------------------------------- #
+# 7. 讀得懂（F89-2，使用者 2026-09-08：「工程師會不會看不懂?」）
+# --------------------------------------------------------------------------- #
+def test_the_menus_say_what_a_column_is_but_store_the_column_name(qapp, frame):
+    """`x` 是**框中心的座標**，但它擺在「Across the bottom」旁邊，讀起來就是
+    「X 軸」—— 挑它想畫「數值」的人會拿到位置，而那張圖畫得出來、有數字、
+    而且答錯了問題。
+
+    ⚠ **只加顯示的字，鍵一個都不動** —— 存回 recipe 的還是 `x`。
+    """
+    ed = SpecEditor('{"mark":"point","x":"x","y":"glv_mean"}', frame.columns,
+                    numeric=frame.numeric_columns())
+    assert ed.boxes["x"].currentText() == "Box centre X (px)"
+    assert ed.boxes["x"].currentData() == "x"
+    assert '"x":"x"' in ed.spec(), "白話跑進 recipe 了"
+
+
+def test_what_the_user_measured_comes_first(qapp, frame):
+    """混在同一張清單裡的話，`glv_median`（他要的）跟 `w`（框有多寬，幾乎
+    沒有人要畫）長得一樣重要。"""
+    ed = SpecEditor("", frame.columns, numeric=frame.numeric_columns())
+    got = [ed.boxes["y"].itemData(i) for i in range(1, ed.boxes["y"].count())]
+    assert got[0] in ("glv_mean", "glv_std"), got
+    assert got.index("glv_mean") < got.index("w"), got
+
+
+def test_the_box_plot_mark_is_not_called_boxes(qapp):
+    """這個工具裡「box」已經有一個意思了 —— **一格量測框**（長表上那一欄就叫
+    `box`）。同一排選單裡出現 `box`（第幾個框）跟 `Boxes`（一種圖）的話，
+    會混淆的是**人**，而那正是 CLAUDE.md 花一整段講的 `bundle`。
+    """
+    from d4t.core.export import chart_frame
+
+    assert cspec.MARK_LABELS[cspec.MARK_BOX] == "Box plot"
+
+    # 真正的不變量：**沒有一個記號的名字等於一個欄的名字**（原始鍵或白話都
+    # 算）。`Box plot` 裡有「box」是可以的 —— 它畫的就是那種圖；不可以的是
+    # 兩個東西**叫同一個名字**。
+    marks = {v.strip().lower() for v in cspec.MARK_LABELS.values()}
+    columns = ({c.strip().lower() for c in chart_frame.COLUMNS_FIXED}
+               | {v.strip().lower()
+                  for v in chart_frame.COLUMN_LABELS.values()})
+    assert not (marks & columns), sorted(marks & columns)
