@@ -31,4 +31,9 @@ from .shape import (
     BlobResult, measure_blob, feret, pick_levels, equivalent_diameter,
     roundness,
 )
+from .uniformity import (
+    SLOPE_UNIT_PX, uniformity_stats, linear_trend, slope_per_100px,
+    rect_centers, jitter_tolerance, cluster_positions, cell_edges,
+    cell_boxes, profile_by_position,
+)
 from . import subpixel

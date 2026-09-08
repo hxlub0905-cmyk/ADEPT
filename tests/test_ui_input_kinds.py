@@ -115,6 +115,87 @@ def test_a_folder_of_images_loads(window, tmp_path):
     assert len(window.dataset.items) == 3
 
 
+def test_one_image_on_its_own_loads_as_a_single_defect(window, tmp_path):
+    """F85：**一張大圖**那條路 —— 不必先把它放進一個資料夾。"""
+    import numpy as np
+    from d4t.core.ingest import imageio
+    f = tmp_path / "field.png"
+    imageio.save_gray(str(f), np.full((32, 48), 90, np.uint8))
+    assert window.load_image_path(str(f), sync=True) is True
+    assert window.dataset.kind == "folder"        # 形狀相同，不新增第五種 kind
+    assert len(window.dataset.items) == 1
+    assert window.dataset.items[0].defect_id == "field"
+    # 沒有 KLARF ⇒ 寫不回 —— 那句話跟另外兩條路走同一個地方（常駐標籤）
+    assert "no KLARF" in window.defect_label.text()
+
+
+def test_opening_something_that_is_not_an_image_says_so(window, tmp_path):
+    """副檔名不認得 → **零顆 defect 加一句講得出原因的話**，不是當機。
+
+    形狀刻意跟 `load_folder`「資料夾裡沒有影像」那一種**逐項相同**（0 顆
+    加一句 warning）—— 兩條路的資料形狀本來就一樣，錯誤的形狀不一樣的話，
+    下游每一段都要各認一種。
+    """
+    from d4t.core.ingest import load_image_file
+    f = tmp_path / "notes.txt"
+    f.write_text("not an image", encoding="utf-8")
+    ds = load_image_file(str(f))
+    assert ds.kind == "folder" and ds.items == []
+    assert ds.warnings and "Not an image file" in ds.warnings[0]
+    # 那句話要**指得出該用什麼副檔名** —— 「不行」而不說為什麼是推廣鐵則擋的
+    assert ".png" in ds.warnings[0]
+
+
+def test_opening_a_file_that_is_not_there_does_not_crash(window, tmp_path):
+    missing = tmp_path / "missing.png"
+    assert window.load_image_path(str(missing), sync=True) is False
+    from d4t.core.ingest import load_image_file
+    ds = load_image_file(str(missing))
+    assert ds.items == [] and "Not a file" in ds.warnings[0]
+
+
+def test_a_multipage_tiff_opened_as_one_image_says_where_to_go(tmp_path):
+    """多頁 TIFF 走這條路只讀得到第 0 頁 —— 那件事以前完全沒有聲音。
+
+    ⚠ 那句話**跟 `load_folder` 共用一份**（`_MULTIPAGE_WARNING`）。抄成兩份
+    的那天，其中一份會停在舊的去處，而使用者照著它走會到一個不存在的入口。
+    """
+    import numpy as np
+    import tifffile
+
+    from d4t.core.ingest import dataset as ds_mod
+    f = tmp_path / "stack.tif"
+    # 明寫 photometric —— 不寫的話 tifffile 把 (3, h, w) 當成 RGB 的三個
+    # 分量平面（一頁），而這條測試問的正是「有幾頁」。
+    tifffile.imwrite(str(f), np.zeros((3, 8, 8), np.uint8),
+                     photometric="minisblack")
+    ds = ds_mod.load_image_file(str(f))
+    assert len(ds.items) == 1                      # 仍然載得進來
+    assert ds.warnings and "image stack" in ds.warnings[0]
+    # **兩條路講的是同一句話** —— 這一條就是那份唯一出處的防線：
+    # 同一個檔案，`Open image…` 與 `Open folder…` 的警告逐字相同。
+    same = ds_mod.load_folder(str(tmp_path))
+    assert same.warnings == ds.warnings
+
+
+def test_the_image_entry_is_on_the_one_table_that_grows_the_buttons():
+    """加一個入口＝改 `INPUT_SOURCES`，不動 UI（`CLAUDE.md` §5）。
+
+    工具列那顆鈕、空白狀態那一列、以及它的處理函式全部從這張表長出來，
+    所以這一條同時守住三個地方 —— 少接一個的下場實測過（F11 Input-5：
+    `Load layout labels` 的入口鈕根本沒被 addWidget 到工具列上）。
+    """
+    from d4t.ui import studio as studio_mod
+    src = [s for s in scope_mod.INPUT_SOURCES if s.key == "image"]
+    assert len(src) == 1, "Open image… 不在那張表上"
+    assert src[0].kinds == ("folder",)
+    assert src[0].has_klarf is False
+    assert hasattr(studio_mod.StudioWindow, "_on_open_image")
+    # 四顆 Open 的圖示要各不相同（F7-24）——「輪廓要分得出來」那一條
+    icons = [s.icon for s in scope_mod.INPUT_SOURCES]
+    assert len(set(icons)) == len(icons)
+
+
 def test_the_two_kinds_without_a_klarf_say_so_where_it_stays(window, tmp_path):
     """沒有 KLARF ⇒ 寫不回 KLARF，而那句話掛在資料集標籤上（常駐）。"""
     import numpy as np

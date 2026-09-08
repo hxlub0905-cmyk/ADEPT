@@ -188,18 +188,35 @@ def test_the_short_one_never_prints_a_small_number_as_zero(qapp):
         assert float(got.replace("−", "-")) != 0.0, (v, got)
 
 
+#: 允許用短版的**那幾支函式**（不是那幾個檔案）。
+#:
+#: ⚠ 以前這張表是**檔名**的，而那漏得掉一整類漂移：`inspectors.py` 已經在表
+#: 上，於是 F87 在同一個檔案裡新增的一張**面板小表**也用了短版，測試照樣綠 ——
+#: 而那正是這條規則明文禁止的事（「表格與面板一律走 `format_feature_value`」）。
+#: 一個 6,700 行的檔案通過一次審查，不代表它以後每一行都通過。
+_SHORT_OK = {
+    "inspectors.py": {"_short_number"},          # 影像上那些標記的別名
+    "widgets.py": {"_paint_heat_bar"},           # 熱圖色條 —— 畫在影像上
+}
+
+
 def test_the_short_one_is_only_used_on_the_image(qapp):
-    """短版是**刻意的例外**，而例外要有邊界：只有疊圖用它。"""
+    """短版是**刻意的例外**，而例外要有邊界：只有畫在影像上的東西用它。"""
+    import ast
+
     from d4t.ui import numbers
 
-    users = []
+    found = {}
     for path in sorted((REPO / "d4t" / "ui").glob("*.py")):
         if path.name == "numbers.py":
             continue
-        text = path.read_text(encoding="utf-8")
-        code = "\n".join(ln for ln in text.splitlines()
-                         if not ln.lstrip().startswith("#"))
-        if "format_feature_value_short" in code:
-            users.append(path.name)
-    assert users == ["inspectors.py"], users
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if any(isinstance(sub, ast.Name)
+                   and sub.id == "format_feature_value_short"
+                   for sub in ast.walk(node)):
+                found.setdefault(path.name, set()).add(node.name)
+    assert found == _SHORT_OK, found
     assert numbers.format_feature_value_short(5.0, signed=True) == "+5"

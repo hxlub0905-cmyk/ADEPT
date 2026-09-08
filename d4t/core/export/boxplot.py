@@ -24,7 +24,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -103,14 +103,70 @@ def _esc(text: Any) -> str:
             .replace(">", "&gt;").replace('"', "&quot;"))
 
 
+def _fill(style: Dict[str, Any], base: str, opacity: float) -> Tuple[str, str]:
+    """填色與濃度 —— **跟 `uniformity_charts.fill_attrs` 同一套規則**。
+
+    ⚠ 這裡不 import 那一支：``uniformity_charts`` 是 import **這個模組**的那
+    一邊（見檔頭），反過來會是循環。規則只有六行，而兩邊有一條測試對著。
+    倍率 1.0 時 opacity 逐位元組等於以前那個字面值。
+    """
+    ink = str(style.get("fill_color", "") or "") or base
+    k = float(style.get("fill_strength", 1.0) or 0.0)
+    a = max(0.0, min(1.0, float(opacity) * k))
+    text = ("%.3f" % a).rstrip("0").rstrip(".") or "0"
+    return ink, text
+
+
+def _refs(o: List[str], style: Dict[str, Any], lo: float, hi: float,
+          px: float, py: float, pw: float, ph: float) -> None:
+    """規格線 —— **借 `uniformity_charts.draw_refs`**，不在這裡再畫一次。
+
+    ⚠ 這裡的 SVG 用雙引號、那邊用單引號（兩套序列化，F88 §14 量過），但
+    **SVG 不在乎引號**，而「規格線長什麼樣」只有一個出處才不會漂。
+    """
+    from .uniformity_charts import draw_refs
+
+    draw_refs(o, dict(style or {}), lo, hi, px, py, pw, ph)
+
+
 def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
                       subtitle: str = "", width: int = 720,
-                      height: int = 340) -> str:
+                      height: int = 340,
+                      style: Optional[Dict[str, Any]] = None) -> str:
     """一張圖。``series`` 的每一項是 ``{name, values, colour?}``。
 
     **一組都畫不出來時仍然回一張圖**（一句「沒有數字」），不是空字串 ——
     呼叫端把它塞進 HTML，而一個消失的區塊讀起來是「這裡本來就沒有東西」。
     """
+    # 外觀（F87）：`style` 沒給就是以前那幾個寫死的值 —— 既有呼叫端
+    # （`output_report` 的盒鬚圖）一個位元組都沒有變。
+    #
+    # ⚠ **四張圖要吃同一份設定。** 盒鬚圖是唯一走這一支的那一張，而
+    # 「字級只對四張裡的兩張有效」是最難發現的那種不一致：使用者調了、
+    # 有三張變了、一張沒有，而畫面上沒有任何線索說為什麼。
+    # ⚠ ``st`` 在下面的迴圈裡被**重新綁定**成每一組的統計量（`box_stats`），
+    # 所以設定那一份另外留一個名字 —— 迴圈之後還要用它畫軸名。
+    st_all = dict(style or {})
+    st = st_all
+    tick_size = float(st.get("tick_size", 10) or 10)
+    tick_w = "700" if st.get("tick_bold") else "400"
+    tick_ink = str(st.get("tick_color", "") or "") or _TEXT
+    axis_size = float(st.get("axis_size", 11) or 11)
+    axis_w = "700" if st.get("axis_bold") else "400"
+    axis_ink = str(st.get("axis_color", "") or "") or _TEXT
+    # ⚠ **線與記號也要吃設定**（F87 第七刀）。F87 第二刀只接了字 —— 而那一刀
+    # 的 commit 訊息自己寫著「四張圖要吃同一份設定，字級只對四張裡的兩張有效
+    # 是最難發現的那種不一致」。線寬與記號大小是同一句話的下半：使用者把
+    # `Lines width` 拉到 4，三張變粗、盒鬚圖沒有；`Whiskers` 關掉，什麼都沒
+    # 發生（那一格在這之前**沒有任何程式碼讀它**）。
+    #
+    # 做法是**按比例縮放既有的常數**，不是換成一個新數字：預設值下每一條線
+    # 的粗細逐位元組不變（`output_report` 的盒鬚圖沒給 style）。
+    k_line = float(st.get("line_width", 1.6) or 1.6) / 1.6
+    line_ink = str(st.get("line_color", "") or "")
+    k_dot = float(st.get("point_size", 2.6) or 2.6) / 2.6
+    dot_ink = str(st.get("point_color", "") or "")
+    whiskers = bool(st.get("whiskers", True))
     pad_l, pad_r, pad_t, pad_b = 66, 18, 34 if title else 14, 52
     plot_w = max(80, width - pad_l - pad_r)
     plot_h = max(80, height - pad_t - pad_b)
@@ -125,7 +181,18 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
 
     o: List[str] = ['<svg viewBox="0 0 %d %d" width="%d" height="%d" '
                     'xmlns="http://www.w3.org/2000/svg" class="boxplot" '
-                    'role="img">' % (width, height, width, height)]
+                    'role="img">' % (width, height, width, height),
+                    # **白底要畫出來**（F87 第七刀，使用者 2026-09-07：
+                    # 「暗色模式下 preview chart box plot 的表示會跟其他人不
+                    # 一樣」）。以前這一張沒有底：在報表的白色頁面上看不出來，
+                    # 但 Studio 的圖視窗會用主題色當底 —— 暗色主題下這張圖是
+                    # **透明**的，深灰的字落在近黑的底上幾乎看不見，而旁邊三
+                    # 張都是白卡片。
+                    #
+                    # 補的是**底**不是主題：這四張圖會被寫進 HTML 報表、貼進
+                    # 投影片，那些地方是白的。四張一致才是重點。
+                    '<rect width="%d" height="%d" fill="#fff"/>'
+                    % (width, height)]
     if title:
         o.append('<text x="%d" y="18" font-size="13" font-weight="600" '
                  'fill="%s">%s</text>' % (pad_l - 46, _TEXT, _esc(title)))
@@ -149,14 +216,21 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
         return pad_t + plot_h - (float(v) - lo) / (hi - lo) * plot_h
 
     # ---- 座標軸 ----
-    for t in _nice_ticks(lo, hi):
+    for t in _nice_ticks(lo, hi, int(st_all.get("yticks", 5) or 5)):
         y = y_of(t)
         o.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="%s"/>'
                  % (pad_l, y, pad_l + plot_w, y, _GRID))
-        o.append('<text x="%d" y="%.1f" font-size="10" text-anchor="end" '
-                 'fill="%s">%s</text>' % (pad_l - 6, y + 3, _MUTED, _fmt(t)))
+        o.append('<text x="%d" y="%.1f" font-size="%g" font-weight="%s" text-anchor="end" '
+                 'fill="%s">%s</text>'
+                 % (pad_l - 6, y + tick_size * 0.3, tick_size, tick_w,
+                    tick_ink, _fmt(t)))
     o.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s"/>'
              % (pad_l, pad_t, pad_l, pad_t + plot_h, _AXIS))
+
+    # ⚠ **規格線畫在盒子之前** —— 它是背景上的一條參考，不是資料；畫在
+    # 資料之上會從盒子上壓過去。走的是**跟另外四張圖同一支**（`draw_refs`），
+    # 不然「規格線長什麼樣」會在同一份報表裡有兩種答案。
+    _refs(o, st_all, lo, hi, pad_l, pad_t, plot_w, plot_h)
 
     slot = plot_w / float(len(boxes))
     bw = min(58.0, slot * 0.52)
@@ -167,51 +241,85 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
         if not st:
             # **這一類沒有這個數字** —— 說出來，不是留一格空白（那讀起來像
             # 「這一類不存在」，而它存在，只是每一顆都沒量到）。
-            o.append('<text x="%.1f" y="%.1f" font-size="10" '
+            o.append('<text x="%.1f" y="%.1f" font-size="%g" font-weight="%s" '
                      'text-anchor="middle" fill="%s">no data</text>'
-                     % (cx, pad_t + plot_h / 2, _MUTED))
+                     % (cx, pad_t + plot_h / 2, tick_size, tick_w, _MUTED))
         else:
             col = b["colour"]
+            ink = line_ink or col
+            dot = dot_ink or col
             y1, y3, ym = y_of(st["q1"]), y_of(st["q3"]), y_of(st["med"])
             ylo, yhi = y_of(st["lo"]), y_of(st["hi"])
-            o.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" '
-                     'stroke="%s" stroke-width="1.2"/>'
-                     % (cx, ylo, cx, yhi, col))
-            for yy in (ylo, yhi):      # 鬚的兩端各一橫
+            if whiskers:
                 o.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" '
-                         'stroke="%s" stroke-width="1.2"/>'
-                         % (cx - bw / 4, yy, cx + bw / 4, yy, col))
+                         'stroke="%s" stroke-width="%.1f"/>'
+                         % (cx, ylo, cx, yhi, ink, 1.2 * k_line))
+                for yy in (ylo, yhi):      # 鬚的兩端各一橫
+                    o.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" '
+                             'stroke="%s" stroke-width="%.1f"/>'
+                             % (cx - bw / 4, yy, cx + bw / 4, yy, ink,
+                                1.2 * k_line))
+            face, alpha = _fill(st_all, col, 0.18)
             o.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" '
-                     'fill="%s" fill-opacity="0.18" stroke="%s" '
-                     'stroke-width="1.4" rx="2"/>'
+                     'fill="%s" fill-opacity="%s" stroke="%s" '
+                     'stroke-width="%.1f" rx="2"/>'
                      % (cx - bw / 2, min(y1, y3), bw, max(1.0, abs(y1 - y3)),
-                        col, col))
+                        face, alpha, ink, 1.4 * k_line))
             o.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" '
-                     'stroke="%s" stroke-width="2.2"/>'
-                     % (cx - bw / 2, ym, cx + bw / 2, ym, col))
+                     'stroke="%s" stroke-width="%.1f"/>'
+                     % (cx - bw / 2, ym, cx + bw / 2, ym, ink, 2.2 * k_line))
             for v in st["outliers"]:
-                o.append('<circle cx="%.1f" cy="%.1f" r="2" fill="none" '
+                # 離群點是**資料**，不受 `points`（「一格框一個記號」）管 ——
+                # 關掉它們等於把「有一顆特別遠」這件事藏起來。
+                o.append('<circle cx="%.1f" cy="%.1f" r="%g" fill="none" '
                          'stroke="%s" stroke-width="1"/>'
-                         % (cx, y_of(v), col))
+                         % (cx, y_of(v), round(2.0 * k_dot, 2), dot))
             o.append('<title>%s: n=%d, median %s, q1 %s, q3 %s</title>'
                      % (_esc(name), st["n"], _fmt(st["med"]),
                         _fmt(st["q1"]), _fmt(st["q3"])))
         # ---- 底下的名字與顆數 ----
         label = name if len(name) <= 18 else name[:17] + "…"
-        o.append('<text x="%.1f" y="%d" font-size="11" text-anchor="middle" '
+        o.append('<text x="%.1f" y="%d" font-size="%g" font-weight="%s" text-anchor="middle" '
                  'fill="%s">%s</text>'
-                 % (cx, pad_t + plot_h + 16, _TEXT, _esc(label)))
-        o.append('<text x="%.1f" y="%d" font-size="10" text-anchor="middle" '
+                 % (cx, pad_t + plot_h + 16, axis_size, axis_w, axis_ink,
+                    _esc(label)))
+        o.append('<text x="%.1f" y="%d" font-size="%g" font-weight="%s" text-anchor="middle" '
                  'fill="%s">n=%d</text>'
-                 % (cx, pad_t + plot_h + 30, _MUTED,
+                 % (cx, pad_t + plot_h + 30, tick_size, tick_w, _MUTED,
                     st["n"] if st else 0))
+
+    # ---- 兩條軸的名字（F87 第七刀）------------------------------------------
+    # ⚠ 這一段以前**不存在**：於是設定編輯器 Box plot 那一頁的「Bottom axis
+    # name」「Side axis name」是兩個打得進去、卻什麼都不會發生的格子。
+    # 一格答了也沒用的設定比沒有那一格更糟（推廣鐵則），而它是
+    # `test_every_editor_moves_the_preview` 逐格試出來的。
+    #
+    # 位置與另外三張一字不差（`uniformity_charts._axis_names`）—— 四張圖擺在
+    # 同一頁上，軸名跳來跳去讀起來像四份不同的報表。
+    xl = str(st_all.get("xlabel") or "")
+    yl = str(st_all.get("ylabel") or "")
+    if xl:
+        o.append('<text x="%.1f" y="%d" font-size="%g" font-weight="%s" '
+                 'fill="%s" text-anchor="middle">%s</text>'
+                 % (pad_l + plot_w / 2, height - 8, axis_size, axis_w,
+                    axis_ink, _esc(xl)))
+    if yl:
+        cy = pad_t + plot_h / 2
+        o.append('<text x="12" y="%.1f" font-size="%g" font-weight="%s" '
+                 'fill="%s" text-anchor="middle" '
+                 'transform="rotate(-90 12 %.1f)">%s</text>'
+                 % (cy, axis_size, axis_w, axis_ink, cy, _esc(yl)))
     o.append("</svg>")
     return "\n".join(o)
 
 
 def build_boxplot_page(charts: Sequence[Dict[str, Any]], title: str,
-                       subtitle: str = "", note: str = "") -> str:
-    """一份只有圖的 HTML（一個特徵一張圖，由上往下）。
+                       subtitle: str = "", note: str = "",
+                       lead: str = "", extra_css: str = "") -> str:
+    """一份只有圖的 HTML（一張圖一列，由上往下）。
+
+    ``charts`` 的每一項要嘛帶 ``series``（這裡畫成盒鬚圖），要嘛帶 ``svg``
+    （已經畫好的，原樣放進去）—— 後者是 F85 的四種均勻度圖走的路。
 
     刻意**不共用 `html.CSS`**：那一份是為了一張幾千列的表寫的（sticky 表頭、
     `max-height:70vh` 的捲動框），而這一頁上一張表都沒有。抄過來的話，改那一份
@@ -226,18 +334,29 @@ def build_boxplot_page(charts: Sequence[Dict[str, Any]], title: str,
          ".note{color:#666;font-size:12px;margin:0 0 20px;max-width:60em}",
          "figure{margin:0 0 26px}",
          "svg.boxplot{display:block;max-width:100%;height:auto}",
+         # 呼叫端補的樣式（F86：均勻度那一頁的摘要表）。版型仍然只有一份 ——
+         # 兩頁會並排在同一個報表資料夾裡。
+         str(extra_css or ""),
          "</style></head><body>",
          "<h1>%s</h1>" % _esc(title)]
     if subtitle:
         o.append("<p class='sub'>%s</p>" % _esc(subtitle))
     if note:
         o.append("<p class='note'>%s</p>" % _esc(note))
+    # 圖**上方**那一塊（F86：均勻度的數字表）。原樣放進去 —— 呼叫端已經
+    # 跳脫過了；`note` 那一格才是純文字。
+    if lead:
+        o.append(str(lead))
     if not charts:
         o.append("<p class='note'>Nothing to plot: none of the numbers you "
                  "picked came out of this run.</p>")
     for ch in charts or []:
-        o.append("<figure>%s</figure>" % build_boxplot_svg(
+        # 已經畫好的就直接放（F85：均勻度那四種圖不是盒鬚圖，但**版型只有
+        # 一份** —— 兩頁會並排在同一個報表資料夾裡，字級不一樣的那天沒有人
+        # 會知道為什麼）。沒有 `svg` 的照舊由這裡畫，既有呼叫端一個字不動。
+        ready = str(ch.get("svg") or "")
+        o.append("<figure>%s</figure>" % (ready or build_boxplot_svg(
             ch.get("series") or [], title=str(ch.get("title", "")),
-            subtitle=str(ch.get("subtitle", ""))))
+            subtitle=str(ch.get("subtitle", "")))))
     o.append("</body></html>")
     return "\n".join(o)

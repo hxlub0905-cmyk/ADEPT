@@ -44,6 +44,14 @@ from .klarf_core import KlarfDoc
 
 _IMAGE_EXTS = {".png", ".tif", ".tiff", ".jpg", ".jpeg", ".bmp"}
 
+#: 多頁 TIFF 走錯入口時說的那一句 —— **`load_folder` 與 `load_image_file`
+#: 共用一份**。這兩條路一樣只讀得到第 0 頁，而一個 15 頁的檔案安靜地變成
+#: 一顆 defect 是這句話存在的理由；抄成兩份的那天，其中一份會停在舊的去處。
+_MULTIPAGE_WARNING = (
+    "%d file(s) have more than one page, and only the first page is "
+    "used here (%s). Open such a file as an image stack instead - "
+    "then every page group becomes a defect.")
+
 
 class DataError(ValueError):
     """資料本身不是 d4t 處理得了的形狀（訊息是白話的，會顯示給使用者）。"""
@@ -435,6 +443,45 @@ def load_tiff_stack(path, per_defect: int = 1,
                    warnings=warnings)
 
 
+def load_image_file(path) -> Dataset:
+    """載入**一個影像檔**成 ``Dataset(kind="folder")``（F85，2026-09-07）。
+
+    使用者要的那條路是「一張大圖，沒有 KLARF」（PEAR 的用法），而在這之前
+    唯一的入口是 :func:`load_folder` —— 也就是**得先把那張圖放進一個資料夾**。
+    那一步沒有換到任何東西。
+
+    ⚠ **``kind`` 仍然是 ``folder``，不新增第五種。** 資料形狀跟
+    :func:`load_folder` 逐項相同（``images={"single": …}``、沒有座標、寫不回
+    KLARF），而多一個 kind 要同時動 `scope.SUPPORTED_KINDS`、
+    `recipe_is_supported` 與那幾支測試 —— 換到的是零。代價是資料集標籤上會
+    寫 ``folder``（使用者 2026-09-07 看過並接受：kind 講的是資料形狀，
+    不是入口名字）。
+
+    多頁 TIFF 跟 :func:`load_folder` 走**同一句警告**（同一份文字、同一個
+    去處）—— 這條路一樣只讀得到第 0 頁。
+    """
+    p = str(path)
+    if not os.path.isfile(p):
+        return Dataset(kind="folder", klarf=None, items=[],
+                       warnings=[f"Not a file: {p}"])
+    stem, ext = os.path.splitext(os.path.basename(p))
+    if ext.lower() not in _IMAGE_EXTS:
+        return Dataset(kind="folder", klarf=None, items=[],
+                       warnings=[f"Not an image file: {p} (expected one of "
+                                 f"{', '.join(sorted(_IMAGE_EXTS))})"])
+    warnings: List[str] = []
+    if ext.lower() in (".tif", ".tiff"):
+        try:
+            if int(tiff_index.n_pages(p)) > 1:
+                warnings.append(_MULTIPAGE_WARNING % (1, os.path.basename(p)))
+        except (OSError, ValueError):
+            pass        # 讀不出頁數不是這條路要解的問題
+    return Dataset(kind="folder", klarf=None, warnings=warnings, items=[
+        DefectItem(defect_id=stem, die=None, xrel_nm=None, yrel_nm=None,
+                   images={"single": ImageRef(path=p, page=None,
+                                              channel="single")})])
+
+
 def load_folder(folder) -> Dataset:
     """掃描資料夾（不遞迴）成 Dataset(kind="folder")。
     無座標資訊（GLAS load_folder 模式）：每個影像檔一個 DefectItem，
@@ -466,12 +513,9 @@ def load_folder(folder) -> Dataset:
                                            channel="single")},
             ))
     if multipage:
-        warnings.append(
-            "%d file(s) have more than one page, and only the first page is "
-            "used here (%s). Open such a file as an image stack instead - "
-            "then every page group becomes a defect."
-            % (len(multipage), ", ".join(multipage[:3])
-               + ("…" if len(multipage) > 3 else "")))
+        warnings.append(_MULTIPAGE_WARNING
+                        % (len(multipage), ", ".join(multipage[:3])
+                           + ("…" if len(multipage) > 3 else "")))
     if not items:
         warnings.append(f"No image files found in folder: {d}")
     return Dataset(kind="folder", klarf=None, items=items, warnings=warnings)

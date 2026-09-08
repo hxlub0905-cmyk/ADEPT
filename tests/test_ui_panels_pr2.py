@@ -115,6 +115,114 @@ def test_the_preview_never_touches_the_disk(qapp, tmp_path):
     assert not target.exists(), "預覽寫了檔 —— 那它就不是預覽"
 
 
+def _unif_meta(n=24, metric="glv_mean"):
+    """引擎寫的那一份（`glv_stats._note_distribution` 的 `spread`）。"""
+    vals = [112.0 + i * 2.4 for i in range(n)]
+    vals[min(9, n - 1)] += 14.0
+    return {"glv_hist": [{
+        "region": "cells", "prefix": "cells", "boxes": n, "n": 1600,
+        "bins": [0] * 64,
+        "spread": {
+            "stats": {metric: vals},
+            "cx": [float(40 + 70 * (i % 6) + 20) for i in range(n)],
+            "cy": [float(40 + 70 * (i // 6) + 20) for i in range(n)],
+            "rects": [[40 + 70 * (i % 6), 40 + 70 * (i // 6), 40, 40]
+                      for i in range(n)],
+            "boxes": list(range(n))}}]}
+
+
+def test_the_uniformity_preview_lists_the_files_and_the_numbers(qapp):
+    """F87：這個面板是**清單 ＋ 這一顆的數字 ＋ 一顆開圖的鈕**，不是圖。
+
+    圖搬去自己的視窗了（使用者 2026-09-07：「右側 Uniformity folder 直接把
+    預覽的圖放上來好像也很奇怪」）。留下的那張小表要跟報告頁上那一張同源 ——
+    `summary_rows` 只有一支，而數字**從 features 來，不重算**。
+    """
+    insp = insp_mod.UniformityPreviewInspector()
+    insp.set_context("out", params={"folder": "/tmp/x", "metric": "glv_mean",
+                                    "charts": "box,histogram,profile,map"},
+                     result={"features": {"cells_glv_mean_cv_pct": 1.83,
+                                          "cells_glv_mean_slope_x": 0.42}},
+                     meta=_unif_meta())
+    names = [f["name"] for f in insp.plan()]
+    assert any(n.endswith(".html") for n in names)
+    assert sum(1 for n in names if n.endswith(".svg")) == 4
+    assert insp.charts() == ["box", "histogram", "profile", "map"]
+    assert len(insp.series()["groups"]) == 1
+    assert "24 box(es)" in insp.summary()
+    rows = insp.rows()
+    assert len(rows) == 1 and rows[0]["boxes"] == 24
+    assert rows[0]["cells"]["cv_pct"] == 1.83, \
+        "數字要從 features 讀 —— 重算的那一份會跟 CSV 上的分岔"
+    assert "range_pct" not in rows[0]["cells"], \
+        "沒寫出來的統計量要留白，不要生一個替身"
+    assert insp.can_preview() is True
+    _paint(insp, 680, 520)          # 畫一次不准炸
+
+
+def test_the_uniformity_button_is_dead_when_there_is_nothing_to_show(qapp):
+    """**沒東西的鈕不該按得下去**（推廣鐵則：按了撞牆比沒有那顆鈕更糟）。"""
+    insp = insp_mod.UniformityPreviewInspector()
+    insp.set_context("out", params={"folder": "/tmp/x", "charts": ""},
+                     meta=_unif_meta())
+    assert insp.can_preview() is False, "一張圖都沒勾"
+    insp.set_context("out", params={"folder": "/tmp/x", "charts": "box"},
+                     meta={"glv_hist": [{"region": "cells", "spread": None}]})
+    assert insp.can_preview() is False, "沒有逐框數字"
+    insp.set_context("out", params={"folder": "/tmp/x", "charts": "box"},
+                     meta=_unif_meta())
+    assert insp.can_preview() is True
+
+
+def test_the_uniformity_panel_no_longer_draws_the_charts_itself(qapp):
+    """圖只剩**一個**畫的地方（`ui/uniformity_window`）。
+
+    這一條是反向的：把圖搬走之後，面板上不准偷偷留一份 —— 兩份繪圖程式碼
+    正是 F85 計畫書風險表的第一行，而它們漂掉的那天兩張都畫得出來。
+    """
+    import inspect as _inspect
+    src = _inspect.getsource(insp_mod.UniformityPreviewInspector)
+    assert "build_chart_svg" not in src
+    assert "QSvgRenderer" not in src
+
+
+def test_the_uniformity_preview_says_why_there_is_nothing_to_draw(qapp):
+    """沒有逐框數字時 —— **原因通常是上游那張卡，不是這一張**。
+
+    一個空的圖區讀起來是「畫壞了」，而真相是「Gray level 還停在 pooled」。
+    """
+    insp = insp_mod.UniformityPreviewInspector()
+    insp.set_context("out", params={"folder": "/tmp/x", "charts": "box"},
+                     meta={"glv_hist": [{"region": "cells", "spread": None}]})
+    assert insp.series()["groups"] == []
+    _paint(insp, 400, 220)
+
+
+def test_the_uniformity_preview_survives_a_panel_too_small_for_a_chart(qapp):
+    """面板縮到畫不下 —— 不畫，但**不准炸、也不准畫壞**（鐵則 7 的 UI 版）。"""
+    insp = insp_mod.UniformityPreviewInspector()
+    insp.set_context("out", params={"folder": "/tmp/x", "charts": "box,map"},
+                     meta=_unif_meta())
+    for w, h in ((360, 160), (120, 80), (40, 30)):
+        _paint(insp, w, h)
+
+
+def test_a_chart_is_never_clipped_to_fit(qapp):
+    """**尺寸夾住，內容不夾。**
+
+    每一支 `_svg_*` 都把圖區夾在 `max(80, …)`，所以高度不夠時內容會比
+    viewBox 高，而 SVG 會**把超出的切掉** —— 實測 126 px 高的格子把斜率
+    那一行（整張圖唯一的數字）切掉一半，而圖看起來完全正常。
+    """
+    from d4t.core.export import uniformity_charts as uc
+    insp = insp_mod.UniformityPreviewInspector()
+    insp.set_context("out", params={"folder": "/tmp/x", "metric": "glv_mean",
+                                    "charts": "profile"}, meta=_unif_meta())
+    svg = uc.build_chart_svg(insp.series(), "profile", {}, width=40, height=30)
+    assert "viewBox='0 0 %d %d'" % (uc.MIN_WIDTH, uc.MIN_HEIGHT) in svg
+    assert "/ 100 px" in svg, "斜率那一行是整張圖唯一的數字，不准被夾掉"
+
+
 def test_the_char_preview_is_fixed_four_plus_columns(qapp):
     insp = insp_mod.CharPreviewInspector()
     insp.set_context("out", params={"folder": "/tmp/x",

@@ -37,6 +37,7 @@ from PySide6.QtGui import (
     QFont,
     QFontMetricsF,
     QImage,
+    QLinearGradient,
     QPainter,
     QPainterPath,
     QPen,
@@ -67,10 +68,11 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.algo import glv as algo_glv
+from ..core.export.uniformity_charts import heat_hex as uc_heat_hex
 from . import glyphs
 from . import region_words
 from . import theme
-from .numbers import format_feature_value
+from .numbers import format_feature_value, format_feature_value_short
 from .theme import TOKENS, region_hex
 
 #: 標記的**角色** → 主題的哪一個顏色權杖（F33）。
@@ -233,6 +235,12 @@ GLYPH_ICONS = (
     # 工具列那五顆（F7-24）＋ 兩個沒有 KLARF 的入口（F11 Input-2／Input-3）
     "folder", "document", "save", "templates", "export", "stack",
     "folder_open", "layers",
+    # F85：**一張大圖**那個入口（`Open image…`）。四顆 Open 並排，所以它是
+    # 唯一內部有東西的那一個 —— 外框空的話它跟 `stack` 的最上層一樣。
+    "image",
+    # F85：`Write charts` 的「profile 沿哪一個軸」。兩顆並排，差別是
+    # **箭頭的方向**，而底下那條軸線相同 —— 那是它們是同一個問題的兩個答案。
+    "axis_x", "axis_y",
     # 畫布彈出視窗（F8-UI D 案）
     "popout",
     # 在 Golden Cell 上標區域的四支工具（F11 Region-1 第二輪）。名字說的是
@@ -516,6 +524,31 @@ def draw_glyph_icon(p: QPainter, name: str, size: float, color: str,
                               side * 0.76, side * 0.76))
         p.setPen(pen)
         p.setBrush(Qt.NoBrush)
+    elif n in ("axis_x", "axis_y"):
+        # 一條軸 ＋ 一個往那個方向的箭頭。兩顆並排時唯一的差別是方向，
+        # 所以軸線本身刻意一模一樣（換了長相的話，使用者要比對兩件事）。
+        if n == "axis_x":
+            a, b = QPointF(m, h * 0.72), QPointF(w - m, h * 0.72)
+            tip = (QPointF(w - m - w * 0.16, h * 0.72 - h * 0.12),
+                   QPointF(w - m - w * 0.16, h * 0.72 + h * 0.12))
+        else:
+            a, b = QPointF(w * 0.28, h - m), QPointF(w * 0.28, m)
+            tip = (QPointF(w * 0.28 - w * 0.12, m + h * 0.16),
+                   QPointF(w * 0.28 + w * 0.12, m + h * 0.16))
+        p.drawLine(a, b)
+        p.drawLine(b, tip[0])
+        p.drawLine(b, tip[1])
+    elif n == "image":
+        # 一張圖：外框 + 裡面一道山稜和一顆太陽（F85 Input-6）。
+        # 四顆 Open 鈕的輪廓要各不相同（F7-24 的同一條）—— ``folder`` 與
+        # ``folder_open`` 上緣有頁籤、``stack`` 是三個錯開的方框，
+        # 這一個是**唯一內部有東西的**：外框空的話它跟 stack 的最上層一樣。
+        p.drawRect(QRectF(m, h * 0.22, w - 2 * m, h * 0.56))
+        p.drawPolyline(QPolygonF([
+            QPointF(m + w * 0.06, h * 0.66),
+            QPointF(w * 0.42, h * 0.40),
+            QPointF(w - m - w * 0.06, h * 0.66)]))
+        p.drawEllipse(QPointF(w * 0.68, h * 0.36), w * 0.06, w * 0.06)
     elif n == "folder":
         p.drawLine(QPointF(m, h * 0.30), QPointF(w * 0.44, h * 0.30))
         p.drawLine(QPointF(w * 0.44, h * 0.30), QPointF(w * 0.54, h * 0.42))
@@ -1344,6 +1377,14 @@ class ImageView(QWidget):
         #: 回溯面板點了哪個區域（PR-3）：命中的框全強度、其餘降 alpha。
         #: **不 overload focus** —— 顏色=哪塊、粗細=缺陷格、alpha=你問的那塊。
         self._overlay_emphasis: List[str] = []
+        #: 熱圖那一層（F87）：一塊一個色，鋪在影像上、框與標記**下面**。
+        #: 見 :meth:`set_heat`。
+        self._heat: List[Tuple[float, float, float, float]] = []
+        self._heat_colors: List[str] = []
+        self._heat_legend: Optional[Tuple[float, float, str]] = None
+        #: 疊上去的不透明度（PEAR 是 178/255 —— 底下的圖案還看得見，
+        #: 而顏色已經讀得出來）。
+        self._heat_alpha = 178
         #: 量測標記（F19）：線段、每條線上的點、要畫粗的那一條。見 :meth:`set_marks`。
         self._marks: List[Any] = []
         #: 這一組標記要不要畫滿（`Step.marks_solid`）。
@@ -1511,6 +1552,52 @@ class ImageView(QWidget):
         """現在點亮的區域名（測試讀這個，不去讀畫素）。"""
         return list(self._overlay_emphasis)
 
+    def set_heat(self, cells: Optional[Sequence[Sequence[float]]] = None,
+                 colours: Optional[Sequence[str]] = None,
+                 legend: Optional[Sequence[Any]] = None,
+                 alpha: int = 178) -> None:
+        """把**熱圖**鋪在影像上（正規化座標，同 :meth:`set_overlay`）。
+
+        ``cells`` 是 ``[(nx, ny, nw, nh), …]``、``colours`` 等長的 hex 色，
+        ``legend`` 是 ``(lo, hi, 一句話)``（沒有就不畫色條）。
+
+        為什麼是第三層，而不是 :meth:`set_overlay` 的一個模式
+        ----------------------------------------------------
+        框是**空心的線**，回答「recipe 說要看哪裡」；這一層是**填滿的色**，
+        回答「這一塊量出來多少」。而且它必須畫在框**底下** —— PEAR 的
+        `_paint_heat_cells` 就是這個順序，理由是框的用途是「這一塊的顏色是從
+        哪一格量來的」，被色塊蓋掉的話那句話就沒了。
+
+        資料由**卡片自己**交出來（`Step.overlay_heat`），跟
+        :meth:`set_marks` 同一條界線：meta 的形狀是那張卡的事，UI 只負責畫。
+
+        兩條保險跟 :meth:`set_overlay` 一字不差：座標正規化（縮放平移、換一顆
+        都跟著走），而**長度對不上就整組不畫** —— 錯位的顏色會把值畫在別的
+        地方，而畫面上沒有任何東西透露那件事。
+        """
+        boxes = [tuple(float(v) for v in tuple(c)[:4])
+                 for c in (cells or []) if c is not None and len(tuple(c)) >= 4]
+        cols = [str(c) for c in (colours or [])]
+        if len(cols) != len(boxes):
+            boxes, cols = [], []
+        self._heat = boxes
+        self._heat_colors = cols
+        got = tuple(legend or ())
+        self._heat_legend = ((float(got[0]), float(got[1]), str(got[2]))
+                             if len(got) >= 3 else None)
+        self._heat_alpha = int(max(0, min(255, int(alpha))))
+        self.update()
+
+    def clear_heat(self) -> None:
+        self.set_heat([], [], None)
+
+    def heat_count(self) -> int:
+        """現在鋪了幾塊 —— **測試讀這個**，不去讀畫素。"""
+        return len(self._heat)
+
+    def heat_legend(self) -> Optional[Tuple[float, float, str]]:
+        return self._heat_legend
+
     def set_marks(self, lines: Optional[Sequence[Any]] = None,
                   points: Optional[Sequence[Any]] = None,
                   focus: Any = -1,
@@ -1668,6 +1755,70 @@ class ImageView(QWidget):
     def kernel_hint(self) -> Optional[Tuple[float, str]]:
         """現在畫著的核心大小（沒有就 None）。測試讀這個，不去讀畫素。"""
         return self._kernel
+
+    def _paint_heat(self, p: QPainter) -> None:
+        """半透明的磚 ＋ 一條橫的色條（PEAR 的版型）。
+
+        磚**不描邊**：相鄰兩塊本來就該連成一片，描了邊之後一片梯度會讀成
+        一排小方塊 —— 那正是 `cell_boxes` 鋪滿中線要避免的事。
+        """
+        if self._pixmap is None or not self._heat:
+            return
+        iw, ih = self._pixmap.width(), self._pixmap.height()
+        s_ = self._scale or 1.0
+        p.setPen(Qt.NoPen)
+        for (nx, ny, nw, nh), hexcol in zip(self._heat, self._heat_colors):
+            col = QColor(hexcol)
+            if not col.isValid():
+                continue
+            col.setAlpha(self._heat_alpha)
+            p.setBrush(col)
+            # **相鄰兩塊之間不留縫**：各自四捨五入的話會露出一條背景色的細線，
+            # 而那條線看起來像資料裡的一道邊界。多畫半個像素蓋掉它。
+            p.drawRect(QRectF(self._offset.x() + nx * iw * s_,
+                              self._offset.y() + ny * ih * s_,
+                              max(1.0, nw * iw * s_) + 0.5,
+                              max(1.0, nh * ih * s_) + 0.5))
+        p.setBrush(Qt.NoBrush)
+        self._paint_heat_bar(p)
+
+    def _paint_heat_bar(self, p: QPainter) -> None:
+        """色條 —— **沒有它那些顏色不是資料，只是裝飾**（PEAR 同款：橫的、
+        150×12、壓在左下角，兩端寫值）。"""
+        if self._heat_legend is None:
+            return
+        lo, hi, label = self._heat_legend
+        f = QFont(p.font())
+        f.setPointSizeF(max(7.0, f.pointSizeF() - 1.0))
+        p.setFont(f)
+        fm = QFontMetricsF(f)
+        pad, w, h, line = 5.0, 150.0, 12.0, fm.height()
+        box = QRectF(6.0, self.height() - (line * 2 + h + pad * 2 + 8.0),
+                     w + pad * 2, line * 2 + h + pad * 2)
+        # **底下墊一塊**（同 `_paint_overlay_legend`）：色條會落在影像上，
+        # 而影像可以是任何亮度 —— 直接寫字的話，深色的圖上那兩個數字看不見，
+        # 於是那些顏色不再是資料、只是裝飾。
+        chip = QColor(TOKENS["bg_surface"])
+        chip.setAlpha(205)
+        p.setPen(Qt.NoPen)
+        p.setBrush(chip)
+        p.drawRoundedRect(box, 3.0, 3.0)
+        x, y = box.left() + pad, box.top() + pad + line
+        grad = QLinearGradient(x, 0.0, x + w, 0.0)
+        for t in (0.0, 0.2, 0.4, 0.6, 0.8, 1.0):
+            grad.setColorAt(t, QColor(uc_heat_hex(t)))
+        p.setBrush(grad)
+        p.drawRoundedRect(QRectF(x, y, w, h), 2.0, 2.0)
+        p.setPen(QColor(TOKENS["text_primary"]))
+        p.drawText(QRectF(x, box.top() + pad, w, line),
+                   Qt.AlignLeft | Qt.AlignVCenter, str(label))
+        p.setPen(QColor(TOKENS["text_secondary"]))
+        foot = QRectF(x, y + h, w, line)
+        p.drawText(foot, Qt.AlignLeft | Qt.AlignVCenter,
+                   format_feature_value_short(lo))
+        p.drawText(foot, Qt.AlignRight | Qt.AlignVCenter,
+                   format_feature_value_short(hi))
+        p.setBrush(Qt.NoBrush)
 
     def _paint_overlay(self, p: QPainter) -> None:
         if self._pixmap is None or not self._overlay:
@@ -1893,6 +2044,9 @@ class ImageView(QWidget):
                         self._pixmap.height() * self._scale)
         p.drawPixmap(target, self._pixmap, QRectF(self._pixmap.rect()))
         p.setRenderHint(QPainter.SmoothPixmapTransform, False)
+        # 順序就是意思：熱色在最底（它是「量出來多少」），框與標記畫在它上面
+        # （它們是「量的是哪一塊」）—— 反過來的話框會被色塊蓋掉。
+        self._paint_heat(p)
         self._paint_overlay(p)
         self._paint_marks(p)
         self._paint_measure(p)
@@ -4414,6 +4568,60 @@ class ParamForm(QWidget):
         if gamma is not None and not gamma.has_error():
             gamma.set_dimmed(active, "Not used while a custom curve is drawn.")
 
+    def set_chart_series(self, series: Optional[Dict[str, Any]]) -> None:
+        """把目前這一顆的均勻度資料交給 `chart_style` 那一列（F87 第七刀）。
+
+        先例是 :meth:`set_histogram` —— 曲線欄位後面墊的那條分布也是這樣從
+        引擎那一份餵過來的。**UI 不自己再算一份**：畫面上的預覽跟真的跑出來
+        的不一樣，比沒有那個預覽更糟。
+        """
+        for row in self._rows.values():
+            if isinstance(row.editor, ChartStyleField):
+                row.editor.set_series(series)
+
+    def set_chart_frame(self, frame: Any) -> None:
+        """把這一顆的**長表**交給 `chart_spec` 那一列（散佈圖的選單）。
+
+        同 :meth:`set_chart_series` 的理由：UI 不自己再攤一次 —— 畫面上那張
+        圖跟寫出去的 `boxes.csv` 對不起來的話，沒有人看得出哪一份是對的。
+        """
+        for row in self._rows.values():
+            if isinstance(row.editor, ChartSpecField):
+                row.editor.set_frame(frame)
+
+    def _chart_kinds(self) -> List[str]:
+        """`chart_style` 的編輯器要開哪幾個分頁 —— **那張卡說的**。
+
+        `Step.chart_kinds`（`Write charts` 是勾了哪幾張、`Write report`
+        只有盒鬚圖）。卡片沒說就給全部：一個空的分頁區讀起來是「壞了」。
+        沒勾的那幾張的覆寫不會因此消失（`ChartSettingsDialog` 原封不動帶回）。
+        """
+        from ..core.export.uniformity_charts import CHARTS
+        from ..core.pipeline import get_step
+
+        want: List[str] = []
+        key = self.step_key()
+        if key:
+            try:
+                want = [str(k) for k in
+                        get_step(key).chart_kinds(dict(self._values))]
+            except Exception:          # noqa: BLE001 — 顯示用，不能擋畫面
+                want = []
+        return [k for k in CHARTS if k in want] or list(CHARTS)
+
+    def _chart_words(self) -> bool:
+        """編輯器右半要不要「每張圖自己的字」—— 也是**那張卡說的**
+        （`Step.chart_words`）。"""
+        from ..core.pipeline import get_step
+
+        key = self.step_key()
+        if not key:
+            return True
+        try:
+            return bool(getattr(get_step(key), "chart_words", True))
+        except Exception:              # noqa: BLE001 — 顯示用，不能擋畫面
+            return True
+
     def step_key(self) -> Optional[str]:
         return None if not self._describe else str(self._describe.get("key"))
 
@@ -4809,6 +5017,21 @@ class ParamForm(QWidget):
             if text in choices:
                 w.setCurrentIndex(choices.index(text))
             w.currentTextChanged.connect(lambda t, n=name: self._emit(n, str(t)))
+            return w
+
+        if ptype == "chart_spec":
+            # 一格參數 ＋ 專屬編輯器（同 `chart_style` / `curve`）。
+            w = ChartSpecField()
+            w.set_text("" if value is None else str(value))
+            w.spec_changed.connect(lambda t, n=name: self._emit(n, str(t)))
+            return w
+
+        if ptype == "chart_style":
+            # 一格參數 ＋ 專屬編輯器（同 `curve`）—— 見 `ChartStyleField`。
+            w = ChartStyleField(self._chart_kinds(),
+                                words=self._chart_words())
+            w.set_text("" if value is None else str(value))
+            w.style_changed.connect(lambda t, n=name: self._emit(n, str(t)))
             return w
 
         if ptype == "curve":
@@ -5290,6 +5513,154 @@ class CurveField(QWidget):
 
     def _on_changed(self, text: str) -> None:
         self.curve_changed.emit(text)
+
+
+class ChartStyleField(QWidget):
+    """`chart_style` 那一格：**一句摘要 ＋ 一顆 `Chart settings…`**。
+
+    為什麼那一格不能是一個文字框（F87 第六刀，使用者 2026-09-07：
+    「Chart look 是什麼? 我沒看到 Chart setting 沒看到編輯器」）
+    ------------------------------------------------------------------
+    `chart_style` 的值是一串 JSON（``{"tick_size":14,"box.title":"…"}``）。
+    沒有這一支的時候它掉進表單的預設分支 —— 一個**可以打字的文字框，裡面是
+    生 JSON**。目標使用者是不會寫 code 的製程工程師（推廣鐵則），而那一格
+    等於在要他手寫設定檔；更糟的是編輯器**存在**，只是掛在別的地方
+    （圖的彈出視窗），所以畫面上那一格看起來就是「這個功能沒做」。
+
+    `tone` 的 ``type="curve"`` 早就立了規矩：**一個複雜的值裝在一格參數裡，
+    配一個專屬編輯器**。我寫下了那句話卻只把編輯器接到視窗上 —— 這一支是把
+    它接回它本來就該在的地方。兩個入口改的是同一格參數，開的是同一個對話框。
+    """
+
+    style_changed = Signal(str)
+
+    def __init__(self, kinds: Optional[Sequence[str]] = None,
+                 parent: Optional[QWidget] = None, words: bool = True):
+        super().__init__(parent)
+        self._text = ""
+        self._kinds = [str(k) for k in (kinds or [])]
+        self._words = bool(words)
+        self._series: Dict[str, Any] = {}
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+        self.summary = QLabel("", self)
+        self.summary.setObjectName("paramHint")
+        self.button = small_button(
+            "Chart settings\u2026", shape="wide",
+            tip=("Titles, axis names, tick counts, text size and colour, "
+                 "marker and line width - and whether the value scale is "
+                 "locked. It travels with the recipe."),
+            parent=self)
+        self.button.clicked.connect(self.open_dialog)
+        lay.addWidget(self.button, 0)
+        lay.addWidget(self.summary, 1)
+
+    def text(self) -> str:
+        return self._text
+
+    def set_text(self, text: str) -> None:
+        from ..core.pipeline import chart_style
+
+        self._text = str(text or "")
+        try:
+            said = chart_style.describe(self._text)
+        except Exception:                  # noqa: BLE001 — 壞掉的值也要顯示
+            said = "not readable - press the button to start over"
+        self.summary.setText(said)
+
+    def set_series(self, series: Optional[Dict[str, Any]]) -> None:
+        """編輯器裡的預覽要畫哪一顆（Studio 餵目前選著的那一顆）。
+
+        沒有的時候編輯器會退到樣本資料 —— 調外觀不必先跑完一批，但**用自己
+        的資料看**是最有用的那一種，所以有就給。
+        """
+        self._series = dict(series or {})
+        dlg = getattr(self, "_dialog", None)
+        if dlg is not None and dlg.isVisible():
+            dlg.set_series(self._series)
+
+    def set_charts(self, kinds: Optional[Sequence[str]]) -> None:
+        """對話框右半要開哪幾個分頁 —— **就是這張卡勾了哪幾張圖**。
+
+        沒勾的那幾張的覆寫不會被清掉（`ChartSettingsDialog` 原封不動帶回去）。
+        """
+        self._kinds = [str(k) for k in (kinds or [])]
+
+    def open_dialog(self) -> None:
+        from .chart_settings import ChartSettingsDialog
+
+        dlg = ChartSettingsDialog(self._text, self._kinds or None, self,
+                                  series=self._series, words=self._words)
+        self._dialog = dlg
+        try:
+            if dlg.exec():
+                got = dlg.value()
+                if got != self._text:
+                    self.set_text(got)
+                    self.style_changed.emit(got)
+        finally:
+            self._dialog = None
+
+
+class ChartSpecField(QWidget):
+    """`chart_spec` 那一格：**一句摘要 ＋ 一顆 `Chart\u2026`**（同 `ChartStyleField`）。
+
+    為什麼一樣不能是文字框：那一格的值是 ``{"mark":"point","x":"glv_mean",
+    "y":"glv_std"}``。目標使用者是不會寫 code 的製程工程師（推廣鐵則）。
+
+    ⚠ **選單要從資料長出來**，所以這一支要拿得到那一顆的長表
+    （:meth:`set_frame`）。沒有的時候按鈕照開 —— 選單是空的，而對話框上那
+    一句話說得出為什麼（總比一顆按不下去的按鈕好）。
+    """
+
+    spec_changed = Signal(str)
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._text = ""
+        self._frame: Any = None
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+        self.summary = QLabel("", self)
+        self.summary.setObjectName("paramHint")
+        self.button = small_button(
+            "Chart\u2026", shape="wide",
+            tip=("Pick which measured number runs across the bottom, which "
+                 "one runs up the side, and what the colour and marker size "
+                 "mean."),
+            parent=self)
+        self.button.clicked.connect(self.open_dialog)
+        lay.addWidget(self.button, 0)
+        lay.addWidget(self.summary, 1)
+
+    def text(self) -> str:
+        return self._text
+
+    def set_text(self, text: str) -> None:
+        from ..core.pipeline import chart_spec
+
+        self._text = str(text or "")
+        try:
+            said = chart_spec.describe(self._text)
+        except Exception:                  # noqa: BLE001 — 壞掉的值也要顯示
+            said = "not readable - press the button to start over"
+        self.summary.setText(said)
+
+    def set_frame(self, frame: Any) -> None:
+        """選單要從哪一份資料長出來（Studio 餵目前選著的那一顆）。"""
+        self._frame = frame
+
+    def open_dialog(self) -> None:
+        from .graph_builder import GraphBuilderDialog
+
+        dlg = GraphBuilderDialog(self._text, self._frame, self)
+        if dlg.exec():
+            got = dlg.value()
+            if got != self._text:
+                self.set_text(got)
+                self.spec_changed.emit(got)
 
 
 class CurveDialog(QDialog):
@@ -6569,6 +6940,19 @@ VARIANT_GLOSS = {
     "nm2": "%s, in square nanometres",
     "raw": "%s, before it was scaled against the batch",
     "rescued": "%s - kept under this name because a later card wrote over it",
+    # ---- 均勻度（F85）：這一群框「之間」的量 ----------------------------
+    # ⚠ 這五句話都要明講**它們講的是整群，不是某一格** —— 名字上唯一沒有的
+    # 資訊正是那個（`glv_median_cv_pct` 讀起來很像又一個灰階值）。
+    # 兩個斜率**必須把 100 說出來**：數字被換成每 px 的版本時，它不會變成
+    # 錯的，它會變成 0.00x —— 而那讀起來是「很平」。
+    "range": "%s - the gap between the brightest box and the darkest one",
+    "range_pct": "%s - that same gap, as a percentage of the average",
+    "cv_pct": "%s - how spread out the boxes are, as a percentage of the "
+              "average; 0 means every box reads the same",
+    "slope_x": "%s - how much it changes from left to right, per 100 pixels; "
+               "0 means no tilt",
+    "slope_y": "%s - how much it changes from top to bottom, per 100 pixels; "
+               "0 means no tilt",
 }
 
 

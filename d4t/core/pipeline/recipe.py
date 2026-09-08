@@ -37,6 +37,7 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional, Set, Tuple, Type
 
+from . import chart_style
 from .expression import ExpressionError, parse_expression
 from .step import (
     FEATURE_TYPES, GROUP_COMPARE, GROUP_ENHANCE, IMAGE_TYPES, REGION_TYPES,
@@ -1521,6 +1522,56 @@ def _migrate_renamed_cards(nodes: Dict[str, "RecipeNode"]) -> None:
                                 enabled=node.enabled)
 
 
+def _migrate_chart_params_into_look(nodes: Dict[str, "RecipeNode"]) -> None:
+    """`output_uniformity` 的五格外觀折進一格 ``look``（F87，2026-09-07）。
+
+    ``value_name`` / ``value_lo`` / ``value_hi`` / ``points`` / ``bins`` /
+    ``percent`` 六格變成一格 ``chart_style``。理由見
+    `pipeline/chart_style.py` 的檔頭：使用者要 PEAR 那種 chart settings，
+    而攤成 ParamSpec 是二十五列。
+
+    **不遷移的話舊檔案打不開**：`validate_params` 對認不得的 key 是
+    ``unknown parameters`` 的硬錯，而那句話的意思是「這份檔案壞了」——
+    真正的情況是「這一格搬家了」。
+
+    判準是**「舊東西在不在」**（鐵則 9）：那幾格在就折進去，不在就什麼都
+    不做。所以跑第二次是 no-op，``to_json_dict → from_json_dict`` 仍然是
+    identity —— 那是 ``run_batch`` 送 recipe 進 worker 的路。
+
+    ⚠ **鎖定那一組要把「規則」翻成「開關」**：舊的約定是「上界高過下界才算
+    鎖住」，而新的有一顆明著的 ``lock``。翻錯的話一份本來鎖著的 recipe 會
+    安靜地變成 auto —— 兩張圖擺在一起，一樣高的柱子其實不一樣高。
+    """
+    moved = ("value_name", "value_lo", "value_hi", "points", "bins", "percent")
+    for node in nodes.values():
+        if node.step != "output_uniformity":
+            continue
+        if not any(k in node.params for k in moved):
+            continue
+        style: Dict[str, Any] = {}
+        try:
+            style.update(chart_style.parse_style(node.params.get("look", "")))
+        except Exception:              # noqa: BLE001 — 遷移不准當機
+            style = {}
+        lo = node.params.pop("value_lo", None)
+        hi = node.params.pop("value_hi", None)
+        if lo is not None and hi is not None:
+            try:
+                lo_f, hi_f = float(lo), float(hi)
+            except (TypeError, ValueError):
+                lo_f = hi_f = 0.0
+            if hi_f > lo_f:            # 舊的「算不算鎖住」就是這一條
+                style.update({"lock": True, "lo": lo_f, "hi": hi_f})
+        for old, new in (("value_name", "value_name"), ("points", "points"),
+                         ("bins", "bins"), ("percent", "percent")):
+            if old in node.params:
+                style[new] = node.params.pop(old)
+        try:
+            node.params["look"] = chart_style.format_style(style)
+        except Exception:              # noqa: BLE001 — 同上
+            node.params["look"] = ""
+
+
 def _migrate_drop_use_within(nodes: Dict[str, "RecipeNode"]) -> None:
     """``normalize`` 的 ``use_within`` 那一格拿掉（2026-09-02）。
 
@@ -2552,6 +2603,8 @@ class Recipe:
         # `node.step == "normalize"`，而那個 key 從來沒有被改過名，所以早跑
         # 晚跑都對 —— 排在這裡只是讓「拿掉一格」跟「換一張卡」讀起來分得開。
         _migrate_drop_use_within(nodes)
+        # 圖表外觀六格收成一格（F87）。
+        _migrate_chart_params_into_look(nodes)
         # GDS 那張卡收成「參照區域」的一個 method（F29）。
         _migrate_roi_from_mask_into_roi_reference(nodes)
         # Profile / Template 也折進去（F30）—— 四張 Region 卡變一張。
@@ -3003,6 +3056,73 @@ def _late_normalize(step_cls, p: Dict[str, Any], nid: str, k: str,
                     f"measured. Put the manual card after the automatic one.")))
         break               # 一張卡一條訊息就夠（每條流各講一次是噪音）
     return out
+
+
+def _chart_metric_issues(recipe: "Recipe", step_cls, p: Dict[str, Any],
+                         nid: str, k: str, registry) -> List["Issue"]:
+    """`Write charts` 要畫的統計量，上游真的有量嗎（F86）。
+
+    使用者打成 ``glv_mena`` 的下場是**四張圖全空，而且沒有任何訊息** ——
+    那一格是自由文字，而 d4t 對「指名上游東西」的欄位向來是有型別的
+    （``image_key`` / ``region_key`` / ``feature_key``）。它不是特徵名（是統計量
+    id），所以套不上那幾種型別，也就落在既有的 ``stale-feature-ref`` 之外。
+
+    為什麼這一支住在 `recipe.py` 而不是卡片上：`configuration_issues` 只看得到
+    **這張卡自己**的參數，而這個問題的答案在**別的節點**上（上游 Gray level 的
+    ``Statistics``）。同一條路上的 `_late_normalize` / `_uneven_treatment` 也是
+    這個形狀。
+
+    兩種都是 **warning**：卡片照樣跑得完、資料夾照樣出得來，只是裡面的圖是空的。
+    """
+    if step_cls.key != "output_uniformity":
+        return []
+    metric = str(p.get("metric", "") or "").strip()
+    if not metric:
+        return []       # 空的 = 「用上游量的第一個」，那是合法而且是預設
+    # **這條 route 上的每一張 GLV 卡都算數，不看先後**：問的是「有沒有人量
+    # 這個統計量」，而順序那件事已經有 `execution_order` 在管。第一版寫了
+    # `for other in order: if other == nid: break`，而 `Recipe` 根本沒有
+    # `route()` —— 於是那個迴圈一次都沒跑，正常的 recipe 也被報一句話。
+    have: List[str] = []
+    each_box = False
+    for other in list(recipe.routes.get(k, []) or []):
+        if other == nid:
+            continue
+        node = recipe.nodes.get(other)
+        if node is None or not getattr(node, "enabled", True):
+            continue
+        if node.step != "glv_stats":
+            continue
+        cls2 = registry.get("glv_stats")
+        if cls2 is None:
+            continue
+        try:
+            q = cls2.validate_params(dict(node.params))
+        except Exception:              # noqa: BLE001 — lint 不准當機
+            q = dict(node.params)
+        if str(q.get("across_boxes", "")) == "each box":
+            each_box = True
+        have.extend(x.strip() for x in
+                    str(q.get("metrics", "") or "").split(",") if x.strip())
+    if not each_box:
+        return [Issue(
+            code="charts-need-each-box", level="warning", node_id=nid,
+            title=f"step '{nid}' has no box-by-box numbers to draw",
+            detail=(f"route '{k}': every one of these charts is one point per "
+                    f"measurement box, and no Gray level card upstream is set "
+                    f"to “each box”. This card will run and write nothing. "
+                    f"Set the Gray level card to “each box” (its “Odd box "
+                    f"out” preset does it) and tick something under “How even "
+                    f"are the boxes”."))]
+    if metric not in have:
+        return [Issue(
+            code="unknown-chart-metric", level="warning", node_id=nid,
+            title=f"step '{nid}' plots a statistic nobody measured",
+            detail=(f"route '{k}': “Which number to plot” is '{metric}', but "
+                    f"the Gray level card upstream measures {sorted(set(have))}"
+                    f". The charts would come out empty. Fix the spelling, or "
+                    f"tick '{metric}' under Statistics on that card."))]
+    return []
 
 
 def _uneven_treatment(step_cls, p: Dict[str, Any], nid: str, k: str,
@@ -3572,6 +3692,8 @@ def validate(recipe: Recipe, kind: Optional[str] = None,
             issues.extend(_late_normalize(step_cls, p, nid, k, history))
             issues.extend(_uneven_treatment(step_cls, p, nid, k, history,
                                             from_input, registry))
+            issues.extend(_chart_metric_issues(recipe, step_cls, p, nid, k,
+                                               registry))
             if step_cls.resolve_group() == GROUP_ENHANCE:
                 sig = _treatment_sig(step_cls, p)
                 for key in step_cls.resolve_writes(p):

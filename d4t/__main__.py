@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import sys
 from typing import Any, List, Optional
 
@@ -74,6 +75,38 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     return 1 if bad else 0
 
 
+def _open_input(path: str, tiff_path: Any = None):
+    """CLI 的輸入 —— **四種都認**（F85），照 `scope.INPUT_SOURCES` 那張表。
+
+    以前這裡只呼叫 `load_dataset`，也就是只認 KLARF；給它一個資料夾的下場是
+    ``IsADirectoryError``，而那句話對使用者沒有任何意義。Studio 早就吃四種
+    輸入了（F11 Input-3），CLI 沒有跟上 —— 於是 `folder` 那條 route 的
+    recipe（`recipes/one-image-uniformity.json` 就是一份）在命令列上**根本
+    跑不起來**，而畫布上它是好的。
+
+    判準只看路徑本身，不看副檔名以外的東西：
+
+    * **資料夾** → `load_folder`（每個影像檔一顆）
+    * **影像檔** → `load_image_file`（那一張就是唯一的一顆）
+    * 其餘 → `load_dataset`（KLARF，含 `--tiff`）
+
+    ⚠ 多頁 TIFF 走的是**第三條**（KLARF 那一支會自己講不出話），而
+    `Open stack…` 那條路 CLI 仍然沒有 —— 它需要「一顆幾張」那個數字，
+    而那是一格參數不是一條路徑。這裡不假裝有。
+    """
+    from d4t.core.ingest import dataset as dataset_mod
+    from d4t.core.ingest.dataset import (
+        load_dataset, load_folder, load_image_file,
+    )
+
+    p = str(path)
+    if os.path.isdir(p):
+        return load_folder(p)
+    if os.path.splitext(p)[1].lower() in dataset_mod._IMAGE_EXTS:
+        return load_image_file(p)
+    return load_dataset(p, tiff_path=tiff_path)
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     import time
 
@@ -85,7 +118,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     if recipe is None:
         return 2
 
-    ds = load_dataset(args.klarf, tiff_path=args.tiff)
+    ds = _open_input(args.klarf, args.tiff)
     print(f"資料集：kind={ds.kind}，{len(ds.items)} 顆 defect")
     for w in ds.warnings:
         print(f"  △ {w}")
@@ -559,9 +592,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_val.add_argument("--kind", default=None, help="只檢查特定資料型別（ebi_patch/rsem）")
     p_val.set_defaults(func=_cmd_validate)
 
-    p_run = sub.add_parser("run", help="對一份 KLARF(+TIFF) 跑 recipe")
+    p_run = sub.add_parser(
+        "run", help="跑 recipe：一份 KLARF(+TIFF)、一個影像資料夾、或一張圖")
     p_run.add_argument("recipe")
-    p_run.add_argument("klarf")
+    p_run.add_argument("klarf", metavar="INPUT",
+                       help="KLARF 檔、一個資料夾（每張圖一顆）、"
+                            "或單獨一張圖（F85）")
     p_run.add_argument("--tiff", default=None, help="patch TIFF 路徑（預設自動尋找）")
     p_run.add_argument("--gds", default="",
                        help="GLAS 匯出資料夾（`<id>_label.png` + "

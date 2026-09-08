@@ -10,7 +10,7 @@
   align, subtract, align_to, pair_source,
   roi_reference,
   glv_stats, cd_measure, focus_quality,
-  output_report, output_klarf, output_char
+  output_report, output_klarf, output_char, output_uniformity
 
 **2026-09-02：``roi_mask``（Mask from regions）刪掉了。** 使用者：「請幫我拿掉
 （看不到此功能 card 用處）」。連同它唯一的消費者 —— ``normalize`` 的

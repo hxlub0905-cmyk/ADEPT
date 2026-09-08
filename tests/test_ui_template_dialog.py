@@ -1146,3 +1146,102 @@ def test_studio_hands_the_dialog_the_stream_the_card_actually_reads(window):
     window.model.set_param(nid, "source", "")
     img2, why2 = window._template_source_image(window.model.nodes[nid])
     assert img2 is _Ctx.images["ref"] and "ref" in why2
+
+
+# --------------------------------------------------------------------------- #
+# F86：大圖不准把視窗凍住
+# --------------------------------------------------------------------------- #
+def test_building_a_cell_reports_progress_and_honours_cancel(qapp, monkeypatch):
+    """使用者回報：7680×7680 疊 Golden Cell「常常會卡一陣子才算完」。
+
+    量出來是 **130 秒**，而且跑在 UI 執行緒上 —— Windows 會標「沒有回應」。
+    F86 做了兩件事，這一條守後面那件：
+
+    1. 成本本身降下來（`stack_cells` 的平均改 reshape、搜尋不升 float64，
+       兩件都逐位元組相同）—— 130 s → 約 17 s；
+    2. 剩下那十幾秒要**看得到、停得下來**。
+    """
+    import numpy as np
+    from d4t.core.algo import template as algo_template
+
+    dlg = tpl_mod.TemplateDialog()
+    try:
+        seen = []
+
+        def fake_build(arr, px=None, py=None, method="mean", anchor=True,
+                       progress=None):
+            # 把 UI 給的 callback 真的叫幾次 —— 那正是進度條會動的原因
+            if progress is not None:
+                for i in range(1, 4):
+                    seen.append(progress("Finding the phase\u2026", i, 3))
+            return algo_template.GoldenCell(
+                cell=np.full((8, 8), 128, np.uint8), px=8, py=8)
+
+        monkeypatch.setattr(algo_template, "build_golden_cell", fake_build)
+        img = np.full((64, 64), 128, np.uint8)
+        assert dlg.load_image(img, "big.png") is True
+        assert seen, "疊模板的時候一次進度都沒報"
+        assert all(v is not False for v in seen), "沒有按取消卻回了取消"
+    finally:
+        dlg.close()
+
+
+def test_a_cancelled_build_keeps_the_previous_cell(qapp, monkeypatch):
+    """取消**不是失敗**：上一張模板要留在畫面上，而且不准出現紅字。
+
+    使用者按取消是因為他改變主意了，不是因為他設錯了 —— 兩句話混在一起的話,
+    他會去找一個不存在的錯誤。
+    """
+    import numpy as np
+    from d4t.core.algo import template as algo_template
+
+    dlg = tpl_mod.TemplateDialog()
+    try:
+        good = np.zeros((96, 96), np.uint8)
+        good[::12, :] = 255
+        good[:, ::12] = 255
+        assert dlg.load_image(good, "first.png") is True
+        before = dlg.cell
+
+        def cancelled(arr, px=None, py=None, method="mean", anchor=True,
+                      progress=None):
+            if progress is not None:
+                progress("Finding the phase\u2026", 1, 10)
+            return algo_template.GoldenCell(
+                cell=np.zeros((0, 0), np.uint8), px=0, py=0,
+                warnings=["cancelled"])
+
+        monkeypatch.setattr(algo_template, "build_golden_cell", cancelled)
+        assert dlg.load_image(np.full((64, 64), 7, np.uint8), "second.png") is False
+        assert dlg.cell is before, "取消卻把上一張模板弄丟了"
+        assert "Cancelled" in dlg.report.text()
+    finally:
+        dlg.close()
+
+
+def test_a_second_build_cannot_start_while_one_is_running(qapp, monkeypatch):
+    """`QProgressDialog.setValue` 會處理事件 —— 所以使用者按得到第二次。
+
+    兩份計算交錯寫同一組欄位的話，畫面上的 cell 跟 `self.cell` 會對不起來。
+    """
+    import numpy as np
+    from d4t.core.algo import template as algo_template
+
+    dlg = tpl_mod.TemplateDialog()
+    try:
+        depth = []
+
+        def reentrant(arr, px=None, py=None, method="mean", anchor=True,
+                      progress=None):
+            depth.append(1)
+            if len(depth) == 1:
+                # 模擬「算到一半使用者又按了一次」
+                dlg._build_with_progress(arr, px, py)
+            return algo_template.GoldenCell(
+                cell=np.full((8, 8), 3, np.uint8), px=8, py=8)
+
+        monkeypatch.setattr(algo_template, "build_golden_cell", reentrant)
+        dlg.load_image(np.full((64, 64), 9, np.uint8), "x.png")
+        assert len(depth) == 1, "重入沒有擋住 —— 疊了兩次"
+    finally:
+        dlg.close()

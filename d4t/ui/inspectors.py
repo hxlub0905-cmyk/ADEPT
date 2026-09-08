@@ -3259,6 +3259,24 @@ class ReportPreviewInspector(OutputPreviewInspector):
     STEP_KEY = "output_report"
     title = "Report folder"
 
+    def frame(self) -> Any:
+        """**一列一顆 defect** 的長表（F89-4）—— 跨整批那張圖的選單吃它。
+
+        ⚠ 跟 `UniformityPreviewInspector.frame()` 是**兩張不同的表**：那一張
+        是「一顆之內、一列一格框」，這一張是「一列一顆」。兩個 `frame()` 同名
+        是刻意的 —— `ParamForm.set_chart_frame` 問的就是這一句，而**哪一張表
+        是這張卡的表，由那張卡自己答**。
+
+        ⚠ 座標（`die_x` / `x_um`）**不在結果那幾列裡** —— 它們住在
+        `Dataset.items`，由主視窗經 `meta["_items"]` 遞過來（同 `_klarf_doc`
+        的理由：儀表不自己去讀檔）。沒有 KLARF 的兩種輸入那幾欄整欄是空的，
+        而**空的欄跟「座標是 0」是兩件事**。
+        """
+        from ..core.export import chart_frame
+
+        return chart_frame.build_lot_frame(
+            self.batch, self.meta.get("_items") or [])
+
 
 class CharPreviewInspector(OutputPreviewInspector):
     STEP_KEY = "output_char"
@@ -3271,6 +3289,203 @@ class CharPreviewInspector(OutputPreviewInspector):
         lines.append(("Columns", "%d ticked" % len(cols) if cols
                       else "(none - just id, class and the pictures)"))
         return lines
+
+
+class UniformityPreviewInspector(OutputPreviewInspector):
+    """F85：`Write charts` 會寫哪幾個檔 —— **而且這一顆量出來是多少**。
+
+    為什麼圖不在這裡（F87，使用者 2026-09-07：「右側 Uniformity folder 直接
+    把預覽的圖放上來好像也很奇怪」）
+    ----------------------------------------------------------------------
+    同意。四張圖塞進這個窄面板，每張只剩約 250×180 —— 讀不動；而且那一排
+    Output 儀表本來的節奏是**一份乾淨的「按下去會寫哪幾個檔」清單**，
+    塞四張圖進去是把圖放在「UI 裡沒有別的家」的地方，不是設計。
+
+    圖搬去 `ui/uniformity_window.UniformityWindow`（一顆 `Preview charts…`
+    開它），這裡留下**讀得動的那一半**：會寫哪幾個檔 ＋ 這一顆每個區域的
+    CV／斜率。那張小表跟報告頁上那一張是**同一支** `summary_rows` ——
+    各算一份的話，面板上與報告裡會出現兩個 CV%，而沒有人看得出哪個對。
+
+    ⚠ 數字**從 features 來，不在這裡重算**（`summary_rows` 的規矩）：
+    算不出來的那一格印 ``-``，不印一個算出來的替身。
+    """
+
+    STEP_KEY = "output_uniformity"
+    title = "Charts folder"
+
+    #: 按了要開圖的視窗 —— 這一份不開視窗（儀表不認識主視窗），只說出請求，
+    #: 跟 `CrossInspector.param_requested` 同一條界線。
+    charts_requested = Signal()
+
+    #: 下半那張小表最多佔幾成 —— 上半的檔案清單是硬規則（寫出前先預覽）。
+    TABLE_SHARE = 0.55
+    #: 按鈕那一條的高度（含上下留白）。
+    BUTTON_H = 30.0
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        from .widgets import small_button
+
+        self.btn_charts = small_button(
+            "Preview charts\u2026", shape="wide",
+            tip=("Open the four charts in their own window, big enough to "
+                 "read - and change how they look."),
+            parent=self)
+        self.btn_charts.clicked.connect(self.charts_requested)
+        self.btn_charts.hide()
+
+    def charts(self) -> List[str]:
+        """勾了哪幾張（照 `CHARTS` 的順序，不照使用者打字的順序）。"""
+        from ..core.export import uniformity_charts as uc
+
+        got = {c.strip() for c in
+               str(self.params.get("charts", "") or "").split(",")}
+        return [k for k in uc.CHARTS if k in got]
+
+    def series(self) -> Dict[str, Any]:
+        """這一顆的資料 —— **跟寫出去的走同一支** `chart_series`。"""
+        from ..core.export import uniformity_charts as uc
+
+        notes = self.meta.get("glv_hist")
+        if not isinstance(notes, list):
+            return {"groups": [], "metric": "", "metrics": []}
+        return uc.chart_series(notes, metric=str(
+            self.params.get("metric", "") or "").strip())
+
+    def frame(self) -> Any:
+        """一列一格框的長表 —— **跟 `boxes.csv` 走同一支** `build_frame`。
+
+        散佈圖吃的是這一份，不是 `series`（兩條軸是使用者自己挑的欄，而
+        `series` 只裝得下「一個統計量 ＋ 位置」）。UI 不自己再攤一次：畫面上
+        那張圖跟寫出去的 CSV 對不起來的話，沒有人看得出哪一份是對的。
+        """
+        from ..core.export import chart_frame
+
+        notes = self.meta.get("glv_hist")
+        if not isinstance(notes, list):
+            return chart_frame.build_frame([])
+        return chart_frame.build_frame(notes)
+
+    def rows(self) -> List[Dict[str, Any]]:
+        """小表的列 —— **報告頁上那一張表的同一支**。"""
+        from ..core.export import uniformity_charts as uc
+
+        return uc.summary_rows(self.series(),
+                               self.result.get("features") or {})
+
+    def _lines(self) -> List[Tuple[str, str]]:
+        lines = super()._lines()
+        kinds = self.charts()
+        lines.append(("Charts", "%d ticked" % len(kinds) if kinds
+                      else "(none - this card would write empty pages)"))
+        return lines
+
+    def summary(self) -> str:
+        base = super().summary()
+        groups = self.series().get("groups") or []
+        if not groups:
+            return base
+        boxes = sum(len(g.get("values") or ()) for g in groups)
+        return "%s  \u00b7  %d region(s), %d box(es)" % (
+            base, len(groups), boxes)
+
+    # -- 那顆鈕 -------------------------------------------------------------
+    def can_preview(self) -> bool:
+        """有東西可看嗎（**沒東西的鈕不該按得下去** —— 推廣鐵則）。"""
+        return bool(self.charts()) and bool(self.series().get("groups"))
+
+    def _place_button(self) -> None:
+        show = self.can_preview()
+        self.btn_charts.setVisible(show)
+        if not show:
+            return
+        size = self.btn_charts.sizeHint()
+        w = max(126, size.width())
+        h = max(22, size.height())
+        self.btn_charts.setGeometry(
+            int(self.width() - w - 14), int(self.height() - h - 12),
+            int(w), int(h))
+
+    def set_context(self, *a, **kw) -> None:          # noqa: D102
+        super().set_context(*a, **kw)
+        self._place_button()
+
+    def resizeEvent(self, event) -> None:             # noqa: D102, N802
+        super().resizeEvent(event)
+        self._place_button()
+
+    # -- 畫 -----------------------------------------------------------------
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+        series = self.series()
+        if not series.get("groups"):
+            super().paint_body(p, rect)
+            self._say_no_boxes(p, rect)
+            return
+        room = max(0.0, rect.height() - self.BUTTON_H)
+        rows = self.rows()
+        table_h = min(room * self.TABLE_SHARE, 19.0 + 17.0 * len(rows))
+        super().paint_body(p, QRectF(rect.left(), rect.top(), rect.width(),
+                                     max(0.0, room - table_h - 6.0)))
+        area = QRectF(rect.left(), rect.top() + room - table_h,
+                      rect.width(), table_h)
+        self._paint_table(p, area, rows, str(series.get("metric") or ""))
+
+    def _say_no_boxes(self, p: QPainter, rect: QRectF) -> None:
+        """為什麼沒有圖 —— **原因通常是上游那張卡，不是這一張**。"""
+        p.setPen(QColor(TOKENS["text_secondary"]))
+        p.drawText(QRectF(rect.left(), rect.bottom() - 30.0,
+                          rect.width(), 28.0),
+                   int(Qt.AlignLeft | Qt.AlignVCenter | Qt.TextWordWrap),
+                   "No box-by-box numbers yet: set the Gray level card to "
+                   "\u201ceach box\u201d and tick something under \u201cHow "
+                   "even are the boxes\u201d.")
+
+    def _paint_table(self, p: QPainter, area: QRectF,
+                     rows: List[Dict[str, Any]], metric: str) -> None:
+        """一個區域一列：``epi · 24 boxes   CV 1.8 %   L→R 0.42 /100 px``。"""
+        from ..core.export import uniformity_charts as uc
+
+        if area.height() < 20.0:
+            return
+        # 一列 16 px：底線（``glv_mean`` 的 ``_``）住在基線下面，14 px 的框會
+        # 把它切掉 —— 而切掉之後那個名字讀起來是 ``glv mean``，也就是一個
+        # 不存在的特徵。
+        fm = p.fontMetrics()
+        p.setPen(QColor(TOKENS["text_secondary"]))
+        p.drawText(QRectF(area.left(), area.top(), area.width(), 16.0),
+                   int(Qt.AlignLeft | Qt.AlignVCenter),
+                   "This defect%s" % (" \u00b7 %s" % metric if metric else ""))
+        y = area.top() + 17.0
+        for i, row in enumerate(rows):
+            if y + 16.0 > area.bottom():
+                p.setPen(QColor(TOKENS["text_hint"]))
+                p.drawText(QRectF(area.left(), y, area.width(), 16.0),
+                           int(Qt.AlignLeft | Qt.AlignVCenter),
+                           "\u2026 %d more" % (len(rows) - i))
+                break
+            cells = row.get("cells") or {}
+            bits = ["%s \u00b7 %d box(es)"
+                    % (row.get("name") or "region", int(row.get("boxes") or 0))]
+            for key, head, unit in uc.UNIF_COLUMNS:
+                if key in cells:
+                    # **面板走完整版**（`numbers` 那一支的邊界：短版只給畫在
+                    # 影像上的標記）。這裡是一張表，而表上的數字是使用者真的
+                    # 要讀的那一個 —— 少一位有效數字省不到什麼寬度，卻會讓
+                    # 面板上的 CV 跟 CSV 上的對不起來。
+                    bits.append("%s %s %s"
+                                % (head, format_feature_value(cells[key]),
+                                   unit))
+            p.setPen(QColor(TOKENS["text_primary"] if i == 0
+                            else TOKENS["text_secondary"]))
+            # **放不下就 elide，不要讓它自己被邊界切掉**：切掉的那一刀落在
+            # 數字中間時，畫面上會出現一個看起來完整而且是錯的值
+            # （``1.29`` 切成 ``1.2``）。`…` 說得出「還有」。
+            p.drawText(QRectF(area.left(), y, area.width(), 16.0),
+                       int(Qt.AlignLeft | Qt.AlignVCenter),
+                       fm.elidedText("    ".join(bits), Qt.ElideRight,
+                                     int(area.width())))
+            y += 17.0
+
 
 
 class FocusInspector(MeasureInspector):
@@ -3364,6 +3579,8 @@ INSPECTORS: Dict[str, type] = {
     # 選到卡就列出會寫哪幾個檔，跟 `run_batch` 讀同一張 `planned_files` 表。
     "output_report": ReportPreviewInspector,
     "output_char": CharPreviewInspector,
+    # F85：跟另外兩張走同一支 —— 寫出前一定先預覽（M5 的硬性規則）。
+    "output_uniformity": UniformityPreviewInspector,
     # ⚠ ``roi_reference`` **一個 key、三種面板**（F30）—— 見 :data:`BY_METHOD`。
     # 這裡放的是「沒有 method 可看時的那一個」。
     "roi_reference": GdsInspector,

@@ -64,6 +64,7 @@ from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
+    QProgressDialog,
     QDialogButtonBox,
     QFileDialog,
     QFrame,
@@ -690,7 +691,11 @@ class TemplateDialog(QDialog):
             self._fail("that image is empty")
             return False
 
-        gc = algo_template.build_golden_cell(arr, px=px, py=py)
+        gc = self._build_with_progress(arr, px, py)
+        if gc is None:
+            # 使用者按了取消 —— **什麼都不動**（上一張模板還在畫面上）。
+            self._status_cancelled()
+            return False
         self.cell = gc
         self._from_recipe = False
         self._source = arr
@@ -711,6 +716,60 @@ class TemplateDialog(QDialog):
             self.add_region()
         self._refresh_tool_ui()
         return True
+
+    # ---- 疊模板要多久（F86，2026-09-07）---------------------------------
+    #: 超過這麼久才把進度視窗叫出來。**快的那些一閃而過比沒有更吵**，而 Qt
+    #: 的 `QProgressDialog` 本來就有這個語意（`setMinimumDuration`）——
+    #: 不必自己發明一個「多大張才算慢」的門檻。
+    PROGRESS_AFTER_MS = 400
+
+    def _build_with_progress(self, arr: Any, px: Optional[int],
+                             py: Optional[int]) -> Any:
+        """疊 Golden Cell，慢的時候給一條進度條。取消回 ``None``。
+
+        為什麼是進度視窗而不是背景執行緒
+        --------------------------------
+        `build_golden_cell` 是**同步**的，而 `load_image` 的三個呼叫端都吃它
+        的回傳值（`bool`）。改成非同步要動那三條路與它們的測試，換到的是同一
+        件事 —— 而 `QProgressDialog` 在 `setValue` 裡會處理事件，所以視窗照樣
+        會動、取消鈕照樣按得下去。
+
+        真正讓它不痛的是**成本本身降下來了**（F86）：7680×7680 從 130 秒變成
+        約 17 秒。進度條是那 17 秒的說明，不是 130 秒的遮羞布。
+
+        ⚠ **重入要擋**：`setValue` 會處理事件，於是使用者可以在算的中途再按
+        一次「載入影像」。那一刀下去兩份計算會交錯寫同一組欄位。
+        """
+        if getattr(self, "_building", False):
+            return None
+        self._building = True
+        dlg = QProgressDialog("Building the Golden Cell\u2026", "Cancel",
+                              0, 100, self)
+        dlg.setWindowTitle("Golden Cell")
+        dlg.setWindowModality(Qt.WindowModal)
+        dlg.setMinimumDuration(self.PROGRESS_AFTER_MS)
+        dlg.setAutoClose(False)
+        dlg.setAutoReset(False)
+
+        def on_progress(stage: str, done: int, total: int) -> bool:
+            dlg.setLabelText(str(stage))
+            dlg.setMaximum(max(1, int(total)))
+            dlg.setValue(min(int(done), max(1, int(total))))
+            return not dlg.wasCanceled()
+
+        try:
+            gc = algo_template.build_golden_cell(
+                arr, px=px, py=py, progress=on_progress)
+        finally:
+            dlg.close()
+            self._building = False
+        if gc is not None and "cancelled" in list(gc.warnings or []):
+            return None
+        return gc
+
+    def _status_cancelled(self) -> None:
+        """取消不是失敗 —— **不要用 `_fail` 那條紅字**（那句話是「你設錯了」）。"""
+        self.report.setText("Cancelled - the previous cell is still loaded.")
 
     def _sync_cell_size(self) -> None:
         """把量到（或使用者指定）的尺寸放回那兩格，別讓它們各說各話。"""

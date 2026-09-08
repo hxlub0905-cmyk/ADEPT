@@ -250,6 +250,7 @@ d4t/
 │   │   ├── align.py normalize.py histmatch.py       #   對位／正規化／直方圖匹配
 │   │   ├── enhance.py curve.py                      #   局部對比、去背景、去噪；tone curve 求值
 │   │   ├── glv.py snr.py quality.py                 #   GLV metric bank／SNR 正負號正典／對焦指標
+│   │   ├── uniformity.py                            #   這一群框之間差多少、有沒有斜掉（F85，vendored from PEAR）
 │   │   ├── iqi.py                                   #   OP-301 的對焦分數（切 64 塊 → 去背景 → 前 30% 平均，F77）
 │   │   ├── edge.py subpixel.py shape.py profile.py  #   CD 的四塊：剖面、次像素、團塊、投影
 │   │   ├── grid.py mask.py roi.py                   #   條紋→框／label map→框／MultiROISet
@@ -265,8 +266,17 @@ d4t/
 │   │   ├── engine.py batch.py cache.py  #   單顆執行／ProcessPool 批次／影像段 checkpoint 快取
 │   │   ├── channels.py       #   這一顆的第幾張圖 → 叫什麼流名
 │   │   ├── cellrois.py       #   標在 Golden Cell 上的具名區域（一個名字、好幾個矩形）
-│   │   └── curve.py          #   tone curve 控制點的字串編碼（parse／format）
-│   ├── steps/                # 步驟卡片 —— **註冊 18 張，卡片庫可見 17 張**（`align` 收起來）
+│   │   ├── curve.py          #   tone curve 控制點的字串編碼（parse／format）
+│   │   ├── chart_style.py    #   圖表長什麼樣 —— **一格參數裝得下的一整組設定**（F87）
+│   │   │                     #     同 `curve` 的形狀：複雜的值裝一格，配一個專屬
+│   │   │                     #     編輯器。⚠ 它**不認識任何一張圖的名字**（那會讓
+│   │   │                     #     `pipeline/` 反過來依賴 `export/`）
+│   │   └── chart_spec.py     #   圖表**畫什麼** —— 哪一欄放到哪一個角色上（x/y/
+│   │                         #     顏色/大小）＋ 一種記號（F88 第二刀）。跟
+│   │                         #     `chart_style` 分家：畫什麼 vs 長什麼樣。
+│   │                         #     ⚠ 驗的是形狀，**不驗欄位存不存在**（存 recipe
+│   │                         #     的時候沒有資料）
+│   ├── steps/                # 步驟卡片 —— **註冊 19 張，卡片庫可見 18 張**（`align` 收起來）
 │   │                         #   ⚠ 卡片庫由上而下的順序 ＝ `__init__.py` 的 import 順序
 │   │   ├── load.py           #   load_patch／load_single（**一種 source 一張卡**）
 │   │   ├── load_sidecar.py pair_source.py               #   別的程式產的圖／另一份 lot 的那一顆
@@ -275,11 +285,19 @@ d4t/
 │   │   ├── roi_reference.py   #   Region 段（**只有這一張**，畫面上叫「ROI」）：四種找法 → 具名區域
 │   │   ├── roi_cross.py roi_template.py  #   ⚠ **不是卡片**：折進 `roi_reference` 的兩個 method（F30）
 │   │   ├── glv_stats.py cd.py quality.py #   Measure 段：GLV → CD → Focus index（**順序有意義**）
-│   │   ├── output.py         #   Output 段三張：output_report／output_klarf／output_char
+│   │   ├── output.py         #   Output 段四張：output_report／output_klarf／output_char／output_uniformity
 │   │   └── _util.py          #   卡片共用小工具（不註冊任何 step）
 │   ├── export/               # 寫出去
 │   │   ├── klarf_out.py      #   KLARF 三種寫回模式：inplace／annotate／topn
 │   │   ├── report.py html.py boxplot.py  #   CSV／Excel／HTML 報表／box plot（手寫 SVG，零新相依）
+│   │   ├── uniformity_charts.py  #   均勻度四種圖（同上手寫 SVG）⚠ 一個點＝一格框，不是一顆 defect
+│   │   ├── chart_frame.py    #   **一列一格框**的長表（F88 第一刀）——「一份資料、
+│   │   │                     #   很多種看法」的那個「一份資料」。`row`/`col` 走
+│   │   │                     #   `cell_edges` 的同一套分群，**整張表一起分**
+│   │   ├── chart_draw.py     #   長表 ＋ 一份角色配置 → 一張圖（F88 第二～四刀）。
+│   │   │                     #   `point`/`line`/`bar`/`box`/`cell` 五種記號。
+│   │   │                     #   ⚠ 四張老圖**不改走這裡**（量過：序列化本來就是
+│   │   │                     #   兩套，相似度 0.01；家具早就共用了）—— 見計畫書 §14
 │   │   └── overlay.py        #   缺陷疊圖：把「機器看到什麼」畫成人看得懂的圖
 │   ├── store/results.py      # SQLite 批次歷史 ＋ rescore
 │   └── calibration.py        # nm/px 校正 profile
@@ -301,6 +319,15 @@ d4t/
     ├── gallery.py region_check.py      #   縮圖網格（虛擬捲動，撐 10k+）／區域畫在很多顆上
     ├── inspectors.py         #   每張卡自己的儀表（依 `Step.key` 註冊）
     ├── template_dialog.py    #   從大圖疊 Golden Cell 模板（模板存進 recipe）
+    ├── uniformity_window.py  #   均勻度那四張圖**自己的視窗**（F87）—— 儀表太窄讀不動
+    │                         #     ⚠ 這裡不畫圖：`core/export` 產的 SVG 交給 QSvgRenderer，
+    │                         #     畫面上跟寫出去的逐位元組相同
+    ├── chart_settings.py     #   上面那顆 `Chart settings…`：一列一個東西、屬性橫著擺
+    │                         #     （列怎麼分住在 `chart_style.ROWS`，不在這裡）
+    ├── graph_builder.py      #   `chart_spec` 那一格的編輯器：**哪一欄放到哪一個
+    │                         #     角色上、畫成哪一種記號**（F88 第二、三刀）。
+    │                         #     ⚠ 選單是從資料長出來的（`Frame.columns`），
+    │                         #     不是一張寫死的清單
     ├── gc_generator.py gc_paint.py  #   **反過來**：貼一張 GC 進來，鋪成整批擬真
     │                         #     資料（F60）＋ 在那一張上畫出「缺陷可能在哪」
     │                         #     （F61 —— 畫一個週期＝畫每一個重複）
