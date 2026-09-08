@@ -87,7 +87,17 @@ MARK_LABELS: Dict[str, str] = {
 #: 角色。順序就是編輯器上由上而下的順序。
 ROLE_X, ROLE_Y = "x", "y"
 ROLE_COLOR, ROLE_SIZE = "color", "size"
-ROLES: Tuple[str, ...] = (ROLE_X, ROLE_Y, ROLE_COLOR, ROLE_SIZE)
+#: **分面**（F89-5）：這一欄的每一個值各畫一張小圖，**共用同一組座標軸**。
+#:
+#: 計畫書 F88 §8 寫著「明確不做」，理由是「它會把一張圖變成一頁圖，版面、匯出、
+#: 報表都要跟著改」。那個判斷在 F89 翻案：讀 wafer 資料的標準做法就是一個區域
+#: 一張小圖，而**共用座標軸**正是它比「四張分開的圖」強的地方 —— 分開畫的四張
+#: 各自縮放，於是一樣高的柱子其實不一樣高。
+#:
+#: 版面那件事後來也沒有變貴：每一張小圖是一個**巢狀 `<svg>`**，所以外面看到的
+#: 仍然是一張圖、一個檔（`chart_draw._facets`）。
+ROLE_FACET = "facet"
+ROLES: Tuple[str, ...] = (ROLE_X, ROLE_Y, ROLE_COLOR, ROLE_SIZE, ROLE_FACET)
 
 #: 每一個角色一句白話（編輯器上那一行 tooltip）。
 ROLE_HELP: Dict[str, str] = {
@@ -99,6 +109,9 @@ ROLE_HELP: Dict[str, str] = {
     ROLE_SIZE: "Which number the marker's size follows. Leave it empty for "
                "one size - size is the hardest channel to read, so use it "
                "only when the two axes are already spoken for.",
+    ROLE_FACET: "Split into one small chart per value of this column - one "
+                "per region, one per class. They all share the same axes, "
+                "so the panels are directly comparable.",
 }
 
 #: 每一種記號**非有不可**的角色。
@@ -118,11 +131,11 @@ REQUIRED: Dict[str, Tuple[str, ...]] = {
 #: ⚠ **只有點用得到「大小」。** 一條線沒有大小，而一根長條的寬度是版面決定
 #: 的、不是資料 —— 把值綁到寬度上等於畫出一張面積說謊的圖。
 USES: Dict[str, Tuple[str, ...]] = {
-    MARK_POINT: (ROLE_X, ROLE_Y, ROLE_COLOR, ROLE_SIZE),
-    MARK_LINE: (ROLE_X, ROLE_Y, ROLE_COLOR),
-    MARK_BAR: (ROLE_X, ROLE_Y, ROLE_COLOR),
-    MARK_BOX: (ROLE_X, ROLE_Y, ROLE_COLOR),
-    MARK_CELL: (ROLE_X, ROLE_Y, ROLE_COLOR),
+    MARK_POINT: (ROLE_X, ROLE_Y, ROLE_COLOR, ROLE_SIZE, ROLE_FACET),
+    MARK_LINE: (ROLE_X, ROLE_Y, ROLE_COLOR, ROLE_FACET),
+    MARK_BAR: (ROLE_X, ROLE_Y, ROLE_COLOR, ROLE_FACET),
+    MARK_BOX: (ROLE_X, ROLE_Y, ROLE_COLOR, ROLE_FACET),
+    MARK_CELL: (ROLE_X, ROLE_Y, ROLE_COLOR, ROLE_FACET),
 }
 
 #: 空的 spec（還沒設定）。
@@ -221,4 +234,6 @@ def describe(spec: object) -> str:
         bits.append("coloured by %s" % d[ROLE_COLOR])
     if d.get(ROLE_SIZE):
         bits.append("sized by %s" % d[ROLE_SIZE])
+    if d.get(ROLE_FACET):
+        bits.append("one panel per %s" % d[ROLE_FACET])
     return " · ".join(bits)

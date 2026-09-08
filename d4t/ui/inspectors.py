@@ -3259,6 +3259,24 @@ class ReportPreviewInspector(OutputPreviewInspector):
     STEP_KEY = "output_report"
     title = "Report folder"
 
+    def frame(self) -> Any:
+        """**一列一顆 defect** 的長表（F89-4）—— 跨整批那張圖的選單吃它。
+
+        ⚠ 跟 `UniformityPreviewInspector.frame()` 是**兩張不同的表**：那一張
+        是「一顆之內、一列一格框」，這一張是「一列一顆」。兩個 `frame()` 同名
+        是刻意的 —— `ParamForm.set_chart_frame` 問的就是這一句，而**哪一張表
+        是這張卡的表，由那張卡自己答**。
+
+        ⚠ 座標（`die_x` / `x_um`）**不在結果那幾列裡** —— 它們住在
+        `Dataset.items`，由主視窗經 `meta["_items"]` 遞過來（同 `_klarf_doc`
+        的理由：儀表不自己去讀檔）。沒有 KLARF 的兩種輸入那幾欄整欄是空的，
+        而**空的欄跟「座標是 0」是兩件事**。
+        """
+        from ..core.export import chart_frame
+
+        return chart_frame.build_lot_frame(
+            self.batch, self.meta.get("_items") or [])
+
 
 class CharPreviewInspector(OutputPreviewInspector):
     STEP_KEY = "output_char"

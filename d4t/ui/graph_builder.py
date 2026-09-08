@@ -77,8 +77,21 @@ class SpecEditor(QWidget):
 
     def __init__(self, spec: str = "", columns: Optional[Sequence[str]] = None,
                  parent: Optional[QWidget] = None,
-                 numeric: Optional[Sequence[str]] = None):
+                 numeric: Optional[Sequence[str]] = None,
+                 labels: Optional[Dict[str, str]] = None,
+                 fixed: Optional[Sequence[str]] = None):
         super().__init__(parent)
+        #: 欄名 → 給人看的字。**這一張表自己的**（`Frame.labels`）——
+        #: 一列一格框跟一列一顆 defect 是兩套欄名，共用一張表的話，
+        #: 跨顆那張圖的 `die_x` 會顯示成它的鍵。
+        #:
+        #: ⚠ 名字是 `_col_labels` 不是 `_labels` —— 後者已經是「角色那幾個
+        #: `QLabel`」了（`_sync_roles` 用它收放列）。撞名的症狀是
+        #: `addItem(QLabel, str)`，而那是一句看不懂的 TypeError。
+        self._col_labels: Dict[str, str] = dict(
+            labels if labels is not None else {})
+        #: 哪幾欄是「表自己的欄」（排在使用者量出來的那幾欄後面）。
+        self._fixed = tuple(fixed if fixed is not None else COLUMNS_FIXED)
         self._cols = [str(c) for c in (columns or ())]
         # 沒說哪幾欄是數字就當全部都是 —— 少一份資料不該讓選單變空的。
         self._numeric = ([str(c) for c in numeric]
@@ -124,7 +137,7 @@ class SpecEditor(QWidget):
                 # 顯示的字直接當值的話，`Box centre X (px)` 會被寫進 recipe。
                 # 那兩個佔位符的值是**空字串** —— 「還沒挑」與「不用」在
                 # `chart_spec` 那一側本來就都是空的。
-                box.addItem(_shown(text),
+                box.addItem(self._shown(text),
                             "" if text in (NONE_WORD, PICK_WORD) else text)
             want = str(got.get(role) or "")
             box.setCurrentIndex(max(0, box.findData(want) if want else 0))
@@ -157,14 +170,20 @@ class SpecEditor(QWidget):
             if lab is not None:
                 lab.setVisible(on)
 
+    def _shown(self, name: str) -> str:
+        """一欄在下拉裡顯示的字。那兩個佔位符原樣顯示。"""
+        if name in (NONE_WORD, PICK_WORD):
+            return name
+        return self._col_labels.get(name) or column_label(name)
+
     def _ordered(self, pool: Sequence[str]) -> List[str]:
         """**量出來的東西排最上面**，位置與大小那幾格幾何欄排後面。
 
         混在同一張字母序清單裡的話，`glv_median`（他要的）跟 `w`（框有多寬，
         幾乎沒有人要畫）長得一樣重要 —— 而清單愈長，那件事愈貴。
         """
-        mine = [c for c in pool if c not in COLUMNS_FIXED]
-        rest = [c for c in pool if c in COLUMNS_FIXED]
+        mine = [c for c in pool if c not in self._fixed]
+        rest = [c for c in pool if c in self._fixed]
         return mine + rest
 
     def _choices(self, role: str) -> List[str]:
@@ -228,13 +247,6 @@ class SpecEditor(QWidget):
             # 換回散點時原本挑的「大小」還在畫面上。
             out[role] = str(box.currentData() or "")
         return cspec.format_spec(out)
-
-
-def _shown(name: str) -> str:
-    """一欄在下拉裡顯示的字。那兩個佔位符原樣顯示。"""
-    if name in (NONE_WORD, PICK_WORD):
-        return name
-    return column_label(name)
 
 
 def _role_word(role: str) -> str:
@@ -309,6 +321,8 @@ class GraphBuilderDialog(QDialog):
 
         cols = list(getattr(frame, "columns", ()) or ())
         numeric = list(getattr(frame, "numeric_columns", lambda: cols)())
+        labels = dict(getattr(frame, "labels", None) or {})
+        fixed = [c for c in cols if c not in chart_draw.metric_columns(frame)]
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 10, 12, 12)
@@ -327,7 +341,8 @@ class GraphBuilderDialog(QDialog):
         root.addWidget(self.presets)
 
         start = str(spec or "") or self.presets.first_spec()
-        self.editor = SpecEditor(start, cols, self, numeric=numeric)
+        self.editor = SpecEditor(start, cols, self, numeric=numeric,
+                                 labels=labels, fixed=fixed)
         root.addWidget(self.editor)
         for box in self.editor.boxes.values():
             box.currentTextChanged.connect(self.refresh_preview)

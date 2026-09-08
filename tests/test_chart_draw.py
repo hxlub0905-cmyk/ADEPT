@@ -389,6 +389,10 @@ _SPEC_FOR = {
 
 #: 那一格「改動」長什麼樣（預設 -> 另一個值）。
 _MOVE = {
+    # log 軸：`_SPEC_FOR` 的 Y 全部是正的，所以每一種記號都動得到
+    # （格子的 Y 是槽 —— 那一個本來就不該動，而表上也沒有列它）。
+    "yscale": {"yscale": "log"},
+    "slot_order": {"slot_order": "desc"},
     # ⚠ **兩個值**：落在範圍外的線刻意不畫（`draw_refs`），而 `_SPEC_FOR`
     # 裡有的記號 Y 是 `glv_mean`（110–115）、有的是 `glv_std`（1–3）。
     # 一個值只蓋得到一半，而那一半會被讀成「這個記號沒讀這一格」。
@@ -432,3 +436,158 @@ def test_every_mark_is_covered_by_that_test():
 
     assert set(_SPEC_FOR) == set(chart_spec.MARKS)
     assert set(_MOVE) == set(uc.CUSTOM_BY_MARK)
+
+
+# --------------------------------------------------------------------------- #
+# 9. log 軸與排序（F89-5）
+# --------------------------------------------------------------------------- #
+def _spread(values):
+    """一批一列一顆的結果（值差好幾個數量級）。"""
+    from d4t.core.export.chart_frame import build_lot_frame
+
+    return build_lot_frame([
+        {"defect_id": "d%d" % i, "ok": True, "score": float(i), "bin": None,
+         "features": {"v": v}} for i, v in enumerate(values)])
+
+
+def test_a_log_axis_puts_the_decades_on_the_ticks():
+    """缺陷尺寸、粒徑、計數跨兩三個數量級是常態，而線性軸上它們全部擠在最
+    下面一條 —— 那張圖畫得出來，只是什麼都看不到。"""
+    f = _spread([1.0, 12.0, 130.0, 1400.0])
+    spec = {"mark": "point", "x": "score", "y": "v"}
+    plain = draw(f, spec)
+    logged = draw(f, spec, {"yscale": "log"})
+    _xml(logged)
+    assert logged != plain
+    assert "(log)" in logged, "軸名要說出它是 log"
+    for decade in (">1<", ">10<", ">100<", ">1000<"):
+        assert decade in logged, decade
+
+
+def test_zero_and_negatives_are_left_out_and_the_axis_says_how_many():
+    """畫在軸底的話讀起來是「它很小」，而真相是「它畫不出來」。一張安靜少了
+    三顆點的圖，跟一張本來就只有那幾顆的圖長得一模一樣。"""
+    f = _spread([1.0, 10.0, 0.0, -5.0])
+    svg = draw(f, {"mark": "point", "x": "score", "y": "v"}, {"yscale": "log"})
+    _xml(svg)
+    assert svg.count("<circle") == 2
+    assert "2 not shown" in svg
+
+
+def test_bars_can_be_sorted_by_value_and_the_labels_follow():
+    """⚠ 重排要在**畫刻度之前**。第一版在 `_bars` 裡才排，而 `_ticks` 已經
+    在 `_Plot` 的建構子裡跑過 —— 長條照新順序擺、標籤照舊順序印，兩邊對不
+    起來。那比不排序糟得多：它畫得出來，而且是錯的。
+    """
+    import re
+
+    f = _spread([30.0, 5.0, 900.0, 1.0])
+    spec = {"mark": "bar", "x": "defect_id", "y": "v"}
+    order = lambda st: re.findall(r">(d\d)</text>", draw(f, spec, st))  # noqa: E731
+
+    assert order({}) == ["d0", "d1", "d2", "d3"]
+    assert order({"slot_order": "asc"}) == ["d3", "d1", "d0", "d2"]
+    assert order({"slot_order": "desc"}) == ["d2", "d0", "d1", "d3"]
+
+
+def test_sorting_never_touches_a_scatter_or_a_wafer_map():
+    """散佈圖排過之後 X 軸不再是那一欄的值（說謊）；格子排過之後 wafer map
+    的兩條軸被打亂，而那張圖的整個意思就是「哪一格在哪裡」。"""
+    f = _spread([30.0, 5.0, 900.0, 1.0])
+    for spec in ({"mark": "point", "x": "defect_id", "y": "v"},
+                 {"mark": "line", "x": "defect_id", "y": "v"},
+                 {"mark": "cell", "x": "defect_id", "y": "bin", "color": "v"}):
+        assert draw(f, spec, {"slot_order": "desc"}) == draw(f, spec), \
+            spec["mark"]
+
+
+def test_a_slot_with_no_value_sorts_last_not_lowest():
+    """它不是「最小的那一個」，它是「沒有量到」。"""
+    import re
+
+    f = _spread([30.0, 5.0, 900.0])
+    f.rows.append({"defect_id": "zz", "ok": True, "score": 9.0, "bin": None,
+                   "v": None})
+    # ⚠ 只挑**槽的標籤** —— 刻度數字與軸名也是 `<text>`（第一版數到 `v`）。
+    svg = draw(f, {"mark": "bar", "x": "defect_id", "y": "v"},
+               {"slot_order": "asc"})
+    slots = [t for t in re.findall(r">(\w+)</text>", svg)
+             if t in ("d0", "d1", "d2", "zz")]
+    assert slots == ["d1", "d0", "d2", "zz"], slots
+
+
+# --------------------------------------------------------------------------- #
+# 10. 分面（F89-5）—— F88 §8 那句「明確不做」翻案了
+# --------------------------------------------------------------------------- #
+def test_one_panel_per_value_of_the_column():
+    f = _frame(_note("epi", 110.0), _note("mg", 128.0, x0=400))
+    svg = draw(f, {"mark": "box", "x": "row", "y": "glv_mean",
+                   "facet": "region"}, {}, 700, 500)
+    _xml(svg)
+    assert svg.count("<g transform='translate(") == 2
+    assert ">epi</text>" in svg and ">mg</text>" in svg
+
+
+def test_the_panels_are_composed_with_g_not_a_nested_svg():
+    """⚠ 巢狀 `<svg>` 是合法的 SVG 1.1，瀏覽器也開得起來 —— 但 Qt 的
+    renderer 走 **Svg Tiny 1.2**，那一版沒有巢狀 `<svg>`，它會整塊**跳過**：
+    寫出去的檔案是對的、Studio 裡的預覽一片空白。
+
+    那正好打破這整個功能的不變量（「畫面上的圖跟寫出去的逐位元組相同」），
+    而且是最壞的那個方向 —— 檔案對、畫面錯。render 出來才看到的。
+    """
+    f = _frame(_note("epi", 110.0), _note("mg", 128.0, x0=400))
+    svg = draw(f, {"mark": "point", "x": "x", "y": "glv_mean",
+                   "facet": "region"}, {}, 700, 500)
+    assert svg.count("<svg") == 1, "巢狀 <svg>：Qt 會整塊跳過"
+
+
+def test_every_panel_shares_one_pair_of_axes():
+    """分開畫的幾張圖各自縮放，於是**一樣高的柱子其實不一樣高** —— 而共用
+    座標軸正是分面比「幾張分開的圖」強的地方。"""
+    import re
+
+    # 兩群的值差很遠：各自縮放的話兩格的刻度會完全不同。
+    f = _frame(_note("epi", 110.0), _note("mg", 190.0, x0=400))
+    svg = draw(f, {"mark": "box", "x": "row", "y": "glv_mean",
+                   "facet": "region"}, {}, 700, 500)
+    panels = re.findall(r"<g transform='translate\([^']*\)'>(.*?)</g>", svg)
+    assert len(panels) == 2
+    ticks = [sorted(set(re.findall(r">(\d+)</text>", part))) for part in panels]
+    assert ticks[0] == ticks[1], ticks
+
+
+def test_the_colours_do_not_change_from_panel_to_panel():
+    """同一個區域在第一格是綠的、在第三格變成琥珀色的話，那一頁沒有人讀得動。"""
+    f = _frame(_note("epi", 110.0, cols=2, rows=2))
+    svg = draw(f, {"mark": "point", "x": "x", "y": "glv_mean",
+                   "color": "row", "facet": "col"}, {}, 700, 500)
+    _xml(svg)
+    # 兩列各拿一個區域色，而且**每一格都是同一個**
+    assert uc.REGION_COLOURS[0] in svg and uc.REGION_COLOURS[1] in svg
+
+
+def test_the_legend_is_printed_once_not_once_per_panel():
+    """同一組顏色在一頁上被講四遍，而那幾行字佔的正是小圖最缺的高度。"""
+    import re
+
+    f = _frame(_note("epi", 110.0), _note("mg", 128.0, x0=400))
+    svg = draw(f, {"mark": "point", "x": "x", "y": "glv_mean",
+                   "color": "row", "facet": "region"}, {}, 700, 500)
+    swatches = re.findall(r"<rect x='[0-9.]+' y='[0-9.]+' width='8' "
+                          r"height='8'", svg)
+    # `_note` 預設是 3 欄 × 2 列 ⇒ `row` 有兩個值 ⇒ 一份圖例兩個色塊。
+    # 每一格各印一份的話會是四個。
+    assert len(swatches) == 2, swatches
+
+
+def test_too_many_panels_is_refused_with_the_reason():
+    """16 格之後每一格只剩 150 px，而那時候該做的是先篩一輪。"""
+    from d4t.core.export.chart_draw import MAX_FACETS
+
+    notes = [_note("r%d" % i, 100.0 + i, x0=40 + 200 * i, cols=1, rows=1)
+             for i in range(MAX_FACETS + 2)]
+    svg = draw(_frame(*notes), {"mark": "point", "x": "x", "y": "glv_mean",
+                                "facet": "region"}, {}, 700, 500)
+    _xml(svg)
+    assert "filter first" in svg

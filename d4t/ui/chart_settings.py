@@ -39,7 +39,7 @@ from ..core.pipeline import chart_spec as cspec
 from ..core.pipeline import chart_style as cs
 from .uniformity_window import ChartView, chart_style_for
 from .theme import TOKENS
-from .widgets import apply_button_cursors, small_button
+from .widgets import ChoiceChips, apply_button_cursors, small_button
 
 __all__ = ["ChartSettingsDialog", "ColourButton"]
 
@@ -81,6 +81,11 @@ _TIPS: Dict[str, str] = {
                   "is wide enough to hold it.",
     "ramp": "Which colour scale is used wherever colour stands for a number - "
             "the heat map's cells and a scatter coloured by a statistic.",
+    "yscale": "A log axis when the numbers span decades - sizes, counts. "
+              "Zero and negatives have no place on one, so those points are "
+              "not drawn and the axis name says how many.",
+    "slot_order": "Sort the bars (or boxes) by their value instead of "
+                  "leaving them in the axis's own order.",
     "ref_lines": "Spec limits, drawn as dashed lines across the chart. One "
                  "or more numbers separated by commas; give one a name with "
                  "USL=132. They land on the value axis, so the heat map "
@@ -193,6 +198,15 @@ def _chips(key: str, parent: Optional[QWidget] = None) -> "BoolChips":
     off, on, off_help, on_help = BOOL_CHIPS[str(key)]
     return BoolChips(off, on, _chip_on(key, cs.DEFAULTS[str(key)]),
                      helps={"off": off_help, "on": on_help}, parent=parent)
+
+
+def _choice(key: str, parent: Optional[QWidget] = None) -> QWidget:
+    """`CHOICE_CHIPS` 的一列 → 一排膠囊（三顆以上）。"""
+    rows = CHOICE_CHIPS[str(key)]
+    return ChoiceChips([r[0] for r in rows], [r[2] for r in rows],
+                       str(cs.DEFAULTS[str(key)]),
+                       helps={r[0]: r[3] for r in rows},
+                       labels={r[0]: r[1] for r in rows}, parent=parent)
 
 
 def _caption(text: str, parent: QWidget) -> QLabel:
@@ -324,6 +338,13 @@ BOOL_CHIPS: Dict[str, Any] = {
              "Every chart picks its own range - right for one run.",
              "Pin the scale to the range below, so two runs can be read side "
              "by side."),
+    "yscale": (("Plain", "scale_linear"), ("Log", "scale_log"),
+               "Equal steps up the axis - right when the numbers are all of "
+               "a size.",
+               "Each step is ten times the last. Use it when the numbers "
+               "span decades (sizes, counts) and a plain axis squashes them "
+               "all onto one line. Zero and negatives are not drawn - the "
+               "axis name says how many were left out."),
     "ramp": (("One colour", "ramp_mono"), ("Rainbow", "ramp_rainbow"),
              "Light to dark in one colour - the order reads straight off the "
              "page, and it survives being printed in grey.",
@@ -338,7 +359,25 @@ BOOL_CHIPS: Dict[str, Any] = {
 #: ⚠ **為什麼不給它自己一張表**：那一格的長相、說明、圖示與那七格一字不差，
 #: 差別只有「這個開關對應到哪兩個值」。多開一張表就是多開一個家，而
 #: `test_every_setting_has_a_home_on_the_page` 守的正是「一格設定只有一個家」。
-CHIP_VALUES: Dict[str, Tuple[Any, Any]] = {"ramp": ("", "rainbow")}
+CHIP_VALUES: Dict[str, Tuple[Any, Any]] = {"ramp": ("", "rainbow"),
+                                           "yscale": ("", "log")}
+
+#: 三顆以上的那幾格（`BoolChips` 只裝得下兩顆）：
+#: ``鍵 -> ((值, 字, 圖示, 一句話), …)``。
+#:
+#: ⚠ 為什麼不做成下拉：同 F68 那條規矩 —— 一格選項是一排膠囊。三顆還在
+#: 「攤開比藏起來好」的範圍裡（`ChoiceChips` 自己會換行）。
+CHOICE_CHIPS: Dict[str, Tuple[Tuple[str, str, str, str], ...]] = {
+    "slot_order": (
+        ("", "As they come", "sort_none",
+         "They keep the order the axis has (region order, column order…)."),
+        ("asc", "Low to high", "sort_asc",
+         "Shortest bar first."),
+        ("desc", "High to low", "sort_desc",
+         "Tallest first - “which is worst” becomes the first thing you "
+         "see."),
+    ),
+}
 
 
 def _chip_on(key: str, value: Any) -> bool:
@@ -592,6 +631,8 @@ class ChartSettingsDialog(QDialog):
                 w.changed.connect(self.refresh_preview)
             elif isinstance(w, (QCheckBox, BoolChips)):
                 w.toggled.connect(self.refresh_preview)
+            elif isinstance(w, ChoiceChips):
+                w.changed.connect(self.refresh_preview)
             elif isinstance(w, QLineEdit):
                 w.textChanged.connect(self.refresh_preview)
             elif isinstance(w, (QSpinBox, QDoubleSpinBox)):
@@ -753,6 +794,9 @@ class ChartSettingsDialog(QDialog):
         refs = QLineEdit(box)
         refs.setPlaceholderText("none - e.g. USL=132, LSL=112")
         self._row(grid, 11, "ref_lines", "Spec limits", box, refs)
+        self._row(grid, 12, "yscale", "The value axis", box, _chips("yscale"))
+        self._row(grid, 13, "slot_order", "Bar and box order",
+                  box, _choice("slot_order"))
         box.layout().addLayout(grid)
         return box
 
@@ -857,6 +901,8 @@ class ChartSettingsDialog(QDialog):
                 w.set_value(str(got or ""))
             elif isinstance(w, (QCheckBox, BoolChips)):
                 w.setChecked(_chip_on(key, got))
+            elif isinstance(w, ChoiceChips):
+                w.set_text(str(got or ""))
             elif isinstance(w, QLineEdit):
                 w.setText(str(got or ""))
             else:
@@ -885,7 +931,9 @@ class ChartSettingsDialog(QDialog):
                 out[key] = w.value()
             elif isinstance(w, (QCheckBox, BoolChips)):
                 out[key] = _chip_value(key, bool(w.isChecked()))
-            elif isinstance(w, QLineEdit):
+            elif isinstance(w, (ChoiceChips, QLineEdit)):
+                # `ChoiceChips` 的介面就是 `text()` / `set_text()`（它本來就
+                # 是 `chip_choice` 那一格的編輯器）—— 所以這兩種走同一支。
                 out[key] = w.text().strip()
             else:
                 out[key] = _num_value(w)

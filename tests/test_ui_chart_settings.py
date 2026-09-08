@@ -24,6 +24,8 @@ from PySide6.QtWidgets import (  # noqa: E402
     QApplication, QCheckBox, QDoubleSpinBox, QLineEdit, QSpinBox,
 )
 
+from d4t.ui.widgets import ChoiceChips  # noqa: E402
+
 import d4t.core.steps  # noqa: F401,E402
 from d4t.core.export import uniformity_charts as uc  # noqa: E402
 from d4t.core.pipeline import chart_style as cs  # noqa: E402
@@ -213,6 +215,9 @@ def test_the_editors_match_the_kind_of_value(qapp):
                 assert isinstance(w, QCheckBox), key
             else:
                 assert isinstance(w, BoolChips), key
+        elif key in chart_settings.CHOICE_CHIPS:
+            # 三顆以上的那幾格（`slot_order`）—— `BoolChips` 只裝得下兩顆。
+            assert isinstance(w, ChoiceChips), key
         elif key in chart_settings.CHIP_VALUES:
             # 值是字串、而它只有**兩種**（`ramp` 是單色階／彩虹）——
             # 一個兩選一的東西做成文字框等於要使用者去記那兩個字。
@@ -532,7 +537,17 @@ def test_every_editor_moves_the_preview(qapp):
     # ⚠ **要真的排版過**：沒 show 的話每一張預覽停在 260 px 最小寬，而熱圖在
     # 那個寬度下一格只剩 20 px —— 「每一格印出值」有一條「放不下就不印」的
     # 規矩，於是那一格會看起來沒反應，而那是尺寸問題不是接線問題。
-    dlg = ChartSettingsDialog("", list(uc.CHARTS))
+    # ⚠ 自己配的那一張要給一份**長條**的 spec（F89-5）：有幾格只有某幾種
+    # 記號讀得到（`slot_order` 只有長條與盒鬚），而拿預設的散點來試等於問一個它本來
+    # 就答不了的問題 —— 那一格在畫面上也是收起來的。
+    #
+    # ⚠ X 要挑一個**槽夠多**的欄（`value` 有 18 個相異值）：長條把 X 當槽，
+    # 而槽 ≤ 12 的時候標籤是全部都印的 —— 那時候「橫著幾個刻度」不動任何
+    # 東西，而那是那一格的定義，不是它沒接上（同 `lo`/`hi` 那兩格）。
+    from d4t.ui.chart_settings import _sample_frame
+
+    dlg = ChartSettingsDialog("", list(uc.CHARTS), frame=_sample_frame(),
+                              spec='{"mark":"bar","x":"value","y":"spread"}')
     dlg.resize(1020, 760)
     dlg.show()
     qapp.processEvents()
@@ -545,6 +560,11 @@ def test_every_editor_moves_the_preview(qapp):
     editors = list(dlg.globals.items()) + [
         ("%s.%s" % (k, n), w)
         for k, f in dlg.per.items() for n, w in f.items()]
+    # ⚠ **`yscale` 排到最後。** 這個迴圈是累積的（改過的那一格留著改過的值），
+    # 而切成 log 之後那條軸的刻度是**整數次方**，不是「你要幾個就幾個」——
+    # 於是後面輪到 `yticks` 時它動不了任何東西，而那是 log 軸的定義，不是那
+    # 一格沒接上。把它放最後，後面就沒有人被它影響。
+    editors.sort(key=lambda kv: kv[0] == "yscale")
     # ⚠ `lock` **一格自己不算數**，而那是它的定義：`chart_style.style_for`
     # 只在 `hi > lo` 時才鎖，兩格都是 0（預設）就是 auto。面板上也是這樣
     # 帶的（關著的時候 Bottom/Top 是灰的）。所以先給它一段真的範圍。
@@ -565,6 +585,11 @@ def test_every_editor_moves_the_preview(qapp):
             w.set_value("#123456")
         elif isinstance(w, (QCheckBox, BoolChips)):
             w.setChecked(not w.isChecked())
+        elif isinstance(w, ChoiceChips):
+            # 換到**下一顆**（不是第一顆 —— 那可能就是現在選著的那一個，
+            # 而「值一樣」不是「沒接上」）。
+            got = [c.mid for c in w._chips]
+            w.chip(got[(got.index(w.text()) + 1) % len(got)]).click()
         elif isinstance(w, QLineEdit):
             # ⚠ **每一格一個不同的字**：全都填 "moved" 的話，`value_name` 會
             # 先把直方圖的 X 軸變成 "moved"，接著 `histogram.xlabel` 也填
@@ -778,8 +803,15 @@ def test_settings_that_cannot_apply_are_hidden(qapp):
         "藏起來的那幾格不准被清掉"
 
 
-def test_all_four_charts_show_everything(qapp):
-    dlg = ChartSettingsDialog("", list(uc.CHARTS))
+def test_all_the_charts_show_everything(qapp):
+    """⚠ 「全部勾起來」現在**不夠**（F89-5）：有幾格還要看自己配的那一張畫成
+    哪一種記號（`slot_order` 只有長條與盒鬚讀）。所以這裡也給一份長條的 spec ——
+    這一條問的是「有沒有哪一格永遠躲著」，而那件事還是要有答案。
+    """
+    from d4t.ui.chart_settings import _sample_frame
+
+    dlg = ChartSettingsDialog("", list(uc.CHARTS), frame=_sample_frame(),
+                              spec='{"mark":"bar","x":"region","y":"value"}')
     for key in cs.GLOBAL_KEYS:
         assert dlg.globals[key].isVisibleTo(dlg) is True, key
 
@@ -885,8 +917,9 @@ def test_no_setting_has_two_controls(qapp):
     in_grid = {k for _t, props in cs.ROWS for k, _c in props}
     assert not (in_grid & set(BOOL_CHIPS)), sorted(in_grid & set(BOOL_CHIPS))
     # 而每一格都要有**一個**家
-    homed = in_grid | set(BOOL_CHIPS) | {
-        "value_name", "bins", "xticks", "yticks", "lo", "hi", "ref_lines"}
+    homed = (in_grid | set(BOOL_CHIPS) | set(chart_settings.CHOICE_CHIPS)
+             | {"value_name", "bins", "xticks", "yticks", "lo", "hi",
+                "ref_lines"})
     assert homed == set(cs.GLOBAL_KEYS), sorted(homed ^ set(cs.GLOBAL_KEYS))
 
 

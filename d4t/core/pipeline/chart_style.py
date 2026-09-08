@@ -129,6 +129,29 @@ _TEXT: Dict[str, str] = {
     #: wafer map 慣例就是彩虹 —— **兩種都留，預設單色**
     #: （使用者 2026-09-07：「兩種都可 預設單色」）。
     "ramp": AUTO,
+    #: **值那一軸走 log**（F89-5，2026-09-08）。``""`` = 線性、``"log"``。
+    #:
+    #: 缺陷尺寸、粒徑、計數這幾種東西跨兩三個數量級是常態，而線性軸上它們
+    #: 全部擠在最下面一條 —— 那張圖畫得出來，只是什麼都看不到。
+    #:
+    #: ⚠ **零與負值在 log 軸上沒有位置**，所以那幾格**不畫**（同「算不出來的
+    #: 那一格不畫」）。畫在軸底的話讀起來是「它很小」，而真相是「它畫不出
+    #: 來」。有幾格被跳過會寫在軸名旁邊。
+    "yscale": AUTO,
+    #: **照值排序**（F89-5）。``""`` = 照槽自己的順序、``"asc"`` / ``"desc"``。
+    #:
+    #: 「誰最差」現在要用眼睛在一排長條（或一排盒子）裡找。排序過之後那件事
+    #: 是第一眼。
+    #:
+    #: ⚠ **只有長條與盒鬚**（`CUSTOM_BY_MARK`）。散佈圖與折線排過之後 X 軸
+    #: 不再是那一欄的值，那是說謊；而格子排過之後 wafer map 的兩條軸會被打
+    #: 亂 —— 那張圖的整個意思就是「哪一格在哪裡」。
+    #:
+    #: ⚠ 名字是 `slot_order` 不是 `bar_order`：它排的是**槽**，而盒鬚圖也有
+    #: 槽。第一版叫 `bar_order`，而那個名字在盒鬚圖也讀它的那一刻就開始說謊
+    #: —— 那一刻剛好是加上去的幾分鐘後，所以改名的代價是零（同 F88 的
+    #: `scatter` → `chart`）。
+    "slot_order": AUTO,
     #: **規格線／參考線**（F89-3，2026-09-08）。一串用逗號分開的值，每一條
     #: 可以帶一個名字：``"USL=132, 120, LSL=112"``。
     #:
@@ -288,6 +311,19 @@ def _coerce(name: str, value: Any, where: str) -> Any:
             return value
         raise ChartStyleError("%s should be true or false, not %r"
                               % (where, value))
+    if name == "yscale":
+        text = "" if value is None else str(value).strip()
+        if text not in ("", "log"):
+            raise ChartStyleError(
+                "%s should be empty (a plain linear axis) or 'log'" % where)
+        return text
+    if name == "slot_order":
+        text = "" if value is None else str(value).strip()
+        if text not in ("", "asc", "desc"):
+            raise ChartStyleError(
+                "%s should be empty (the axis keeps its own order), 'asc' or "
+                "'desc'" % where)
+        return text
     if name == "ref_lines":
         # 擋在打字的當下並**正規化**（同 `curve` / `cell_rois`）：排序、
         # 統一小數、去掉多餘空白，好讓 round-trip 是 identity（鐵則 9）。

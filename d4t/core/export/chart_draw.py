@@ -24,8 +24,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..pipeline import chart_spec as spec_mod
 from .chart_frame import (
-    CATEGORY_COLUMNS, COL_COL, COL_REGION, COL_ROW, COL_X, COLUMNS_FIXED,
-    Frame,
+    COL_COL, COL_REGION, COL_ROW, COL_X, COLUMNS_FIXED, Frame,
 )
 from .uniformity_charts import (  # noqa: PLC2701 — 見檔頭：刻度只該有一份
     REGION_COLOURS, _axis_names, _empty, _esc, _fmt, _frame, _head,
@@ -63,6 +62,8 @@ def draw(frame: Frame, spec: object, style: Optional[Dict[str, Any]] = None,
     if all(v is None for v in ys):
         return _empty(width, height, "no column called '%s'" % sp["y"])
 
+    if sp.get(spec_mod.ROLE_FACET):
+        return _facets(frame, sp, st, int(width), int(height))
     drawer = _MARKS.get(str(sp["mark"]))
     if drawer is None:
         # 封閉字彙（`chart_spec.MARKS`）—— 走到這裡表示有人加了一種 mark 卻沒
@@ -170,6 +171,53 @@ class _Linear(object):
         return _fmt(t)
 
 
+class _Log(object):
+    """對數軸（F89-5）。**零與負值沒有位置，所以那幾格不畫。**
+
+    ⚠ 畫在軸底的話讀起來是「它很小」，而真相是「它畫不出來」—— 那兩件事在
+    一張缺陷尺寸圖上差很多。跳過幾格由 :attr:`dropped` 說出來，呼叫端把它
+    寫在軸名旁邊。
+    """
+
+    kind = "linear"          # 對外它就是一條連續軸（`_ticks` 走同一條路）
+
+    def __init__(self, values: Sequence[Any], lo_hi=None) -> None:
+        good = [float(v) for v in values if _ok(v) and float(v) > 0.0]
+        self.dropped = sum(1 for v in values if _ok(v) and float(v) <= 0.0)
+        lo, hi = _span(good, lo_hi)
+        # 鎖定的範圍也可能帶進一個 <= 0 的下界 —— 那時候退到最小的正值。
+        if lo <= 0:
+            lo = min(good) if good else 1.0
+        if hi <= lo:
+            hi = lo * 10.0
+        self.lo, self.hi = float(lo), float(hi)
+        self._llo, self._lhi = math.log10(self.lo), math.log10(self.hi)
+
+    def at(self, value: Any, a: float, b: float) -> Optional[float]:
+        if not _ok(value) or float(value) <= 0.0:
+            return None
+        span = (self._lhi - self._llo) or 1.0
+        return a + (math.log10(float(value)) - self._llo) / span * (b - a)
+
+    def ticks(self, want: int) -> List[float]:
+        """**整數次方**（1, 10, 100…）—— 那才是讀 log 軸的方式。
+
+        跨不到兩個數量級的時候補上 2 與 5 那兩檔，不然整張圖只剩一兩個刻度。
+        """
+        first, last = int(math.floor(self._llo)), int(math.ceil(self._lhi))
+        out: List[float] = []
+        steps = (1, 2, 5) if (last - first) <= 2 else (1,)
+        for p in range(first, last + 1):
+            for m in steps:
+                v = m * (10.0 ** p)
+                if self.lo <= v <= self.hi:
+                    out.append(v)
+        return out or [self.lo, self.hi]
+
+    def label(self, t: float) -> str:
+        return _fmt(t)
+
+
 class _Band(object):
     """類別軸：一格一個槽，記號落在槽的中間。
 
@@ -219,14 +267,20 @@ class _Band(object):
         return _fmt(float(t)) if self.numeric else str(t)
 
 
-def _scale(frame: Frame, column: str, lo_hi=None, band: bool = False):
+def _scale(frame: Frame, column: str, lo_hi=None, band: bool = False,
+           log: bool = False):
     """一欄 → 一支 scale。**類別欄走 band，其餘走 linear。**
 
     ``band=True`` 是長條圖用的：長條有寬度，而寬度在連續軸上沒有意義
     （兩個很近的值會疊在一起，看起來像一根特別粗的）。
     """
-    if band or str(column) in CATEGORY_COLUMNS:
+    # ⚠ **問這一張表**，不是問模組層那張清單 —— 「哪幾欄是類別」是每一張表
+    # 自己的事（`Frame.categories`）。第二張表（一列一顆 defect）的 `die_x`
+    # 走錯的話，「第 3 欄的 die 比第 1 欄大兩欄」會被畫成一條連續軸。
+    if band or str(column) in frame.categories:
         return _Band(frame.column(column))
+    if log:
+        return _Log(frame.column(column), lo_hi)
     return _Linear(frame.column(column), lo_hi)
 
 
@@ -241,9 +295,10 @@ def _ok(value: Any) -> bool:
 # mark：point
 # --------------------------------------------------------------------------- #
 def _points(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
-            width: int, height: int) -> str:
+            width: int, height: int, scale_frame: Optional[Frame] = None
+            ) -> str:
     """一格框一個記號。"""
-    plot = _Plot(frame, sp, style, width, height)
+    plot = _Plot(frame, sp, style, width, height, scale_frame=scale_frame)
     radius_of = _radii(frame, str(sp.get("size") or ""), style)
     filled = bool(style.get("point_fill"))
     line_w = float(style.get("line_width", 1.6) or 1.6) / 1.6
@@ -260,6 +315,115 @@ def _points(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
     return plot.finish()
 
 
+def _sort_slots(plot: "_Plot", frame: Frame, sp: Dict[str, Any],
+                style: Dict[str, Any]) -> None:
+    """把槽照**值**重排（F89-5 的 `slot_order`）。
+
+    「誰最差」在一排沒排過的長條裡要用眼睛找；排過之後那是第一眼。
+
+    ⚠ **只有長條與盒鬚**（呼叫端給 `sortable=True`）。散佈圖與折線排過之後
+    X 軸不再是那一欄的值，那是說謊；格子排過之後 wafer map 的兩條軸會被打亂，
+    而那張圖的整個意思就是「哪一格在哪裡」。第一版把它放在 `_Plot` 裡對**所有**
+    band 軸生效，而 `CUSTOM_BY_MARK` 的雙向測試當場說「表上說不讀，實際上讀
+    了」。
+
+    ⚠ 一個槽上有好幾格框的時候照**中位數**排。用平均的話一顆離群點會把整根
+    拉走，而排序要回答的是「這一群典型上多高」。
+
+    ⚠ **沒有值的槽排最後** —— 它不是「最小的那一個」，它是「沒有量到」。
+    """
+    order = str(style.get("slot_order", "") or "")
+    if order not in ("asc", "desc") or plot.sx.kind != "band":
+        return
+    mid: Dict[str, float] = {}
+    for slot in plot.sx.slots:
+        got = sorted(float(r[sp["y"]]) for r in frame.rows
+                     if str(r.get(sp["x"], "")) == slot
+                     and _ok(r.get(sp["y"])))
+        if got:
+            mid[slot] = got[len(got) // 2]
+    plot.sx.slots = sorted(
+        plot.sx.slots,
+        key=lambda s: (s not in mid,
+                       (mid.get(s, 0.0) if order == "asc"
+                        else -mid.get(s, 0.0))))
+
+
+#: 一張圖最多切成幾格。**不是技術限制** —— 16 格之後每一格只剩 150 px，
+#: 而那時候該做的是先篩一輪，不是把它們全部塞進一張圖。
+MAX_FACETS = 16
+
+#: 一格小圖再小就沒有意義了（軸名與刻度已經占掉大半）。
+MIN_PANEL = 150
+
+
+def _facets(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
+            width: int, height: int) -> str:
+    """一欄的每一個值一張小圖，**共用同一組座標軸**（F89-5）。
+
+    為什麼共用座標軸是重點
+    ----------------------
+    分開畫的四張圖各自縮放，於是**一樣高的柱子其實不一樣高** —— 那正是
+    `lock` 那一格存在的理由，而分面把它變成不必想的事：這裡每一格的兩條軸
+    都是用**整張表**算的（`scale_frame`），只有記號是那一格自己的。
+
+    ⚠ 一張小圖是一個**巢狀 `<svg>`**，所以外面看到的仍然是一張圖、一個檔 ——
+    F88 §8 當初不做分面的理由（「版面、匯出、報表都要跟著改」）因此沒有發生。
+
+    ⚠ **值的順序是第一次出現的順序**（同 `_Band` 的槽、同圖例）。
+    """
+    column = str(sp.get(spec_mod.ROLE_FACET) or "")
+    seen: List[str] = []
+    for v in frame.column(column):
+        got = "" if v is None else str(v)
+        if got not in seen:
+            seen.append(got)
+    if not seen:
+        return _empty(width, height, "no column called '%s'" % column)
+    if len(seen) > MAX_FACETS:
+        return _empty(width, height,
+                      "that is %d panels; %d is the most that stays readable "
+                      "- filter first, or drop the split" % (len(seen),
+                                                             MAX_FACETS))
+
+    cols = int(math.ceil(math.sqrt(len(seen))))
+    rows = int(math.ceil(len(seen) / float(cols)))
+    pw = max(MIN_PANEL, int(width // cols))
+    ph = max(MIN_PANEL, int(height // rows))
+
+    inner = dict(sp)
+    inner.pop(spec_mod.ROLE_FACET, None)
+    o = ["<svg xmlns='http://www.w3.org/2000/svg' width='%d' height='%d' "
+         "viewBox='0 0 %d %d'><rect width='%d' height='%d' fill='#fff'/>"
+         % (width, height, width, height, width, height)]
+    for i, value in enumerate(seen):
+        part = Frame([c for c in frame.columns],
+                     [r for r in frame.rows
+                      if ("" if r.get(column) is None
+                          else str(r.get(column))) == value],
+                     categories=frame.categories, labels=frame.labels)
+        one = dict(style)
+        # 每一格的標題是**那個值**（"epi" / "bin 2"）—— 整張圖的標題只印一次，
+        # 在最上面那一格上會跟值打架。
+        one["title"] = value or "(blank)"
+        # ⚠ **圖例只印一次。** 每一格各印一份的話，同一組顏色在一頁上被講了
+        # 四遍，而那幾行字佔的正是小圖最缺的高度（render 出來才看到的）。
+        one["_no_legend"] = i > 0
+        drawer = _MARKS.get(str(sp["mark"]))
+        panel = drawer(part, inner, one, pw, ph, scale_frame=frame)
+        # ⚠ **`<g transform>`，不是巢狀 `<svg>`。** 巢狀 `<svg>` 是合法的
+        # SVG 1.1，而且瀏覽器開得起來 —— 但 Qt 的 renderer 走 **Svg Tiny
+        # 1.2**，那一版沒有巢狀 `<svg>`，它會**整塊跳過**：於是寫出去的檔案
+        # 是對的、Studio 裡的預覽是一片空白。那正好打破這整個功能的不變量
+        # （「畫面上的圖跟寫出去的逐位元組相同」），而且是最壞的那個方向 ——
+        # 檔案對、畫面錯。render 出來才看到的。
+        o.append("<g transform='translate(%d,%d)'>%s</g>"
+                 % ((i % cols) * pw, (i // cols) * ph,
+                    panel[panel.index(">") + 1:-len("</svg>")]))
+    o.append("</svg>")
+    return "".join(o)
+
+
 # --------------------------------------------------------------------------- #
 # 三種 mark 共用的那一半 —— **版面只有一份**
 # --------------------------------------------------------------------------- #
@@ -273,14 +437,24 @@ class _Plot(object):
 
     def __init__(self, frame: Frame, sp: Dict[str, Any],
                  style: Dict[str, Any], width: int, height: int,
-                 band_x: bool = False, band_y: bool = False) -> None:
+                 band_x: bool = False, band_y: bool = False,
+                 sortable: bool = False,
+                 scale_frame: Optional[Frame] = None) -> None:
         self.frame, self.sp, self.style = frame, sp, style
+        # ⚠ **座標軸從哪一張表算**：分面時是**整張**表，記號才是這一格自己的
+        # （`_facets`）。分開算的話每一格各自縮放，於是一樣高的柱子其實不一樣
+        # 高 —— 而那正是分面比「四張分開的圖」強的地方。
+        scale_frame = frame if scale_frame is None else scale_frame
         self.width, self.height = width, height
+        # 顏色也要跨格一致 —— 同一個區域在第一格是綠的、在第三格變成琥珀色
+        # 的話，那一頁沒有人讀得動。
         self.colour_of, self.legend = _colours(
-            frame, str(sp.get("color") or ""), style)
+            scale_frame, str(sp.get("color") or ""), style)
 
         self.pad_l, pad_r = 58, 18
         self.pad_t = 30 if style.get("title") else 14
+        if style.get("_no_legend"):
+            self.legend = []          # 分面時只有第一格印（見 `_facets`）
         pad_b = 46 + (14 if self.legend else 0)
         self.pw = max(60, width - self.pad_l - pad_r)
         self.ph = max(60, height - self.pad_t - pad_b)
@@ -288,8 +462,15 @@ class _Plot(object):
         # **鎖定的是「值那一軸」，而在這張圖上那是 Y。** X 也是一個統計量，
         # 但同一組鎖定範圍套到兩條意思不同的軸上會把圖擠成一條線 —— 兩批要
         # 並排比的時候，鎖住 Y 就夠了（同 `_span` 那條「鎖住的照鎖的」）。
-        self.sx = _scale(frame, sp["x"], band=band_x)
-        self.sy = _scale(frame, sp["y"], style.get("vlock"), band=band_y)
+        self.sx = _scale(scale_frame, sp["x"], band=band_x)
+        self.sy = _scale(scale_frame, sp["y"], style.get("vlock"),
+                         band=band_y,
+                         log=str(style.get("yscale", "")) == "log")
+        # ⚠ **重排要在畫刻度之前。** 第一版在 `_bars` 裡才排，而 `_ticks`
+        # 已經在這個建構子裡跑過了 —— 於是長條照新順序擺、標籤照舊順序印，
+        # 兩邊對不起來。那比不排序糟得多：它畫得出來，而且是錯的。
+        if sortable:
+            _sort_slots(self, scale_frame, sp, style)
 
         self.out = _head(width, height, str(style.get("title") or ""))
         _frame(self.out, self.pad_l, self.pad_t, self.pw, self.ph)
@@ -316,9 +497,16 @@ class _Plot(object):
                           self.pad_t)
 
     def finish(self) -> str:
+        # ⚠ **跳過幾格要說出來。** log 軸畫不了 0 與負值，而一張安靜少了三顆
+        # 點的圖，跟一張本來就只有那幾顆的圖長得一模一樣。
+        ylab = str(self.sp["y"])
+        if getattr(self.sy, "dropped", None) is not None:
+            skipped = int(self.sy.dropped or 0)
+            ylab = ("%s (log; %d not shown, zero or below)" % (ylab, skipped)
+                    if skipped else "%s (log)" % ylab)
         _axis_names(self.out, self.style, self.width, self.height,
                     self.pad_l, self.pad_t, self.pw, self.ph,
-                    str(self.sp["x"]), str(self.sp["y"]))
+                    str(self.sp["x"]), ylab)
         if self.legend:
             _legend(self.out, self.legend, self.pad_l, self.height - 8,
                     self.style)
@@ -350,9 +538,10 @@ def _by_colour(frame: Frame, sp: Dict[str, Any]) -> List[List[Dict[str, Any]]]:
 # mark：line
 # --------------------------------------------------------------------------- #
 def _lines(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
-           width: int, height: int) -> str:
+           width: int, height: int, scale_frame: Optional[Frame] = None
+           ) -> str:
     """一群一條折線 —— 「一列一條線」就是 `Colour = row`（計畫書 §9-2）。"""
-    plot = _Plot(frame, sp, style, width, height)
+    plot = _Plot(frame, sp, style, width, height, scale_frame=scale_frame)
     line_w = max(0.6, float(style.get("line_width", 2.0) or 2.0))
     dots = bool(style.get("points", True))
     radius = float(style.get("point_size", 2.6) or 2.6)
@@ -398,7 +587,8 @@ BAR_SHARE = 0.72
 
 
 def _bars(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
-          width: int, height: int) -> str:
+          width: int, height: int, scale_frame: Optional[Frame] = None
+          ) -> str:
     """一格框一根長條。同一個槽裡的**並排**，不疊。
 
     ⚠ **不疊，也不合併。** 疊起來的長條只有最底下那一段是從同一條基線量的，
@@ -413,7 +603,8 @@ def _bars(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
     """
     # X 一律當**槽**：長條有寬度，而寬度在連續軸上沒有意義（兩個很近的值會
     # 疊在一起，看起來像一根特別粗的）。
-    plot = _Plot(frame, sp, style, width, height, band_x=True)
+    plot = _Plot(frame, sp, style, width, height, band_x=True, sortable=True,
+                 scale_frame=scale_frame)
     groups = _by_colour(frame, sp)
 
     # 槽 -> 落在它上面的那幾根（照顏色的群序，所以同一群永遠在同一邊）
@@ -465,7 +656,8 @@ def _bars(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
 # mark：box
 # --------------------------------------------------------------------------- #
 def _boxes(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
-           width: int, height: int) -> str:
+           width: int, height: int, scale_frame: Optional[Frame] = None
+           ) -> str:
     """一個槽一個盒子 —— 中間那一半、中位數、鬚。
 
     ⚠ **統計走 `boxplot.box_stats`，不在這裡再算一次。** 那一支已經定死了
@@ -475,7 +667,8 @@ def _boxes(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
     """
     from .boxplot import box_stats
 
-    plot = _Plot(frame, sp, style, width, height, band_x=True)
+    plot = _Plot(frame, sp, style, width, height, band_x=True, sortable=True,
+                 scale_frame=scale_frame)
     groups = _by_colour(frame, sp)
 
     # 槽 -> 那個槽上的那幾個盒子（照顏色的群序）
@@ -556,7 +749,8 @@ def _boxes(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
 # mark：cell
 # --------------------------------------------------------------------------- #
 def _cells(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
-           width: int, height: int) -> str:
+           width: int, height: int, scale_frame: Optional[Frame] = None
+           ) -> str:
     """一格一個色塊 —— **熱圖，但兩條軸是你自己挑的**。
 
     ⚠ 兩條軸都當**槽**（每一格一樣大、鋪滿圖區）。那是熱圖預設的樣子，
@@ -567,8 +761,9 @@ def _cells(frame: Frame, sp: Dict[str, Any], style: Dict[str, Any],
     並排時同一個顏色要是同一個意思。
     """
     column = str(sp.get("color") or "")
-    plot = _Plot(frame, sp, style, width, height, band_x=True, band_y=True)
-    vals = frame.values(column)
+    plot = _Plot(frame, sp, style, width, height, band_x=True, band_y=True,
+                 scale_frame=scale_frame)
+    vals = (scale_frame or frame).values(column)
     lo, hi = _span(vals, style.get("hlock"))
     rainbow = str(style.get("ramp", "")) == "rainbow"
     show = bool(style.get("map_values"))
@@ -632,7 +827,7 @@ def _colours(frame: Frame, column: str, style: Dict[str, Any]):
     if not column:
         return (lambda _row: fallback), []
 
-    if column in CATEGORY_COLUMNS:
+    if column in frame.categories:
         seen: List[str] = []
         for v in frame.column(column):
             s = "" if v is None else str(v)
@@ -676,7 +871,7 @@ def _colours(frame: Frame, column: str, style: Dict[str, Any]):
 def _radii(frame: Frame, column: str, style: Dict[str, Any]):
     """``一列 -> 半徑``。沒有大小角色就整組同一個。"""
     base = float(style.get("point_size", 2.6) or 2.6)
-    if not column or column in CATEGORY_COLUMNS:
+    if not column or column in frame.categories:
         return lambda _row: base
     vals = frame.values(column)
     lo, hi = (min(vals), max(vals)) if vals else (0.0, 0.0)
