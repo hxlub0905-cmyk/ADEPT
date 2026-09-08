@@ -32,6 +32,14 @@ from .context import Context
 from .cellrois import CellRoiError, format_cell_rois, parse_cell_rois
 from .channels import ChannelMapError, format_channel_map, parse_channel_map
 from .curve import CurveError, format_curve, parse_curve
+from .chart_spec import (
+    ChartSpecError, format_spec as format_chart_spec,
+    parse_spec as parse_chart_spec,
+)
+from .chart_style import (
+    ChartStyleError, format_style as format_chart_style,
+    parse_style as parse_chart_style,
+)
 
 CATEGORY_IMAGE = "image"
 CATEGORY_ALGO = "algo"
@@ -185,7 +193,9 @@ _CATEGORIES = (CATEGORY_IMAGE, CATEGORY_ALGO, CATEGORY_ADC, CATEGORY_BATCH)
 PARAM_TYPES = ("int", "float", "bool", "str", "expr",
                "feature_key", "feature_keys",
                "choice", "image_key",
-               "image_keys", "curve", "template", "multi_choice",
+               "image_keys", "curve", "chart_style", "chart_spec",
+               "template",
+               "multi_choice",
                "metric_chips", "metric_choice", "channel_map", "cell_rois",
                "region_key", "region_keys", "chip_choice")
 
@@ -678,6 +688,17 @@ class ParamSpec:
                 # 擋在這裡而不是等 run() 才炸（鐵則 4）。順便正規化：
                 # 排序、去空白、統一小數位 —— 手打的字串與 UI 拉出來的一樣。
                 v = format_curve(parse_curve(value))
+            elif self.type == "chart_spec":
+                # 同 `chart_style`：擋在打字的當下（鐵則 4）並正規化 ——
+                # 排序過的 JSON、空的角色不寫出來，round-trip 是 identity
+                # （鐵則 9）。⚠ **不驗欄位存不存在** —— 那要有資料才知道，
+                # 見 `chart_spec` 的模組說明。
+                v = format_chart_spec(parse_chart_spec(value))
+            elif self.type == "chart_style":
+                # 同 `curve`：擋在打字的當下（鐵則 4）並正規化 —— 排序、
+                # 丟掉等於預設的、整數存成整數，好讓 round-trip 是 identity
+                # （鐵則 9）。手寫 recipe 與編輯器產出的字串因此一模一樣。
+                v = format_chart_style(parse_chart_style(value))
             elif self.type == "cell_rois":
                 # 同上：擋在打字的當下，並正規化成「四位小數、去尾數零」——
                 # round-trip 要是 identity（見 cellrois.format_cell_rois）。
@@ -707,8 +728,11 @@ class ParamSpec:
                 raise ParamError(f"parameter '{self.name}': unknown type")
         except ParamError:
             raise
-        except (CurveError, ChannelMapError, CellRoiError) as exc:
-            # 這兩個的訊息已經是白話的，別被下面的通用訊息蓋掉
+        except (CurveError, ChannelMapError, CellRoiError,
+                ChartStyleError, ChartSpecError) as exc:
+            # 這幾個的訊息已經是白話的，別被下面的通用訊息蓋掉
+            # （「'{"tick_size":99}' cannot be converted to chart_style」對
+            # 使用者沒有意義；「tick_size is 99, which is outside 5–28」有）
             raise ParamError(f"parameter '{self.name}': {exc}") from None
         except (TypeError, ValueError):
             raise ParamError(
@@ -787,6 +811,14 @@ def qualified_feature_name(prefix: str, name: str) -> str:
 #: 定義）：任何一張卡宣告 ``variant="outlier_box"``，那個數字就是一個框號。
 VARIANT_UNITS: Dict[str, str] = {
     "outlier_box": "box",
+    # ---- 均勻度（F85）：這一群框「之間」的量 ---------------------------
+    # `range` 刻意不在這裡 —— 它跟本尊同單位（灰階的全距還是灰階），
+    # 而 `feature_units` 已經由 metric 那一層答得出來。
+    "range_pct": "%", "cv_pct": "%",
+    # ⚠ **單位就是那個 100 住的地方之一。** 斜率報的是「每 100 px 變多少」，
+    # 而每 px 的版本在真實影像上是 0.00x —— 整欄印成 0.000，讀起來是「很平」。
+    # 單位少了那個 100，數字本身不會變，但**沒有人看得出它被換過**。
+    "slope_x": "gray / 100 px", "slope_y": "gray / 100 px",
 }
 
 
@@ -1089,6 +1121,59 @@ class Step(ABC):
         預設什麼都不畫，所以既有的卡一張都不用動。
         """
         return [], [], -1, []
+
+    @classmethod
+    def chart_kinds(cls, params: Dict[str, Any]) -> List[str]:
+        """這張卡的 ``chart_style`` 那一格**管到哪幾種圖**。
+
+        設定編輯器右半是「一張圖一個分頁」，而分頁該有幾個是**那張卡的事**：
+        `Write charts` 是使用者勾了哪幾張，`Write report` 只畫盒鬚圖。
+        UI 問這一支，所以加一張用 `chart_style` 的新卡不必動 UI（同 F7-17）。
+
+        回空的就由 UI 決定（全部給）—— 一個空的分頁區讀起來是「壞了」。
+        """
+        return []
+
+    #: 這張卡的 ``chart_style`` 那一格**有沒有「每張圖自己的字」**（標題、
+    #: 軸名、刻度數）。
+    #:
+    #: `Write report` 是 ``False``：它一次畫**好幾張**盒鬚圖（一個數字一張），
+    #: 所以一組「這張圖的標題」會同時套到五張上 —— 那一格填了等於什麼都沒
+    #: 說。一格答了也沒用的設定比沒有那一格更糟（推廣鐵則），所以那張卡的
+    #: 編輯器右半只留預覽。
+    chart_words: ClassVar[bool] = True
+
+    @classmethod
+    def overlay_heat(cls, ctx: Any, params: Dict[str, Any],
+                     stream: Optional[str] = None) -> Any:
+        """這張卡要在預覽影像上鋪哪些**填色的磚**（正規化座標）。
+
+        回 ``(cells, colours, legend)``：
+
+        * ``cells`` —— ``[(nx, ny, nw, nh), …]``，一塊一個
+        * ``colours`` —— ``["#rrggbb", …]``，**跟 ``cells`` 等長**
+        * ``legend`` —— ``(lo, hi, 一句話)`` 或 ``None``（沒有色條）
+
+        為什麼跟 :meth:`overlay_marks` 分開，而不是多一種 mark
+        -----------------------------------------------------
+        標記是**線與點**：它們指出「量到的那一塊在哪」，畫在影像**上面**，
+        而且刻意畫得很淡（見那一支的說明）。這一層講的是完全不同的一句話 ——
+        **「這一塊的值是多少」**，它是一片半透明的顏色，畫在影像**跟標記
+        之間**，而且需要一條色條才讀得懂。硬塞進 marks 的話，那一支
+        「線淡、點滿」的規矩會對一片色塊變成一句沒有意思的話。
+
+        PEAR 的熱圖就是這樣用的（`pear/ui/image_view.py` 的
+        ``_paint_heat_cells``，alpha 178，ROI 外框畫在熱色**上面**）——
+        「不均勻在哪裡」這個問題的答案要對得到晶圓上的位置，而一張白底的
+        獨立圖回答不了它。
+
+        ``stream`` 同 :meth:`overlay_marks`：畫面現在顯示的那一條流。
+        一張卡在好幾條流上各量一次時，全鋪上去等於在你正在看的圖上塗另一張
+        圖的答案。
+
+        預設什麼都不畫，所以既有的卡一張都不用動。
+        """
+        return [], [], None
 
     # ---- 具名區域（F7-9）---------------------------------------------------
     #: 影像流有 reads/writes 可以在 validate 裡模擬，**具名 ROI 以前沒有**。

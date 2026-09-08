@@ -35,7 +35,7 @@ The estimation strategy, per axis:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -363,11 +363,39 @@ def _origin_axis_candidates(period: int, span: int, max_side: int) -> List[int]:
     return list(range(0, period, step))
 
 
+#: ⚠ **考慮過、做出來了，然後拿掉：用一塊「代表性的窗」去搜相位。**
+#:
+#: 動機是真的：這一支在 7680×7680 上要 **130 秒**，而且跑在 UI 執行緒上
+#: （`ui/template_dialog.load_image`）—— 視窗整整凍兩分鐘。搜尋要試 ~281 個
+#: 候選相位，每一個都把影像**整張**疊一次，而格數隨面積長：
+#:
+#: ==============  ==========  ===============
+#: 影像            幾格        `choose_origin`
+#: ==============  ==========  ===============
+#: 1024 × 1024        441        0.6 s
+#: 4096 × 4096      7 225         28 s
+#: 7680 × 7680     25 440      **130 s**
+#: ==============  ==========  ===============
+#:
+#: 只看中間 1024 格是 **2.2 秒**（快 60 倍）。但實測它**會改變答案**：
+#: 2304² 的接觸孔陣列上，全搜尋挑 ``(42, 24)``、看窗的挑 ``(42, 0)`` ——
+#: y 差了**半個 cell**。拿整張圖回頭評分，窗選的那個銳利度低 1.5–2.4%。
+#:
+#: 那不是平手，是**不同的晶格相位**，而使用者在 Golden Cell 上標的每一個區域
+#: 都掛在那個相位上：跑得完、有數字、而框落在別的地方。
+#:
+#: 所以速度是從**別的地方**拿回來的（F86）：`golden.stack_cells` 的平均改成
+#: reshape、而且搜尋不再先把影像升成 float64 —— 兩件都**逐位元組相同**，
+#: 130 s → 約 13 s。這一段留著，是為了讓下一個想「抽樣一下就好了吧」的人
+#: 先看到這個量測。
+
 def choose_origin(shape: Tuple[int, ...], px: Optional[int], py: Optional[int],
                   image: Optional[np.ndarray] = None,
                   method: str = "mean",
                   max_evals: int = 256,
-                  refine: int = 2) -> Tuple[int, int]:
+                  refine: int = 2,
+                  progress: Optional[Callable[[int, int], Any]] = None
+                  ) -> Tuple[int, int]:
     """Return the grid origin (top-left of the cell lattice) — phase search.
 
     Convention
@@ -439,10 +467,31 @@ def choose_origin(shape: Tuple[int, ...], px: Optional[int], py: Optional[int],
     if xs == [0] and ys == [0]:
         return (0, 0)
 
+    # ⚠ **搜尋不要用 float64 那一份。** 上面的 `_to_gray` 為了頻譜分析把影像
+    # 升成 float64，而 `stack_cells` 拿它疊 281 次 —— 每一次都配一塊
+    # 「格數 × py × px × 8 bytes」的暫時陣列（7680² 上是 469 MB）。用原本的
+    # 8-bit 影像疊出來的結果**逐位元組相同**（`mean(dtype=float64)` 累加的是
+    # 同一組數字），而快 7 倍。F86 量的：0.33 s → 0.046 s 每個候選。
+    src = np.asarray(image)
+    if src.ndim != 2 or src.shape[:2] != gray.shape[:2]:
+        src = gray            # 彩色／形狀對不上就退回那一份，不猜
+
     def score(ox: int, oy: int) -> float:
-        stacked = golden.stack_cells(gray, px_i, py_i, method=method,
+        stacked = golden.stack_cells(src, px_i, py_i, method=method,
                                      origin=(ox, oy))
         return float(golden.ghosting_score(stacked)[1])
+
+    # 進度回報（F86）：呼叫端給一個 ``fn(done, total)`` 就會被叫。
+    # **回 False 可以取消** —— 使用者關掉視窗時不該還在算。
+    total = len(xs) * len(ys) + (0 if not refine else (2 * refine + 1) ** 2)
+    done = 0
+
+    def tick() -> bool:
+        nonlocal done
+        done += 1
+        if progress is None:
+            return True
+        return progress(done, total) is not False
 
     best_ox, best_oy, best_lv = 0, 0, -np.inf
     for oy in ys:
@@ -450,6 +499,10 @@ def choose_origin(shape: Tuple[int, ...], px: Optional[int], py: Optional[int],
             lv = score(ox, oy)
             if lv > best_lv:           # strict > → first winner wins (deterministic)
                 best_lv, best_ox, best_oy = lv, ox, oy
+            if not tick():
+                # 取消：把**目前為止最好的**回去（不是 (0,0)）—— 那至少是
+                # 一個真的評過分的相位，而 (0, 0) 是一個沒有根據的答案。
+                return (int(best_ox) % px_i, int(best_oy) % py_i)
 
     # Local refinement around the coarse winner (only where we sub-sampled).
     refine = max(0, int(refine))
@@ -463,5 +516,7 @@ def choose_origin(shape: Tuple[int, ...], px: Optional[int], py: Optional[int],
                 lv = score(ox, oy)
                 if lv > best_lv:
                     best_lv, best_ox, best_oy = lv, ox, oy
+                if not tick():
+                    return (int(best_ox) % px_i, int(best_oy) % py_i)
 
     return (int(best_ox) % px_i, int(best_oy) % py_i)

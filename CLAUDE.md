@@ -18,6 +18,7 @@
 | **環境限制**：兩台機器、剪貼簿是唯一通道、為什麼工具都 stdlib-only | [`AGENTS.md`](AGENTS.md) | **動手之前**（不知道會把必要設計當成過度設計刪掉）|
 | 怎麼加卡片、鐵則、開發流程 | 這一份 | 一直 |
 | **怎麼做 EBI ↔ API characterization**（給使用者的操作手冊：線接哪、每格填什麼、報表怎麼讀、出事了照什麼順序查）| [`docs/USING-CHARACTERIZATION.md`](docs/USING-CHARACTERIZATION.md) | 要動 `pair_source` / `H2H` / `output_char` 的參數或說明之前 |
+| **怎麼看一片區域均不均勻**（給使用者的操作手冊：那五個數字、四張圖各回答哪一句話、兩批要比的時候先鎖尺度、出事了照什麼順序查）| [`docs/USING-UNIFORMITY.md`](docs/USING-UNIFORMITY.md) | 要動 `glv_stats` 的 `report` 那一格、`output_uniformity`，或四張圖的畫法之前 |
 | **怎麼用 CD 那張卡**（給使用者的操作手冊：每一格什麼時候動、數字會往哪走）| [`docs/USING-CD.md`](docs/USING-CD.md) | 要動 CD 卡的參數、help 文字或輸出名字之前 |
 | **怎麼用 Golden Cell 產一批模擬資料**（給使用者的操作手冊：每一格什麼意思、輸出長什麼樣、出事了照什麼順序查）| [`docs/USING-SIMGEN.md`](docs/USING-SIMGEN.md) | 要動 `simgen` 視窗（`ui/gc_generator.py` / `gc_paint.py`）或 `tools/make_lot_from_gc.py` 的參數之前 |
 | **架構**：三段式心智模型、資料模型（影像流 vs 具名區域）、目錄結構 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 動到 pipeline／資料流之前 |
@@ -501,6 +502,6 @@ CLI 不受影響：`python -m d4t run` 照樣跑得動 rsem recipe。
 | **KLIP** | KLARF 1.2/1.8 無損引擎、TIFF page 對應、健檢 lint |
 | **GLAS** | fine align、SEM loader、DAG 拓撲排序概念、ROI label map 契約 |
 | **MMH** | recipe 架構原型、批次引擎模式、次像素邊緣定位、品質指標、KLARF 寫回 |
-| **PEAR** | GLV 統計 metric bank、Tukey 離群、η²/Cohen's d、CJK-safe 影像載入 |
+| **PEAR** | GLV 統計 metric bank、Tukey 離群、**均勻度與位置趨勢**（F85）、CJK-safe 影像載入 |
 | **cell-period-estimator** | 週期估測、Golden Cell 堆疊、ghosting 分數 |
 | **Perspective-Combination (Fusi³)** | 正規化、直方圖匹配、5-backend 對位、MultiROISet（~~SNR map~~ 2026-08-25 刪、~~blob 分割~~ 同日隨 `find_defect` 刪）|

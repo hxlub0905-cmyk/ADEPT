@@ -116,6 +116,13 @@ EXPECTED = {
         "cmp_spread_ratio_outlier",
         "cmp_spread_ratio_outlier_box",
         "cmp_spread_ratio_worst",
+        # F85 新增（**加名字不是改名字**，同下面 F76 那一句）：均勻度那一組
+        # 掛在**絕對統計量**上，不掛在 `cmp_*` 上 —— 均勻度問的是「這一塊自己
+        # 亮得均不均勻」，那是區域的性質。所以這裡只有 `glv_median_*` 三個，
+        # 上面那六族 `cmp_*` 一個都沒有多。
+        "glv_median_cv_pct",
+        "glv_median_slope_x",
+        "glv_median_slope_y",
         "glv_boxes",
         "glv_worst_i",
         "glv_worst_x",

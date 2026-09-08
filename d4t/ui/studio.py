@@ -4101,6 +4101,32 @@ class StudioWindow(QMainWindow):
         self._status("Loading folder: %s" % d)
         return True
 
+    def load_image_path(self, path: Any, sync: bool = False) -> bool:
+        """載入**一個影像檔**（F85）—— `load_folder_path` 的單檔版。
+
+        沒有 KLARF、沒有座標，那一張圖就是唯一的一顆 defect。資料集標籤上
+        仍然寫 ``folder``（`ingest.load_image_file` 的 docstring 有理由）。
+        """
+        f = str(path)
+        if not os.path.isfile(f):
+            self._status("Not a file: %s" % f)
+            return False
+        self._pending_dataset_name = os.path.splitext(os.path.basename(f))[0]
+        if sync:
+            try:
+                ds = DatasetLoadWorker.run_sync_image_file(f)
+            except Exception as e:      # noqa: BLE001 — UI 邊界，一律回報
+                self._status("Could not load image: %s: %s"
+                             % (type(e).__name__, e), "error")
+                return False
+            return self._on_dataset_loaded(ds)
+        if not self.dataset_worker.start_image_file(f):
+            self._status("A dataset is already loading — please wait.")
+            return False
+        self._progress_busy("Loading %s…" % os.path.basename(f))
+        self._status("Loading image: %s" % f)
+        return True
+
     def _on_dataset_loaded(self, dataset: Any) -> bool:
         # F7-1：型別要到載完才知道，所以擋在這裡而不是 load_dataset_path。
         # 擋下來時**不動既有狀態** —— 使用者手上原本那份資料集還在，
@@ -4853,6 +4879,9 @@ class StudioWindow(QMainWindow):
         sig = getattr(insp, "calibrate_requested", None)
         if sig is not None:
             sig.connect(self._on_calibrate_requested)
+        sig = getattr(insp, "charts_requested", None)
+        if sig is not None:
+            sig.connect(self._on_charts_requested)
 
     #: 一鍵校正最多量幾顆。統計上 50 顆已經把單張雜訊除到 1/7，再多只是等待。
     CALIBRATE_LIMIT = 60
@@ -4950,6 +4979,52 @@ class StudioWindow(QMainWindow):
                 self.model.available_streams(before_node=nid),
                 self.model.available_regions(before_node=nid))
 
+    def _on_charts_requested(self) -> None:
+        """`Write charts` 儀表上的 `Preview charts…`（F87）。
+
+        視窗**只有一個**（開第二次是把同一個抬到最前面）—— 每按一次多開一個
+        的話，改設定會只改到其中一個，而其他幾個還畫著舊的樣子。
+        """
+        from .uniformity_window import UniformityWindow
+
+        win = getattr(self, "_charts_window", None)
+        if win is None:
+            win = UniformityWindow(self)
+            win.style_changed.connect(self._on_chart_style_changed)
+            self._charts_window = win
+        self._refresh_charts_window(self._inspector, force=True)
+        win.show()
+        win.raise_()
+        win.activateWindow()
+
+    def _refresh_charts_window(self, insp: Any, force: bool = False) -> None:
+        """把儀表現在那一顆餵給圖的視窗（開著才餵）。"""
+        win = getattr(self, "_charts_window", None)
+        if win is None or not (force or win.isVisible()):
+            return
+        if not hasattr(insp, "series") or not hasattr(insp, "charts"):
+            return
+        series = insp.series()
+        win.set_context(series, look=str(insp.params.get("look", "") or ""),
+                        axis=str(insp.params.get("axis", "") or "x"),
+                        metric=str(series.get("metric") or ""),
+                        kinds=insp.charts(),
+                        # 散佈圖吃的那兩份（別的圖用不到）。
+                        frame=insp.frame() if hasattr(insp, "frame") else None,
+                        spec=str(insp.params.get("spec", "") or ""))
+
+    def _on_chart_style_changed(self, look: str) -> None:
+        """視窗裡改完設定 → 寫回那張卡的 ``look`` 那一格。
+
+        走「量給我填」同一條路（`_on_param_requested` → `set_param`），所以它
+        進得了復原堆疊、參數表也跟著顯示新值 —— 一個會改 recipe 而 Ctrl+Z
+        撤不掉的視窗，比沒有那個視窗糟。
+        """
+        node = self.model.nodes.get(self.selected_node or "")
+        if node is None or node.step != "output_uniformity":
+            return
+        self._on_param_requested("look", str(look))
+
     def _on_select_requested(self, axis: str, rule: str) -> None:
         """使用者在曲線上**點了一根條紋** → 那個方向改用那一種材質（F11 2b）。
 
@@ -5009,12 +5084,27 @@ class StudioWindow(QMainWindow):
         # 沒有 KLARF 的兩種輸入這一格就是 None，面板會退回估算並標明。
         meta = dict(meta or {})
         meta["_klarf_doc"] = getattr(self.dataset, "klarf", None)
+        # 跨顆那張圖的座標（`die_x` / `x_um`）在**結果那幾列裡沒有** ——
+        # 它們住在 `Dataset.items`。同 `_klarf_doc` 的理由由這裡遞過去，
+        # 不然選單裡少掉 die 那兩欄，而 die 圖正是那張圖最有用的一種。
+        meta["_items"] = list(getattr(self.dataset, "items", None) or [])
         insp.set_context(self.selected_node or "",
                          params=dict(node.params) if node else {},
                          result=one, batch=self.trial_results, meta=meta,
                          feature_names=feats,
                          shown_streams=[s for s in shown if s])
         self.inspector_summary.setText(insp.summary())
+        # 圖的視窗開著就跟著這一顆走 —— 換一顆 defect 而視窗停在上一顆的
+        # 數字，是最難發現的那一種說謊（兩張圖都畫得出來）。
+        self._refresh_charts_window(insp)
+        # `Chart look` 那一列的編輯器，預覽要畫**這一顆**（不是樣本）。
+        # 同 `set_histogram` 的先例：數字只有引擎那一份，UI 不再算一次。
+        self.param_form.set_chart_series(
+            insp.series() if hasattr(insp, "series") else None)
+        # 散佈圖那一格的選單是從**這一顆的長表**長出來的（欄名跟著量測卡走，
+        # 寫死一份的話使用者的欄位在選單上找不到）。
+        self.param_form.set_chart_frame(
+            insp.frame() if hasattr(insp, "frame") else None)
         # 分頁鈕的字由**儀表現在畫的東西**決定（使用者 2026-08-21：「title 要
         # 更詳細一點」）。放不下的那半句進 tooltip。
         if hasattr(insp, "tab_title"):
@@ -5493,6 +5583,23 @@ class StudioWindow(QMainWindow):
         return (list(lines or []), list(points or []), focus,
                 [str(v) for v in (labels or [])])
 
+    def heat_tiles(self, stream: Optional[str] = None):
+        """選著那張卡要鋪的熱圖 ``(cells, colours, legend)``（F87）。
+
+        跟 :meth:`measure_marks` 一模一樣的形狀 —— 卡片自己交
+        （`Step.overlay_heat`），這裡只問「現在選著的是誰、正在看哪一條流」。
+        """
+        node = self.model.nodes.get(self.selected_node or "")
+        ctx = getattr(getattr(self, "_last_result", None), "context", None)
+        if node is None or ctx is None:
+            return [], [], None
+        try:
+            cells, colours, legend = get_step(node.step).overlay_heat(
+                ctx, node.params, stream)
+        except Exception:                  # noqa: BLE001 — 顯示用，不能擋畫面
+            return [], [], None
+        return list(cells or []), [str(c) for c in (colours or [])], legend
+
     def _refresh_measure_marks(self) -> None:
         """**一個 view 一次** —— 兩張圖顯示的可能是不同的流（比對模式）。
 
@@ -5506,6 +5613,9 @@ class StudioWindow(QMainWindow):
                 str(combo.currentText() or ""))
             view.set_marks(lines, points, focus, labels,
                            solid=self._marks_solid())
+            cells, colours, legend = self.heat_tiles(
+                str(combo.currentText() or ""))
+            view.set_heat(cells, colours, legend)
 
     def _marks_solid(self) -> bool:
         """選著那張卡的標記要不要畫滿（`Step.marks_solid`）。
@@ -5904,6 +6014,26 @@ class StudioWindow(QMainWindow):
         self._apply_trial_results(list(results or []),
                                   time.time() - (self._trial_t0 or time.time()))
 
+    def _enabled_output_cards(self) -> int:
+        """畫布上**啟用中**的 Output 卡有幾張（F86）。
+
+        只數啟用的：停用的那張不會跑，把它算進去等於承諾一件不會發生的事。
+        """
+        from ..core.pipeline import get_step
+        from ..core.pipeline.step import CATEGORY_BATCH
+
+        n = 0
+        for nid in self.model.node_order:
+            node = self.model.nodes.get(nid)
+            if node is None or not getattr(node, "enabled", True):
+                continue
+            try:
+                if get_step(node.step).category == CATEGORY_BATCH:
+                    n += 1
+            except Exception:          # noqa: BLE001 — 一句提示不准擋畫面
+                continue
+        return n
+
     def _apply_trial_results(self, results: Sequence[Dict[str, Any]],
                              elapsed: float) -> None:
         results = list(results or [])
@@ -5966,6 +6096,23 @@ class StudioWindow(QMainWindow):
             # **而且要講出來**：安靜地不寫跟安靜地寫一樣糟。
             msg = "%s  ·  Stopped, so nothing was written." % msg
             write = False
+        elif not write:
+            # **試跑不寫，而那件事以前完全沒有說出來**（F86，2026-09-07，
+            # 使用者：「output 預覽有，但跑完沒 output（沒看到資料夾）」）。
+            #
+            # 「試跑不寫」是使用者自己定的（F16 Stage 5c）而且是對的 ——
+            # 每拖一下門檻就覆寫一次 KLARF 是不可逆的。錯的是**沒有回音**：
+            # 畫布上明明有一張 Output 卡、它的儀表列著會寫哪幾個檔，按下那顆
+            # 最大的鈕之後什麼都沒有發生，而狀態列只說「Run finished」。
+            # 那正是推廣鐵則擋的東西：看不懂發生了什麼事。
+            #
+            # 所以只在**真的有 Output 卡**的時候多講一句，並且指名那個動作。
+            n_out = self._enabled_output_cards()
+            if n_out:
+                msg = ("%s  ·  Trial run - nothing written. Use “Run all && "
+                       "write” (the arrow beside Run trial) to run every "
+                       "defect and let the %d Output card%s write."
+                       % (msg, n_out, "" if n_out == 1 else "s"))
         self._status(msg)
         if write and results:
             self._write_outputs(results)
@@ -6652,6 +6799,14 @@ class StudioWindow(QMainWindow):
         if not d:
             return
         self.load_folder_path(d)
+
+    def _on_open_image(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open image", "",
+            "Images (*.png *.tif *.tiff *.jpg *.jpeg *.bmp);;All files (*)")
+        if not path:
+            return
+        self.load_image_path(path)
 
     def _on_open_recipe(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

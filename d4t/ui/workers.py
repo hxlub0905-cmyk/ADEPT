@@ -35,7 +35,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 
 import d4t.core.steps  # noqa: F401 — 觸發卡片註冊（Qt-free、便宜）
 from d4t.core.ingest.dataset import (
-    Dataset, load_dataset, load_folder, load_tiff_stack,
+    Dataset, load_dataset, load_folder, load_image_file, load_tiff_stack,
 )
 from d4t.core.pipeline import (
     Recipe, run_batch, run_batch_steps, run_defect,
@@ -241,6 +241,28 @@ class DatasetLoadWorker(_ThreadedWorker):
     def run_sync_folder(folder: str) -> Dataset:
         """同步掃一個資料夾；給測試 / headless 用。"""
         return load_folder(str(folder))
+
+    def start_image_file(self, path: str) -> bool:
+        """一個影像檔一顆 defect（F85）—— `start_folder` 的單檔版。"""
+        if self.is_running():
+            return False
+        f = str(path)
+
+        def job() -> None:
+            try:
+                ds = load_image_file(f)
+            except Exception as e:                      # noqa: BLE001 — 一律回報
+                self.failed.emit(f"{type(e).__name__}: {e}")
+            else:
+                self.loaded.emit(ds)
+
+        self._start_job(job)
+        return True
+
+    @staticmethod
+    def run_sync_image_file(path: str) -> Dataset:
+        """同步讀一個影像檔；給測試 / headless 用。"""
+        return load_image_file(str(path))
 
 
 # ---------------------------------------------------------------------------

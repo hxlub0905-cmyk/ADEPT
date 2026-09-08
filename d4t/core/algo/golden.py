@@ -96,6 +96,30 @@ def stack_cells(image: np.ndarray, px: int, py: int, method: str = "mean",
         idx = rng.choice(len(coords), size=sample_n, replace=False)
         coords = [coords[i] for i in idx]
 
+    if method != "median" and sample_n is None:
+        # **平均那條路不要把每一格各切一份出來**（F86，2026-09-07）。
+        #
+        # 原本的寫法是 `np.stack([...每一格...])` 再對 axis 0 取平均，而那個
+        # 中間陣列是「格數 × py × px × 8 bytes」—— 7680×7680 的圖上是
+        # **469 MB**，配一次 0.33 秒。`choose_origin` 的相位搜尋要疊 281 次，
+        # 所以整整 93 秒花在配置與丟棄同一塊記憶體上（實測 130 s／張，而且
+        # 是在 UI 執行緒上跑）。
+        #
+        # reshape 成 ``(ny, py, nx, px)`` 再對 (0, 2) 取平均是**同一組數字的
+        # 同一個平均**，只是不必把它們搬到別的地方去加。實測**逐位元組相同**
+        # （`tests/test_period_golden.py` 釘著），而且 7 倍快。
+        #
+        # ⚠ 只走得了 ``mean`` 而且沒有抽樣：中位數要看得到每一格
+        # （那正是它對稀疏缺陷免疫的原因），抽樣挑的格子不連續，兩者都
+        # reshape 不出來。
+        ox, oy = int(origin[0]), int(origin[1])
+        h, w = gray.shape[:2]
+        nx, ny = (w - ox) // px, (h - oy) // py
+        block = gray[oy:oy + ny * py, ox:ox + nx * px]
+        stacked = block.reshape(ny, py, nx, px).mean(axis=(0, 2),
+                                                     dtype=np.float64)
+        return np.clip(stacked, 0, 255).astype(np.uint8)
+
     cells = np.stack([
         gray[y:y + py, x:x + px].astype(np.float64) for (x, y) in coords
     ])

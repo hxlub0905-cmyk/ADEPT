@@ -79,6 +79,21 @@ CHIP_ICONS = (
     # 判定還沒設定時那一塊：**畫的是畫布上真的長那樣的東西**
     # （菱形＝一個問題、托盤＝一個類別）
     "adc_number", "adc_question", "adc_tray",
+    # Chart settings（F87 第十刀）：**這張圖要長成哪一種**。
+    # 每一排兩顆，差別做在形狀不做在粗細（同 §2 的規矩）。
+    "mark_hollow", "mark_solid",          # 記號空心還是實心
+    "dots_off", "dots_on",                # 一格框畫不畫記號
+    "whisk_off", "whisk_on",              # 盒鬚圖的鬚
+    "bars_count", "bars_pct",             # 直方圖的高度是次數還是比例
+    "cells_equal", "cells_true",          # 熱圖每一格一樣大還是照實鋪
+    "cells_plain", "cells_values",        # 熱圖每一格印不印值
+    "range_auto", "range_locked",         # 數值範圍自己挑還是鎖死
+    "ramp_mono", "ramp_rainbow",          # 顏色代表大小時走單色階還是彩虹
+    # Graph builder（F88 第三刀）：**這張圖用哪一種記號**。
+    "mark_dots", "mark_line", "mark_bars",
+    # F89-5：值那一軸的尺、以及長條要不要照值排
+    "scale_linear", "scale_log",
+    "sort_none", "sort_asc", "sort_desc",
 )
 
 #: 「原本就在那裡的東西」的透明度。跟 `widgets._draw_profile_glyph` 同一個值
@@ -736,6 +751,154 @@ def _adc_tray(g: _Pad) -> None:
     g.line(0.50, 0.36, 0.50, 0.56, True, 0.07)
 
 
+# --------------------------------------------------------------------------- #
+# Chart settings：這張圖要長成哪一種（F87 第十刀）
+#
+# 使用者 2026-09-07：「如果可以也能以膠囊方式呈現(like GLV card)」。
+# 這一族的底都是**同一張小圖表**（一條基線＋幾個資料點），選項的差別畫在那
+# 張圖上 —— 那正是 §3 說的「一排裡的每一顆共用同一個底」。
+# --------------------------------------------------------------------------- #
+def _marker(g: _Pad, solid: bool) -> None:
+    # 三顆記號落在一條淡的線上。**實不實心**就是這一排在問的事。
+    g.line(0.06, 0.72, 0.94, 0.72, False, 0.06)
+    for cx, cy in ((0.22, 0.62), (0.5, 0.42), (0.78, 0.26)):
+        if solid:
+            g.dot(cx, cy, 0.11, True)
+        else:
+            g.p.setPen(QPen(g.solid, max(1.0, 0.07 * g.w)))
+            g.p.setBrush(Qt.NoBrush)
+            g.p.drawEllipse(QPointF(cx * g.w, cy * g.h), 0.11 * g.w,
+                            0.11 * g.w)
+
+
+def _dots(g: _Pad, on: bool) -> None:
+    # 一條趨勢線一定在；**點在不在**是這一排的差別。
+    g.poly([(0.08, 0.80), (0.5, 0.50), (0.92, 0.22)], True, 0.08)
+    for cx, cy in ((0.08, 0.80), (0.5, 0.50), (0.92, 0.22)):
+        g.dot(cx, cy, 0.10, on)
+
+
+def _whisk(g: _Pad, on: bool) -> None:
+    # 一個盒子（實心框）＋ 中位線。**上下那兩根鬚在不在**是差別。
+    g.frame(0.26, 0.36, 0.74, 0.72, True, 0.08)
+    g.line(0.26, 0.54, 0.74, 0.54, True, 0.09)
+    if on:
+        g.line(0.5, 0.08, 0.5, 0.36, True, 0.07)
+        g.line(0.5, 0.72, 0.5, 0.94, True, 0.07)
+        g.line(0.36, 0.08, 0.64, 0.08, True, 0.07)
+        g.line(0.36, 0.94, 0.64, 0.94, True, 0.07)
+
+
+def _bars(g: _Pad, pct: bool) -> None:
+    """同一組柱子，差別是**有沒有一個「滿格」當分母**。
+
+    次數：三根高低不一，站在基線上。
+    比例：同樣三根，但每一根外面套一個淡的**滿格**框 —— 那就是「佔幾成」的
+    畫法（第一版把三根都畫到頂再加一條頂線，而那條線跟柱頂重疊，等於沒畫）。
+    """
+    g.line(0.04, 0.92, 0.96, 0.92, False, 0.06)
+    for i, h in enumerate((0.34, 0.86, 0.56)):
+        x = 0.14 + i * 0.27
+        if pct:
+            g.blk(x, 0.08, x + 0.19, 0.92, False)      # 滿格＝100%
+        g.blk(x, 0.92 - h * 0.84, x + 0.19, 0.92, True)
+
+
+def _cells(g: _Pad, equal: bool) -> None:
+    # 2×2 的磚。**一樣大** vs **大小不一**（照實鋪：間距決定面積）。
+    if equal:
+        for x in (0.08, 0.52):
+            for y in (0.08, 0.52):
+                g.blk(x, y, x + 0.40, y + 0.40, True)
+        return
+    g.blk(0.08, 0.08, 0.46, 0.38, True)
+    g.blk(0.58, 0.08, 0.92, 0.52, True)
+    g.blk(0.08, 0.50, 0.46, 0.92, True)
+    g.blk(0.58, 0.64, 0.92, 0.92, True)
+
+
+def _cell_values(g: _Pad, values: bool) -> None:
+    # 2×2 的磚（淡的，因為磚不是這一排在問的事）；**格子裡有沒有字**才是。
+    for x in (0.08, 0.52):
+        for y in (0.08, 0.52):
+            g.blk(x, y, x + 0.40, y + 0.40, False)
+    if values:
+        for x in (0.14, 0.58):
+            for y in (0.24, 0.68):
+                g.blk(x, y, x + 0.28, y + 0.08, True)
+
+
+def _mark_dots(g: _Pad) -> None:
+    # 四顆散開的空心點 —— **不排成一條線**（排成線就變成折線圖那一顆了）。
+    for x, y in ((0.18, 0.70), (0.40, 0.34), (0.62, 0.60), (0.84, 0.20)):
+        g.dot(x, y, 0.10, False)
+
+
+def _mark_line(g: _Pad) -> None:
+    # 一條折線，轉折處有點 —— 「照順序連起來」就是這一顆在說的事。
+    pts = ((0.12, 0.74), (0.38, 0.40), (0.62, 0.56), (0.88, 0.18))
+    for i in range(len(pts) - 1):
+        g.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], True, 0.09)
+    for x, y in pts:
+        g.dot(x, y, 0.07, True)
+
+
+def _mark_bars(g: _Pad) -> None:
+    # 四根從同一條基線長上來的長條 —— **基線要看得見**，那正是長條圖跟其他
+    # 兩種的差別（高度是從哪裡量的）。
+    for i, top in enumerate((0.52, 0.22, 0.64, 0.36)):
+        x = 0.12 + i * 0.21
+        g.blk(x, top, x + 0.14, 0.84, True)
+    g.line(0.08, 0.86, 0.92, 0.86, True, 0.06)
+
+
+def _scale_kind(g: _Pad, log: bool) -> None:
+    # 一條軸 ＋ 幾個刻度。**線性**是等距，**log** 是愈往上愈密 —— 那正是
+    # 那條軸在做的事，而它畫得出來。
+    g.line(0.16, 0.10, 0.16, 0.90, True, 0.07)
+    stops = ((0.90, 0.70, 0.50, 0.30, 0.10) if not log
+             else (0.90, 0.56, 0.36, 0.23, 0.12))
+    for y in stops:
+        g.line(0.16, y, 0.42, y, True, 0.06)
+
+
+def _sort_bars(g: _Pad, order: str) -> None:
+    # 三根長條。**沒排**是高低不一，**asc** 由矮到高，**desc** 反過來 ——
+    # 差別做在形狀，不做在別的地方（同這一排其他圖示）。
+    tops = {"asc": (0.62, 0.42, 0.18),
+            "desc": (0.18, 0.42, 0.62)}.get(order, (0.44, 0.16, 0.60))
+    for i, top in enumerate(tops):
+        x = 0.14 + i * 0.26
+        g.blk(x, top, x + 0.18, 0.88, True)
+    g.line(0.08, 0.90, 0.92, 0.90, True, 0.05)
+
+
+def _ramp(g: _Pad, rainbow: bool) -> None:
+    # 一條色階。**單色**是一路變深的四段；**彩虹**是四段各自跳一次
+    # （差別做在「有沒有台階」而不是顏色 —— 這一排圖示只有一種墨色）。
+    n = 4
+    for i in range(n):
+        x = 0.08 + i * (0.84 / n)
+        if rainbow:
+            # 高低交錯：讀起來是「一段一段跳」，那正是彩虹階的問題。
+            top = 0.24 if i % 2 else 0.52
+            g.blk(x, top, x + 0.84 / n - 0.03, 0.86, True)
+        else:
+            # 一路長高：讀起來是「由淺到深」。
+            g.blk(x, 0.80 - i * 0.16, x + 0.84 / n - 0.03, 0.86, True)
+
+
+def _range(g: _Pad, locked: bool) -> None:
+    # 一條軸。**auto** 是兩端開口的箭頭；**locked** 是兩端被夾住的短槓。
+    g.line(0.10, 0.5, 0.90, 0.5, True, 0.08)
+    if locked:
+        g.line(0.10, 0.18, 0.10, 0.82, True, 0.10)
+        g.line(0.90, 0.18, 0.90, 0.82, True, 0.10)
+        return
+    g.poly([(0.30, 0.26), (0.08, 0.5), (0.30, 0.74)], True, 0.08)
+    g.poly([(0.70, 0.26), (0.92, 0.5), (0.70, 0.74)], True, 0.08)
+
+
 #: 名字 → 畫它的那支。**這張表就是 `CHIP_ICONS` 的實作**，兩邊由
 #: `test_ui_chip_icons` 對得起來（少一支的症狀是那顆膠囊直接 ValueError）。
 _DRAW = {
@@ -809,6 +972,30 @@ _DRAW = {
     "cmp_le": lambda g: _cmp(g, "left", True),
     "cmp_eq": lambda g: _cmp(g, "", True),
     "cmp_ne": lambda g: _cmp(g, "both", False),
+    "mark_hollow": lambda g: _marker(g, False),
+    "mark_solid": lambda g: _marker(g, True),
+    "dots_off": lambda g: _dots(g, False),
+    "dots_on": lambda g: _dots(g, True),
+    "whisk_off": lambda g: _whisk(g, False),
+    "whisk_on": lambda g: _whisk(g, True),
+    "bars_count": lambda g: _bars(g, False),
+    "bars_pct": lambda g: _bars(g, True),
+    "cells_equal": lambda g: _cells(g, True),
+    "cells_true": lambda g: _cells(g, False),
+    "cells_plain": lambda g: _cell_values(g, False),
+    "cells_values": lambda g: _cell_values(g, True),
+    "range_auto": lambda g: _range(g, False),
+    "range_locked": lambda g: _range(g, True),
+    "ramp_mono": lambda g: _ramp(g, False),
+    "ramp_rainbow": lambda g: _ramp(g, True),
+    "mark_dots": _mark_dots,
+    "mark_line": _mark_line,
+    "mark_bars": _mark_bars,
+    "scale_linear": lambda g: _scale_kind(g, False),
+    "scale_log": lambda g: _scale_kind(g, True),
+    "sort_none": lambda g: _sort_bars(g, ""),
+    "sort_asc": lambda g: _sort_bars(g, "asc"),
+    "sort_desc": lambda g: _sort_bars(g, "desc"),
     "adc_number": _adc_number,
     "adc_question": _adc_question,
     "adc_tray": _adc_tray,

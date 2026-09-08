@@ -56,7 +56,7 @@ import base64
 import math
 import zlib
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, Callable, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -217,12 +217,29 @@ def anchor_cell(cell: np.ndarray,
 # --------------------------------------------------------------------------- #
 def build_golden_cell(image: Any, px: Optional[int] = None,
                       py: Optional[int] = None, method: str = "mean",
-                      anchor: bool = True) -> GoldenCell:
+                      anchor: bool = True,
+                      progress: Optional[Callable[[str, int, int], Any]] = None
+                      ) -> GoldenCell:
     """從大圖疊出一個 Golden Cell。
 
     ``px`` / ``py`` 留空就從影像自己量（``period.estimate_period``）。
     量不到週期時回一個空的 cell 並在 ``warnings`` 說明 —— 不猜。
+
+    ``progress``（F86，2026-09-07）
+    ------------------------------
+    ``fn(stage, done, total)``，``stage`` 是給人看的一句話。回 ``False``
+    就**取消**：這一支會盡快回一個空的 cell（``warnings`` 說是取消的）。
+
+    為什麼需要它：這一支在 7680×7680 上要十幾秒，而呼叫它的
+    `ui/template_dialog.load_image` 跑在 UI 執行緒上 —— 沒有回報的話那段時間
+    視窗是死的（Windows 會標「沒有回應」）。**core 不得 import Qt**（鐵則 1），
+    所以這裡給的是一個 callback，畫面長什麼樣由 UI 決定。
     """
+    def _say(stage: str, done: int, total: int) -> bool:
+        return progress is None or progress(stage, done, total) is not False
+
+    cancelled = GoldenCell(cell=np.zeros((0, 0), np.uint8), px=0, py=0,
+                           warnings=["cancelled"])
     gray = _gray_u8(image)
     warnings: List[str] = []
     if gray.size == 0:
@@ -234,6 +251,8 @@ def build_golden_cell(image: Any, px: Optional[int] = None,
     conf_x = 100.0 if given_x else 0.0
     conf_y = 100.0 if given_y else 0.0
     if not (given_x and given_y):
+        if not _say("Measuring the period\u2026", 0, 1):
+            return cancelled
         est = algo_period.estimate_period(gray)
         if not given_x:
             px, conf_x = int(est.px or 0), float(est.confidence_x)
@@ -268,7 +287,19 @@ def build_golden_cell(image: Any, px: Optional[int] = None,
         warnings.append("no period down the image; the cell spans the full "
                         "height and no region is located along that direction")
 
-    origin = algo_period.choose_origin(gray.shape, px, py, image=gray)
+    # **相位搜尋是這一支的全部成本**（281 個候選 × 整張圖）—— 進度就報它。
+    stop = [False]
+
+    def _phase(done: int, total: int) -> bool:
+        if not _say("Finding the phase\u2026", done, total):
+            stop[0] = True
+            return False
+        return True
+
+    origin = algo_period.choose_origin(gray.shape, px, py, image=gray,
+                                       progress=_phase)
+    if stop[0]:
+        return cancelled
     cell = algo_golden.stack_cells(gray, px, py, method=method, origin=origin)
     n_cells = len(algo_golden.tile_coords(gray.shape, px, py, origin))
 
