@@ -247,6 +247,18 @@ param 相依 I/O（例如輸出流名稱由參數決定）覆寫 `resolve_reads/
 > 任何一條測試問過「使用者看到的第一張是哪一張」。現在有了：
 > `tests/test_card_library_order.py`。
 
+> **使用者面的字走 `ui/strings.py`，卡片名與階段名不走**（F98 U14，
+> 2026-09-08）。翻譯層擺在**共用的那幾支** —— `_tool_button`、`small_button`、
+> `_HintLabel.set_full_text`（每一句 `ParamSpec.help`）、狀態列 —— 所以加一張
+> 卡、加一句 help 都**不必做任何事**，它自動就在待翻清單上。鍵就是英文原句，
+> 缺翻譯就回原句。
+>
+> ⚠ **`Step.label` 與 `step.GROUPS` 的標題不准進 catalog**：它們是 recipe JSON
+> 的鄰居與廠內的共同語彙，翻掉的話同一份 recipe 在兩台機器上講的是兩個名字。
+> 三條測試守著，其中一條直接檢查出貨的 `zh_TW.json` 裡沒有任何卡片名。
+> 還缺哪些句子跑 `python tools/i18n_todo.py`（**不是掃原始碼** —— 大部分句子
+> 在原始碼裡看起來不像要翻的東西）。
+
 > **一格選項＝一排膠囊（圖 + 字），不是下拉**（F68 第二輪，2026-09-01，
 > 使用者：「我認為設定區都要變成這樣 icon 膠囊 + 文字，並且視覺模型可能要
 > 接近會比較好」）。型別是 `chip_choice`：`choices` 每一個值配一個
@@ -492,7 +504,16 @@ import**。測試大量用屬性存取（`widgets_mod.METRIC_GROUP_ORDER`），�
 影像（鐵則 9）。
 
 `d4t/ui/scope.py` 仍然是這類「暫時不給看」的**唯一**去處，
-**而「入口長什麼樣」也住在同一份**（F11 Input-5）：
+**而「入口長什麼樣」也住在同一份**（F11 Input-5）。
+
+**2026-09-08（F96 U10）起那幾個旗標由 profile 一次設好**：`fab`（預設，廠內
+那台）／`dev`（收起來的全部打開）／`demo`。啟動時看 `D4T_PROFILE` ——
+廠內那台是點捷徑開的，捷徑改得動環境變數、改不動命令列。
+
+⚠ **旗標要透過模組讀**（`scope.SHOW_ROUTE_BY`），不准
+`from .scope import SHOW_…` —— 那拿到的是一份**當時的複本**，換了 profile 而那
+個模組停在舊值，症狀是「設定說關著、畫面上還在」。`welcome.py` 本來就是那樣寫
+的，`tests/test_ui_scope_profiles.py` 現在擋著。
 
 ```python
 SUPPORTED_KINDS = ("ebi_patch", "tiff_stack", "rsem", "folder")

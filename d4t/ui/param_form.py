@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
 )
 
+from . import strings
 from . import theme
 from .chips import ChoiceChips, MetricChips, MetricPick, _ChoiceChip
 from .fields import (
@@ -394,7 +395,7 @@ class ParamForm(QWidget):
             self._title.setVisible(True)
             step_help = str(describe.get("help", ""))
             self._step_help.set_full_text(step_help)
-            self._step_help.setToolTip(step_help)
+            self._step_help.setToolTip(strings.tr(step_help))
             self._step_help.setVisible(bool(step_help))
             self._placeholder.setVisible(False)
             self._values = {}
@@ -416,7 +417,7 @@ class ParamForm(QWidget):
                 value = current_params.get(name, spec.get("default"))
                 self._values[name] = value
                 editor = self._make_editor(spec, value, streams)
-                editor.setToolTip(str(spec.get("help", "")))
+                editor.setToolTip(strings.tr(str(spec.get("help", ""))))
                 row = _ParamRow(spec, editor, self._host)
                 self._form.insertWidget(self._form.count() - 1, row)
                 self._rows[name] = row

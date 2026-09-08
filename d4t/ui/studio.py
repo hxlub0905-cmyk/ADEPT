@@ -125,6 +125,7 @@ from .canvas import SUMMARY_SEP, PipelineCanvas
 from .inspectors import inspector_for
 from .problems_bar import ProblemsBar
 from .why_panel import WhyPanel
+from . import strings
 from .status_action import StatusAction, open_folder
 from .status_log import StatusHistory
 from .gallery import make_thumb
@@ -1123,8 +1124,11 @@ class StudioWindow(QMainWindow):
         QSS 的 ``[hasGlyph="true"]`` 把左邊 padding 撐開，文字才不會疊上去。
         """
         b = _GlyphToolButton(self) if icon else QToolButton(self)
-        b.setText(text)
-        b.setToolTip(tip)
+        # **翻譯層擺在共用的那一支**（U14）：工具列的每一顆鈕都流過這裡，所以
+        # 包這一次就涵蓋整條工具列 —— 而呼叫端一個字都不用改。那正是「之後
+        # 不必改 38 個檔案」那句話成立的方式。
+        b.setText(strings.tr(text))
+        b.setToolTip(strings.tr(tip))
         b.setToolButtonStyle(Qt.ToolButtonTextOnly)
         b.setCursor(Qt.PointingHandCursor)
         if primary:
@@ -1784,7 +1788,7 @@ class StudioWindow(QMainWindow):
         bar.setProperty("level", "error" if level == "error" else "info")
         bar.style().unpolish(bar)
         bar.style().polish(bar)
-        bar.showMessage(str(msg))
+        bar.showMessage(strings.tr(str(msg)))
         # **下一句話一定把上一句的「下一步」收起來**（X5／X6 那顆鈕的第一條
         # 規矩）。一顆停在那裡的「復原」按鈕，在使用者做了三件別的事之後按
         # 下去，復原的不是他以為的那一件。收在這裡而不是在每個呼叫端，是因為
@@ -1839,11 +1843,17 @@ class StudioWindow(QMainWindow):
         """
         n = len(self.trial_results or [])
         self.btn_results.setEnabled(n > 0)
-        self.btn_results.setText("Results · %d" % n if n else "Results")
-        self.btn_results.setToolTip(
+        # ⚠ **這一支繞過 `_tool_button`，所以它要自己翻**（U14）。翻譯層擺在
+        # 共用的那幾支換到的是「大部分地方不用管」，不是「沒有地方要管」——
+        # 任何**後來**又改寫 text/tooltip 的地方都要自己包一次。
+        # 那不是理論：`tests/test_ui_strings.py` 就是這樣抓到這一格的。
+        self.btn_results.setText(
+            "%s · %d" % (strings.tr("Results"), n) if n
+            else strings.tr("Results"))
+        self.btn_results.setToolTip(strings.tr(
             "Open the Results window - score distribution, thumbnails and the "
             "per-defect table (Ctrl+Shift+R)" if n else
-            "No results yet - run the pipeline first (Run trial)")
+            "No results yet - run the pipeline first (Run trial)"))
 
     def _delete_selected_on_canvas(self) -> None:
         """畫布上選著的卡片與線 —— 刪掉。
@@ -3890,13 +3900,17 @@ class StudioWindow(QMainWindow):
         if btn is None:
             return
         going = "Tune" if self._layout_mode == "build" else "Build"
+        # 同 `_refresh_results_button`：它繞過 `_tool_button`，要自己翻。
+        # **模式的名字（Build / Tune）不翻** —— 它們是 `Ctrl+B` 的兩個檔位，
+        # 跟卡片名同一類：使用者跟同事講的是那兩個字。
         btn.setText(going)
-        btn.setToolTip(
-            "Switch to %s layout (Ctrl+B) — %s"
-            % (going,
-               "canvas fills the column, for wiring and seeing the whole thing"
-               if going == "Build" else
-               "canvas on top, settings below, for tuning parameters"))
+        why = strings.tr(
+            "canvas fills the column, for wiring and seeing the whole thing"
+            if going == "Build" else
+            "canvas on top, settings below, for tuning parameters")
+        btn.setToolTip(strings.tr("Switch to %s layout (Ctrl+B) — %s")
+                       % (going, why))
+
 
     def _canvases(self) -> List[PipelineCanvas]:
         """現在活著的每一份畫布。
