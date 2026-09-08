@@ -208,6 +208,7 @@ Path 行都建在它上面。
 │   └── fixtures/
 │       ├── recipes/          #     e2e 用的最小 recipe（**測試用，不是教學範例**）
 │       ├── golden/           #     黃金值三份，`tools/freeze_golden.py` 產與驗
+│       ├── bench_baseline.json #   吞吐量基準，`tools/bench.py` 產與驗（時間寬、結構嚴）
 │       └── sample_real.klarf #     遮蔽過的 KLARF 結構樣本（鐵則 8：值遮蔽、結構保留）
 ├── recipes/                  # **出貨的 recipe**：走 `Open recipe…`，不走範本庫
 │                             #   每一份都被 `tests/test_shipped_recipes.py` 真的跑一次
