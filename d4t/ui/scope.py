@@ -35,11 +35,13 @@ CLI 不受影響
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, NamedTuple, Sequence, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 __all__ = [
     "SUPPORTED_KINDS", "HIDDEN_STEPS", "DEFAULT_KIND",
     "SHOW_TEMPLATE_LIBRARY", "SHOW_SAMPLE_DATA", "SHOW_ROUTE_BY",
+    "PROFILES", "DEFAULT_PROFILE", "current_profile", "use_profile",
+    "profile_from_env",
     "INPUT_SOURCES", "ATTACHMENTS", "InputSource",
     "is_supported_kind", "visible_steps", "recipe_is_supported",
     "unsupported_kind_message",
@@ -111,7 +113,12 @@ SUPPORTED_KINDS: Sequence[str] = ("ebi_patch", "tiff_stack", "rsem", "folder")
 #: —— **這是那條規矩第一次跑完全程**。舊 recipe 用到它們的話開起來是一條
 #: `unknown-step`（那就是刪掉要付的錢），沒有遷移：那兩張卡的功能在判定的
 #: working numbers 裡，而算式怎麼搬進去是使用者的決定，不是一道機械遷移。
-HIDDEN_STEPS: Sequence[str] = ("align",)
+#: 廠內那一組收起來的卡。**「align 是收起來的」這句話只寫在這裡一次** ——
+#: `PROFILES` 那張表引用這個名字，不再各自打一遍字串。三個地方各寫一次的話，
+#: 打開其中一組而忘了另一組，症狀是「換了 profile 但那張卡還在／還是不在」。
+_DEFAULT_HIDDEN: Tuple[str, ...] = ("align",)
+
+HIDDEN_STEPS: Sequence[str] = _DEFAULT_HIDDEN
 
 #: 沒有資料集時 ``RecipeModel`` 用的 route 名稱。
 DEFAULT_KIND: str = SUPPORTED_KINDS[0]
@@ -166,6 +173,97 @@ SHOW_SAMPLE_DATA: bool = False
 #: `ui/route_badge.py` 一行都沒動 —— 帶著 `route_by` 的 recipe 照樣跑得出
 #: 一模一樣的數字（黃金值不動），CLI 照樣認。改回 ``True`` 就整組回來。
 SHOW_ROUTE_BY: bool = False
+
+
+# --------------------------------------------------------------------------- #
+# Profile：一個字串決定一組開關（U10，2026-09-08）
+# --------------------------------------------------------------------------- #
+#: 上面那幾個旗標**已經開始互相牽扯**，而那是這一段存在的理由。
+#:
+#: 實例（F91 X4 那一輪付過的錢）：`SHOW_SAMPLE_ENTRIES` 一個旗標管兩個入口，
+#: 而它們的**死法不一樣** —— 範本庫的理由到期了（`recipes/` 有東西而且有測試
+#: 跑過），範例資料那條仍然是死路。合在一起的下場是「打開其中一個順手把另一個
+#: 也放回畫面上」，而畫面上那顆鈕按下去會撞牆（推廣鐵則：**按了撞牆的鈕比沒有
+#: 那顆鈕更糟**）。拆開之後又多了一個問題：三個旗標要一起設對，而「一起」沒有
+#: 任何東西在守。
+#:
+#: 所以 profile 不是一個抽象層，是**把「這台機器要看到什麼」變成一句話**：
+#:
+#: =========  ==============================================================
+#: ``fab``    廠內那台。只有走得完的路 —— 撞牆的入口一個都不給。**預設。**
+#: ``dev``    開發機。收起來的東西全部打開，好在動它們之前先看得到。
+#: ``demo``   給人看的。範本庫開著（那是「我該放哪張卡」的答案），而會產生
+#:            檔案或需要真實資料的入口收起來。
+#: =========  ==============================================================
+#:
+#: ⚠ **這張表是那幾個旗標的唯一寫入端。** 模組層那幾個名字仍然是讀取端
+#: （`visible_steps` 等等照樣讀它們），改的方式是 :func:`use_profile`。
+#: 兩邊都能寫的話，「現在到底是哪一組」就沒有答案了。
+PROFILES: Dict[str, Dict[str, Any]] = {
+    "fab": {
+        "SHOW_TEMPLATE_LIBRARY": True,
+        "SHOW_SAMPLE_DATA": False,
+        "SHOW_ROUTE_BY": False,
+        "HIDDEN_STEPS": _DEFAULT_HIDDEN,
+    },
+    "dev": {
+        "SHOW_TEMPLATE_LIBRARY": True,
+        "SHOW_SAMPLE_DATA": False,
+        "SHOW_ROUTE_BY": True,
+        "HIDDEN_STEPS": (),
+    },
+    "demo": {
+        "SHOW_TEMPLATE_LIBRARY": True,
+        "SHOW_SAMPLE_DATA": False,
+        "SHOW_ROUTE_BY": False,
+        "HIDDEN_STEPS": _DEFAULT_HIDDEN,
+    },
+}
+
+#: 現在是哪一組。`fab` 是預設 —— **目標使用者是廠內那台機器上的人**。
+DEFAULT_PROFILE = "fab"
+
+_PROFILE = DEFAULT_PROFILE
+
+
+def current_profile() -> str:
+    """現在套的是哪一組。"""
+    return _PROFILE
+
+
+def use_profile(name: str) -> str:
+    """換一組開關，回真的套上去的那一組名字。
+
+    不認得的名字**退回預設並且不拋例外**：這是一個產品範圍的旋鈕，不是一個
+    輸入驗證的地方 —— 打錯字的下場應該是「看到廠內那一組」，不是一個開不起來
+    的 Studio。
+
+    ⚠ 它改的是**模組層的那幾個名字**，所以已經開著的視窗不會自己重畫。
+    這是刻意的：profile 是啟動時的決定（`D4T_PROFILE` 或測試裡設一次），
+    不是一個執行中的功能開關。做成後者的話，「使用者現在看到的是哪一組」
+    會跟著時間改變，而那件事沒有辦法在畫面上講清楚。
+    """
+    global _PROFILE
+    use = str(name or "")
+    if use not in PROFILES:
+        use = DEFAULT_PROFILE
+    _PROFILE = use
+    g = globals()
+    for key, value in PROFILES[use].items():
+        g[key] = value
+    return use
+
+
+def profile_from_env(env: Optional[Dict[str, str]] = None) -> str:
+    """`D4T_PROFILE` 說了什麼（沒說就是預設）。
+
+    環境變數而不是命令列參數：廠內那台機器是**點捷徑開的**，而捷徑改得動
+    環境變數、改不動 `python -m d4t gui` 後面的字。
+    """
+    import os
+
+    src = os.environ if env is None else env
+    return str(src.get("D4T_PROFILE", "") or "") or DEFAULT_PROFILE
 
 
 class InputSource(NamedTuple):

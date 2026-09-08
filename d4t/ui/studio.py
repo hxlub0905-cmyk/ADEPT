@@ -106,6 +106,7 @@ from PySide6.QtWidgets import (
 import d4t.core.steps  # noqa: F401 — 觸發卡片註冊（Qt-free、便宜）
 from d4t.core.pipeline import ParamError, Recipe, get_step, list_steps
 from d4t.core.pipeline.cellrois import region_names
+from d4t.core.pipeline import sampling
 from d4t.core.pipeline.engine import (
     FEATURE_OWNER_KEY, feature_prefixes,
 )
@@ -496,6 +497,10 @@ class StudioWindow(QMainWindow):
         self._gds_layers: List[Any] = []
         self.trial_scores: List[float] = []
         self.trial_results: List[Dict[str, Any]] = []   # M5：Gallery / 輸出的來源
+        #: 試跑抽哪幾顆（X3）。預設 `first` —— 老行為，一個位元都不變。
+        self.sample_mode: str = sampling.DEFAULT_MODE
+        #: 上一次抽樣的紀錄（含種子）。**空的表示還沒跑過**，不是「用了預設」。
+        self.sample_note: Dict[str, Any] = {}
         self.defect_index: int = 0
         self.selected_node: Optional[str] = None
         self.recipe_path: Optional[str] = None
@@ -813,7 +818,12 @@ class StudioWindow(QMainWindow):
         bar.addWidget(self.btn_theme)
         bar.addSeparator()
 
-        self.lbl_trial_n = QLabel("First ", bar)
+        # **工具列的字要跟著抽樣方式換**（X3）。以前這裡寫死是「First」，
+        # 而如果換了抽樣方式畫面卻沒有變，就是這個功能最危險的失敗方式：
+        # 跑的東西變了、看的人不知道。字從 `sampling.describe()` 來。
+        self.lbl_trial_n = QLabel(sampling.describe(sampling.DEFAULT_MODE)[0]
+                                  + " ", bar)
+        self.lbl_trial_n.setToolTip(sampling.describe(sampling.DEFAULT_MODE)[1])
         bar.addWidget(self.lbl_trial_n)
         self.spin_trial_n = QSpinBox(bar)
         self.spin_trial_n.setRange(10, 5000)
@@ -823,6 +833,27 @@ class StudioWindow(QMainWindow):
         self.spin_trial_n.setToolTip(
             "How many defects a trial run covers (keep it small while tuning)")
         bar.addWidget(self.spin_trial_n)
+
+        # 抽樣方式（X3）。**一顆小鈕的下拉，不是三顆膠囊** —— 它平常不動，
+        # 而工具列上每一格寬度都是跟別人借的。
+        self.btn_sample = QToolButton(bar)
+        self.btn_sample.setText("…")
+        self.btn_sample.setCursor(Qt.PointingHandCursor)
+        self.btn_sample.setPopupMode(QToolButton.InstantPopup)
+        self.btn_sample.setToolTip("Which defects a trial run covers")
+        menu_s = QMenu(self.btn_sample)
+        self._sample_actions = {}
+        for mode in sampling.MODES:
+            word, why = sampling.describe(mode)
+            act = menu_s.addAction(word)
+            act.setToolTip(why)
+            act.setCheckable(True)
+            act.setChecked(mode == self.sample_mode)
+            act.triggered.connect(
+                lambda _c=False, m=mode: self.set_sample_mode(m))
+            self._sample_actions[mode] = act
+        self.btn_sample.setMenu(menu_s)
+        bar.addWidget(self.btn_sample)
 
         self.btn_trial = self._tool_button(
             "Run trial", "Run the current pipeline over the first N defects "
@@ -897,7 +928,21 @@ class StudioWindow(QMainWindow):
         ("Ctrl+-", "zoom_out"), ("Ctrl+Shift+F", "zoom_fit"),
         ("Ctrl+F", "find_card"),
         ("Ctrl+Left", "prev_defect"), ("Ctrl+Right", "next_defect"),
+        # U18：Delete / Esc 以前只住在畫布與 cell_canvas 各自的 keyPressEvent
+        # 裡，主快捷鍵表上沒有 —— 於是「這個工具有哪些鍵」這個問題有兩個答案，
+        # 而使用者讀得到的是不完整的那一個。
+        #
+        # ⚠ **它們綁在畫布上，不是綁在視窗上**（見 `_WIDGET_SHORTCUTS`）。
+        # Delete 綁成 window-level 的話，使用者在參數區的輸入框裡按 Delete
+        # 會刪掉一張卡 —— 那是這張表最貴的一種錯。
+        ("Del", "delete_selected"), ("Esc", "clear_selection"),
     )
+
+    #: 這幾個鍵**只在畫布上**管用（見上面那段 ⚠）。
+    #:
+    #: 它們仍然列在 `SHORTCUTS` 裡，因為那張表回答的是「這個工具有哪些鍵」——
+    #: 一個使用者讀得到的答案，不是一份綁定清單。
+    _WIDGET_SHORTCUTS = frozenset(("delete_selected", "clear_selection"))
 
     def _build_shortcuts(self) -> None:
         handlers = {
@@ -916,10 +961,17 @@ class StudioWindow(QMainWindow):
             "find_card": self.focus_card_search,
             "prev_defect": lambda: self.step_defect(-1),
             "next_defect": lambda: self.step_defect(+1),
+            "delete_selected": self._delete_selected_on_canvas,
+            "clear_selection": self._clear_canvas_selection,
         }
         self._shortcuts = []
         for keys, name in self.SHORTCUTS:
-            sc = QShortcut(QKeySequence(keys), self)
+            # 畫布專用的那幾個掛在畫布上、而且是 `WidgetWithChildrenShortcut`
+            # —— 焦點不在畫布裡的時候它們根本不會被叫到（U18）。
+            host = self.pipeline if name in self._WIDGET_SHORTCUTS else self
+            sc = QShortcut(QKeySequence(keys), host)
+            if name in self._WIDGET_SHORTCUTS:
+                sc.setContext(Qt.WidgetWithChildrenShortcut)
             sc.activated.connect(handlers[name])
             self._shortcuts.append(sc)
 
@@ -1685,6 +1737,35 @@ class StudioWindow(QMainWindow):
         # 正是唯一講出「那件事沒成功」的地方。
         self.status_history.add(str(msg), level)
 
+    def set_sample_mode(self, mode: str) -> None:
+        """換抽樣方式，**並且把工具列上那個字換掉**（X3）。
+
+        兩件事一定一起做：跑的東西變了而畫面沒變，是這個功能最危險的失敗方式
+        —— 使用者會以為他還在看「前 200 顆」，而門檻是在另一批上調的。
+        """
+        use = str(mode or "")
+        if use not in sampling.MODES:
+            return
+        self.sample_mode = use
+        word, why = sampling.describe(use)
+        self.lbl_trial_n.setText(word + " ")
+        self.lbl_trial_n.setToolTip(why)
+        for name, act in (getattr(self, "_sample_actions", None) or {}).items():
+            act.setChecked(name == use)
+        self._status("Trial runs now cover: %s — %s" % (word.lower(), why))
+
+    def sample_spec(self) -> Dict[str, Any]:
+        """這一次要送給 `run_batch` 的抽樣設定。
+
+        **每次跑都給一個新種子**（`first` 除外，它不用）：使用者按第二次
+        「Run trial」的意思是「再抽一批看看」，不是「把剛才那批再跑一次」。
+        要重現某一批的話，種子在 `sample_note` 裡，也寫進 run 紀錄。
+        """
+        if self.sample_mode == "first":
+            return {"mode": "first"}
+        return {"mode": self.sample_mode, "seed": sampling.new_seed(),
+                "column": "CLASSNUMBER"}
+
     def _refresh_results_button(self) -> None:
         """Results 那顆鈕要說出**裡面現在有幾顆**（U21）。
 
@@ -1706,6 +1787,19 @@ class StudioWindow(QMainWindow):
             "Open the Results window - score distribution, thumbnails and the "
             "per-defect table (Ctrl+Shift+R)" if n else
             "No results yet - run the pipeline first (Run trial)")
+
+    def _delete_selected_on_canvas(self) -> None:
+        """畫布上選著的卡片與線 —— 刪掉。
+
+        真正的動作在 `PipelineCanvas.delete_selected()` 裡（它知道選著什麼），
+        這一支只是把快捷鍵表上的那一格接過去 —— 好讓「這個工具有哪些鍵」只有
+        一個答案，而**刪除只有一份實作**。
+        """
+        self.pipeline.delete_selected()
+
+    def _clear_canvas_selection(self) -> None:
+        """Esc：放掉手上的東西。"""
+        self.pipeline.clear_selection()
 
     def _status_next_step(self, msg: str, label: str, callback: Any,
                           level: str = "info", tip: str = "") -> None:
@@ -6030,12 +6124,26 @@ class StudioWindow(QMainWindow):
         # 背景 worker 的訊號投遞不到 —— 寫檔那一段要跟著走同步版。
         self._write_outputs_sync = bool(sync)
 
+        # 這一次抽哪幾顆（X3）。**紀錄先寫下來再跑** —— 跑到一半當掉的時候，
+        # 「剛才那一批是哪幾顆」仍然答得出來。
+        spec = self.sample_spec()
+        # 這裡**再算一次**同一個抽樣，只為了拿那份紀錄。它不浪費（幾千顆的
+        # `random.sample`），而且**保證跟 `run_batch` 挑到同一批** —— 同一個
+        # 種子、同一串 items。紀錄裡的 `mode` 可能跟 `spec` 不一樣（分層那一欄
+        # 整批是空的時候會退成 random），而使用者要看到的是**真的發生的那個**。
+        _picked, note = sampling.pick(
+            items, limit, mode=str(spec.get("mode", "first")),
+            seed=spec.get("seed"),
+            column=str(spec.get("column", "CLASSNUMBER") or "CLASSNUMBER"))
+        self.sample_note = dict(note)
+
         if sync:
             t0 = time.time()
             try:
                 results = TrialWorker.run_sync(
                     recipe, self.dataset, limit,
-                    workers=int(workers) if workers else 1, cache_dir=cdir)
+                    workers=int(workers) if workers else 1, cache_dir=cdir,
+                    sample=spec)
             except Exception as e:      # noqa: BLE001 — UI 邊界
                 self._status("Trial run failed: %s: %s" % (type(e).__name__, e), "error")
                 return False
@@ -6044,7 +6152,8 @@ class StudioWindow(QMainWindow):
 
         self._trial_t0 = time.time()
         if not self.trial_worker.start(recipe, self.dataset, limit,
-                                       workers=workers, cache_dir=cdir):
+                                       workers=workers, cache_dir=cdir,
+                                       sample=spec):
             self._status("A run is already in progress — please wait.")
             return False
         self._progress_set(0, limit, "%v / %m defects")

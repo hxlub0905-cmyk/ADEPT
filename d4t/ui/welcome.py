@@ -56,7 +56,12 @@ from PySide6.QtWidgets import (
 )
 
 from . import fit_screen
-from .scope import SHOW_SAMPLE_DATA, SHOW_TEMPLATE_LIBRARY, recipe_is_supported
+# ⚠ **旗標要透過模組讀，不要 `from .scope import SHOW_…`**（U10）：
+# `scope.use_profile()` 改的是 scope 模組上的那幾個名字，而 import 進來的
+# 是一份**當時的複本** —— 換了 profile 而這裡停在舊值，症狀是「設定說
+# 關著、畫面上還在」。`tests/test_ui_scope_profiles.py` 擋著。
+from . import scope
+from .scope import recipe_is_supported
 from .theme import SEG_LABELS, TOKENS, seg_hex
 from .widgets import apply_button_cursors
 
@@ -117,10 +122,10 @@ _INTRO = (
 _FOOTER_HINT = (
     "First time here? Press the button on the left — you will be looking "
     "at scored results in about a minute."
-    if SHOW_SAMPLE_DATA else
+    if scope.SHOW_SAMPLE_DATA else
     "Open your own data, then press “Templates…” — do not start from an "
     "empty pipeline; every template is a complete, runnable one."
-    if SHOW_TEMPLATE_LIBRARY else
+    if scope.SHOW_TEMPLATE_LIBRARY else
     "Close this window and Studio shows you the four kinds of data it reads, "
     "one entry each; then build the pipeline card by card from the library on "
     "the left."
@@ -380,9 +385,9 @@ class WelcomeDialog(QDialog):
         # 範例資料仍然收著（產得出資料，但不載 pipeline）。
         # 收起來的是入口不是能力 —— ``click_demo`` / ``click_library`` 與訊號
         # 一行都沒動，測試照樣直接呼叫得到。
-        self.btn_demo.setVisible(bool(SHOW_SAMPLE_DATA))
-        self.btn_library.setVisible(bool(SHOW_TEMPLATE_LIBRARY))
-        if not (SHOW_SAMPLE_DATA and SHOW_TEMPLATE_LIBRARY):
+        self.btn_demo.setVisible(bool(scope.SHOW_SAMPLE_DATA))
+        self.btn_library.setVisible(bool(scope.SHOW_TEMPLATE_LIBRARY))
+        if not (scope.SHOW_SAMPLE_DATA and scope.SHOW_TEMPLATE_LIBRARY):
             # 少了幾顆之後，「開自己的資料」就是主要動作。
             self.btn_open.setObjectName("primary")
         root.addLayout(row)

@@ -12,7 +12,7 @@ from typing import List, Optional, Sequence
 
 from PySide6.QtWidgets import QApplication
 
-from . import crashlog, fit_screen, theme
+from . import crashlog, fit_screen, scope, theme
 from .branding import app_icon
 from .studio import StudioWindow
 from .welcome import saved_theme
@@ -30,6 +30,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # 最沒有線索的那一種（畫面上什麼都還沒有出現過），而它正是最需要一份
     # traceback 的那一種（U3）。
     crashlog.install()
+
+    # 產品範圍（U10）：一個字串決定一組開關。**在建任何視窗之前** ——
+    # `HIDDEN_STEPS` 是卡片庫建構時就讀掉的，晚一步設等於沒設。
+    scope.use_profile(scope.profile_from_env())
 
     app = QApplication.instance()
     if app is None:
