@@ -17,7 +17,8 @@ subtract 的遷移（2026-08-16）                ``workers=1`` 與 ``workers=2`
 而不是「演算法算錯」。所以這裡問的是整台引擎的規矩，並且**自動套用到 registry
 裡的每一張卡** —— 加第 18 張卡的人不必記得來補，它自己會被納管。
 
-這一檔目前鎖六條：
+這一檔目前鎖九條（⚠ 這一行以前寫著「六條」，而 I7／I8 早就在檔案裡了 ——
+2026-09-08 加 I9 那一輪一起補上）：
 
 * **I1 同一份輸入跑兩次，答案要一樣。** 抓的是演算法自己的非決定性（OpenCV 的
   IPP 路徑、未固定的隨機初值、吃到 dict/set 迭代順序的實作）。
@@ -35,6 +36,13 @@ subtract 的遷移（2026-08-16）                ``workers=1`` 與 ``workers=2`
 * **I5 參數推到上下界不炸，也不吐 NaN。** ``min``/``max`` 是卡片自己宣告的
   「使用者拖得到的範圍」（鐵則 4），所以這條問的是**那個範圍宣告得對嗎**。
 * **I6 換一個 patch 尺寸照樣跑得動。** F7-4 那個坑的性質版。
+* **I7 改一個參數，快取一定要跟著失效。** I4 的另一半：I4 問「同一份 recipe
+  冷跑熱跑一不一樣」，這條問「改了參數還會不會拿到舊影像」。
+* **I8 每一張卡都答得出「哪幾格是進階的」。** ``describe()`` 少了那個鍵的話，
+  UI 會整批當成非進階 —— 安靜地失效，不是壞掉。
+* **I9 藏起來的參數不影響結果**（2026-09-08）。``show_when`` 是**顯示**規則
+  不是驗證規則，而 registry 裡有 91 個參數掛著它（``roi_reference`` 一張卡就
+  33 個）。在這條之前，「用不到的參數不影響結果」是**靠人記得**的。
 
 每一條都用「把對應的 bug 放回去」驗過會紅（見各自的 docstring）。
 進度見 ``docs/ROADMAP.md`` Phase 1。
@@ -68,9 +76,12 @@ KIND = "ebi_patch"
 #:
 #: **刻意寫死成一張清單**：新增一張卡而它跑不起來時，測試會叫，逼人做一個決定
 #: （補前置、或明確寫進這裡並說明為什麼），而不是安靜地少測一張。
+#: ⚠ **這張表有一支反向測試**（``test_the_setup_exception_list_has_no_ghosts``，
+#: 2026-09-08）：卡片刪掉或改名之後，這裡那一列要跟著拿掉。補那支測試的當天
+#: 它就抓到兩隻幽靈 —— ``roi_template``（F29 併進 ``roi_reference`` 的
+#: ``method="a cell I mark myself"``）與 ``roi_from_mask``（F74 刪掉），
+#: 兩列都指著不存在的卡。
 NEEDS_MORE_SETUP = {
-    # 模板是一張影像，要先用 template_dialog 從大圖疊出來凍進 recipe。
-    "roi_template": "模板參數要外部資料（一張原大圖）",
     # 這一套 harness 餵的是 ebi_patch（一顆兩張），而這張卡承諾「一顆一張」——
     # 它對多張資料的正確行為就是**擋下來**（見 steps/load.py）。專屬驗收在
     # tests/test_f11_split_load_cards.py。
@@ -79,9 +90,6 @@ NEEDS_MORE_SETUP = {
     # 的 lot 沒有掛。沒掛的時候這張卡**正確的行為就是擋下來並講出兩種原因**
     # （見 steps/load_sidecar.py）。專屬驗收在 tests/test_glas_sidecar.py。
     "load_sidecar": "需要掛上 GLAS 匯出的資料集（harness 的 lot 沒有）",
-    # 它吃的是 `load_sidecar` 吐的那條流，而那張卡在這個 harness 上跑不起來
-    # （上一行）。專屬驗收在 tests/test_roi_from_mask.py。
-    "roi_from_mask": "需要 GLAS 的 label map 那條流（前一張卡在這裡跑不起來）",
     # F16：`roi_compare` 併進 `glv_stats` 的 ``method="compare"`` 了。
     # 那個 method 需要上游先有一張 Region 卡（這個 harness 只接 load_patch，
     # 所以一個區域都沒有），而**預設的 method 是 `stats`**，在這裡跑得起來 ——
@@ -1070,3 +1078,220 @@ def test_every_card_can_declare_advanced_rows():
         for spec in step().describe()["params"]:
             assert "advanced" in spec, "%s.%s" % (step.key, spec["name"])
             assert isinstance(spec["advanced"], bool)
+
+
+# --------------------------------------------------------------------------- #
+# I9：藏起來的參數不影響結果
+#
+# `CLAUDE.md` §3 已經寫下這條規矩，但在這之前**沒有任何東西在守它**：
+#
+#   「注意 `show_when` 是**顯示**規則不是驗證規則：藏起來的參數照樣有預設值，
+#     卡片自己要保證用不到的參數不影響結果（`resolve_reads` 也一樣）。」
+#
+# 「卡片自己要保證」＝ 人要記得。而 2026-09-08 量到 registry 裡有 91 個參數掛著
+# `show_when`，光 `roi_reference` 一張卡就 33 個 —— 那是 33 個要靠人記得的分支。
+#
+# 這條為什麼是「安靜地錯」那一族
+# ------------------------------
+# 藏起來的參數壞掉時，畫面上**什麼都看不到**：使用者選了 method A，畫面上只有
+# A 的那幾格，而卡片偷偷讀了 B 的某一格的預設值。他改不到它、看不到它，
+# 而數字是錯的。這正是這一檔開頭那張表的形狀 ——「有一條路徑讓 pipeline 安靜地
+# 用了跟使用者宣告的不一樣的輸入」。
+#
+# 這條在這之前是**逐卡臨時做的**：`test_roi_cross.py` 對 `directions` 做了兩半
+# （藏起來的那一種真的沒有作用、沒藏的那幾種有作用），`test_output_uniformity.py`
+# 只留了一句註解說「⚠ show_when 是顯示規則不是驗證規則」。升成不變量之後，
+# 第 20 張卡的作者不必記得來補。
+# --------------------------------------------------------------------------- #
+#: 換一個值的時候不碰這幾種型別。
+#:
+#: `image_key` / `image_keys` / `region_key` / `region_keys` 的值是**接線的結果**
+#: （F9-6：設定區唯讀，來源只在畫布上拉線決定），所以「換一個值」在那裡不是
+#: 使用者做得到的動作 —— 塞一個不存在的流名進去，量到的會是「引擎對壞值的
+#: 反應」，不是這條不變量要問的事。
+_UNSWAPPABLE = ("image_key", "image_keys", "region_key", "region_keys",
+                "curve", "template", "cell_rois", "channel_map",
+                "chart_spec", "chart_style", "expr", "feature_keys")
+
+
+def _another_value(spec, current):
+    """給這個參數挑一個**跟現在不一樣**的合法值；挑不出來回 ``None``。"""
+    if spec.type in _UNSWAPPABLE:
+        return None
+    if spec.type == "bool":
+        return not bool(current)
+    if spec.type in ("int", "float"):
+        bounds = [b for b in (spec.min, spec.max) if b is not None]
+        if not bounds:
+            return None
+        cast = int if spec.type == "int" else float
+        # 離現在最遠的那一界 —— 「換了值」要換得夠明顯，換到一個跟預設只差
+        # 0.001 的值，就算卡片真的偷讀了它也看不出來。
+        far = max(bounds, key=lambda b: abs(float(b) - float(current or 0)))
+        return cast(far) if cast(far) != current else None
+    if spec.type in ("choice", "chip_choice", "icon_choice"):
+        for choice in (spec.choices or []):
+            if choice != current:
+                return choice
+        return None
+    if spec.type == "multi_choice":
+        # 值是逗號分隔的一串。挑一個「不是現在這一串」的組合。
+        picked = [c for c in (spec.choices or []) if c not in str(current or "")]
+        return ",".join(picked[:2]) if picked else None
+    if spec.type == "str":
+        return None          # 自由文字沒有「另一個合法值」可言
+    return None
+
+
+def _hidden_param_cases(key: str):
+    """這張卡在**預設設定下被藏起來**的參數 → ``(參數名, 另一個值)``。
+
+    只問預設那一組設定（使用者剛從卡片庫拖出來的樣子）。要把每一個 method
+    的每一種組合都走一遍的話，這組會爆炸成幾百個 case，而抓到的東西是同一
+    類 —— 預設那一組已經覆蓋了每一張卡最常被走到的那條路。
+    """
+    cls = REGISTRY[key]
+    defaults = _defaults(key)
+    for spec in cls.params:
+        if not getattr(spec, "show_when", None):
+            continue
+        if spec.visible_for(defaults):
+            continue                       # 現在看得到 → 不是這條要問的
+        alt = _another_value(spec, defaults.get(spec.name))
+        if alt is None:
+            continue
+        yield spec.name, alt
+
+
+def _recipe_with_probe(key: str) -> Recipe:
+    """:func:`recipe_for` 再接一張**量測卡**在被測的那張後面。
+
+    ⚠ 這一段是踩出來的。第一版直接用 ``recipe_for(key)``，然後把「偷讀一個
+    藏起來的參數」這個 bug 放進 ``denoise`` 去驗 —— **測試照樣全綠**。原因是
+    影像段的卡（Enhance 那四張）**根本不產 feature**：它改的是影像，而
+    ``run_defect`` 回傳的 ``features`` 是空的，於是「結果不變」這句話問的是
+    兩個空 dict 相不相等。
+
+    那正是這個 repo 踩過好幾次的老樣式（測試通過，只是什麼都沒測），所以這裡
+    在後面接一張 ``glv_stats`` 讀被測卡吐出來的那條流 —— **影像變了，就會有
+    一個數字跟著變**。
+    """
+    recipe = recipe_for(key)
+    if key == "glv_stats":
+        return recipe                       # 它自己就是量測卡
+    defaults = _defaults(key)
+    writes = list(REGISTRY[key].resolve_writes(defaults))
+    regions = list(REGISTRY[key].resolve_regions_out(defaults))
+    if not writes and not regions:
+        return recipe
+    probe = dict(_defaults("glv_stats"))
+    if writes:
+        probe["source"] = writes[0]
+    if regions:
+        probe["roi"] = regions[0]
+    probe["output_prefix"] = "probe"
+    recipe.nodes["probe"] = RecipeNode("probe", "glv_stats", probe)
+    recipe.routes[KIND].append("probe")
+    return recipe
+
+
+HIDDEN_CASES = sorted(
+    (key, name, value)
+    for key in CARDS if key not in NEEDS_MORE_SETUP
+    for name, value in _hidden_param_cases(key))
+
+
+@pytest.mark.parametrize("key,name,value", HIDDEN_CASES,
+                         ids=["%s.%s=%s" % c for c in HIDDEN_CASES])
+def test_a_hidden_parameter_changes_nothing(key, name, value, dataset):
+    """把一個**畫面上看不到的**參數換掉，這張卡必須：
+
+    1. **宣告不變** —— ``resolve_reads`` / ``resolve_writes`` /
+       ``resolve_features`` / ``resolve_regions_out`` 逐項相同。
+       這一半是 `CLAUDE.md` 那句「``resolve_reads`` 也一樣」的執行機構：
+       藏起來的參數改變了這張卡吃哪條流的話，**畫布會多畫一條使用者拉不到、
+       也看不到的線**（I3 的孿生條款）。
+    2. **結果不變** —— feature 逐項相同、score 相同。
+
+    紅了的時候要修的是**卡片**，不是這條測試：要嘛那一格其實有作用（那它就
+    不該被藏起來，`show_when` 的條件寫錯了），要嘛卡片該在用不到它的時候
+    真的不去讀它。
+    """
+    from d4t.core.pipeline.batch import pin_cv2_deterministic
+    pin_cv2_deterministic()
+
+    cls = REGISTRY[key]
+    base = dict(_defaults(key))
+    swapped = dict(base)
+    swapped[name] = value
+
+    def features_with(params):
+        recipe = _recipe_with_probe(key)
+        recipe.nodes[key].params = params
+        return run_defect(recipe, dataset.items[0], dataset.kind)
+
+    # ---- 1. 宣告不變 ----
+    for what in ("resolve_reads", "resolve_writes", "resolve_features",
+                 "resolve_regions_out"):
+        before = list(getattr(cls, what)(base))
+        after = list(getattr(cls, what)(swapped))
+        assert before == after, (
+            "%s 的 %s 是藏起來的，但把它換成 %r 之後 %s() 變了：%s → %s\n"
+            "  畫布是照這個宣告畫線的，所以這會畫出一條使用者看不到、"
+            "也改不到的線。"
+            % (key, name, value, what, before, after))
+
+    # ---- 2. 結果不變 ----
+    before = features_with(base)
+    after = features_with(swapped)
+
+    assert before.ok == after.ok, (
+        "%s 的 %s 是藏起來的，但把它換成 %r 之後這一顆從 ok=%s 變成 ok=%s（%s）"
+        % (key, name, value, before.ok, after.ok, after.error))
+    if not before.ok:
+        return                      # 兩邊都失敗且理由一致 → 不是這條要問的
+
+    diff = sorted(
+        k for k in set(before.features or {}) | set(after.features or {})
+        if (before.features or {}).get(k) != (after.features or {}).get(k))
+    assert not diff, (
+        "%s 的 %s 在畫面上是藏起來的，但把它換成 %r 之後這幾個特徵變了：%s\n"
+        "  使用者看不到那一格、也改不到它，而數字跟著動了 —— "
+        "要嘛 show_when 的條件寫錯，要嘛卡片在用不到它的時候還是讀了它。"
+        % (key, name, value, [(k, (before.features or {}).get(k),
+                               (after.features or {}).get(k)) for k in diff]))
+    assert before.score == after.score, (
+        "%s 的 %s 是藏起來的，但分數從 %r 變成 %r"
+        % (key, name, value, before.score, after.score))
+
+
+def test_the_hidden_parameter_check_is_not_vacuous():
+    """真的有藏起來的參數被換過 —— 不然這組會安靜地空轉。
+
+    2026-09-08：registry 有 91 個參數掛 `show_when`，這組蒐集到 %d 個 case。
+    數字掉到個位數的話，要嘛是 `_UNSWAPPABLE` 排掉太多，要嘛是 `_defaults`
+    那一組設定剛好什麼都藏不住 —— 兩種都要看一眼。
+    """
+    assert len(HIDDEN_CASES) >= 12, len(HIDDEN_CASES)
+    assert len({key for key, _n, _v in HIDDEN_CASES}) >= 3, HIDDEN_CASES
+
+
+def test_the_setup_exception_list_has_no_ghosts():
+    """:data:`NEEDS_MORE_SETUP` 上不准留已經不存在的卡片 key。
+
+    這一條是 `NEEDS_MORE_SETUP` 自己的註解點名要的（2026-08-27 寫下、
+    2026-09-08 補上）：
+
+      「**這張表上留一個不存在的 key 沒有任何測試會叫**，而它會讓下一個讀的人
+        以為那張卡還在（`CLAUDE.md`：任何『例外清單』都要有一支反向的測試，
+        而這一張目前沒有）。」
+
+    而它已經發生了：`roi_template` 與 `roi_from_mask` 兩張卡分別在 F29 與 F74
+    被併掉／刪掉，兩列卻留到現在 —— 於是這張表一邊說「這幾張卡跳過」，
+    一邊指著兩張不存在的卡。
+    """
+    ghosts = sorted(k for k in NEEDS_MORE_SETUP if k not in REGISTRY)
+    assert not ghosts, (
+        "NEEDS_MORE_SETUP 上這幾個 key 已經不在 registry 裡了：%s\n"
+        "  卡片刪掉或改名之後那一列要跟著拿掉，不然這張表會指著不存在的卡。"
+        % ghosts)
