@@ -111,7 +111,7 @@ eba83449a5a176d987ec5b531c45b233ed2a5d47 d4t/ui/glyphs.py
 480e6660f5b9015be5047282146bc37c80ec2eb1 d4t/ui/graph_builder.py
 a25988273c1d0e09040cc3474421a584b4f81614 d4t/ui/inspectors.py
 99b8d619c884e776014c33948df97d22e6579ef8 d4t/ui/numbers.py
-faf63f05c0d4d5c3f0d68df88bc3419efd450810 d4t/ui/problems_bar.py
+6f01c59fd91309c66c716f2d62faa17bbba48077 d4t/ui/problems_bar.py
 d7a7ed82b00851954125480e5bba3c8d472f5b61 d4t/ui/region_check.py
 9bcae50b6478688608568c6c8242688343af9d38 d4t/ui/region_words.py
 2126287af938a93e23246131ae63d0cc85d5ba13 d4t/ui/results.py

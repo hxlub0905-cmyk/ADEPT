@@ -42,7 +42,12 @@ LEVEL_ORDER = ("error", "warning", "info")
 
 #: 每一級在清單上的記號。**寫字不只給顏色**（U13 同一個根）：紅綠對色覺
 #: 缺陷者不可分辨，而這一列是「還能不能跑」唯一的答案。
-LEVEL_MARK = {"error": "✕", "warning": "⚠", "info": "i"}
+#:
+#: ⚠ **字元是挑過的**（F7-23 那條規矩）：廠內是 Windows，Segoe UI 蓋不到
+#: ``✕``(U+2715) 那一族，退字型的結果是大小與 baseline 都不一樣，最壞是豆腐
+#: 框 —— 而我們在開發機上看不到。``×`` 是 Latin-1、``⚠`` 這個 repo 已經在
+#: 結果表的警示欄上用著，兩個都安全。
+LEVEL_MARK = {"error": "×", "warning": "⚠", "info": "i"}
 
 
 def counts_of(issues: Sequence[Any]) -> Dict[str, int]:
@@ -140,7 +145,11 @@ class ProblemsBar(QWidget):
         hl.addWidget(self.label, 1)
         self.btn_toggle = QToolButton(head)
         self.btn_toggle.setCursor(Qt.PointingHandCursor)
-        self.btn_toggle.setText("Show the list ▾")
+        # ⚠ **不要在按鈕上放 ``▾``**（F7-23：Segoe UI 蓋不到 Geometric
+        # Shapes，廠內那台會退字型或畫成豆腐框，而
+        # `test_ui_f7_23_buttons` 會擋）。這顆鈕的字本來就說完了整件事，
+        # 一個箭頭沒有多講任何東西。
+        self.btn_toggle.setText("Show the list")
         self.btn_toggle.clicked.connect(self.toggle)
         hl.addWidget(self.btn_toggle)
         lay.addWidget(head)
@@ -163,7 +172,9 @@ class ProblemsBar(QWidget):
         c = counts_of(issues)
         self.label.setText(summary_of(issues))
         worst = next((lv for lv in LEVEL_ORDER if c[lv]), "")
-        self.mark.setText(LEVEL_MARK.get(worst, "✓"))
+        # 沒有問題就**不畫記號**（不是一個打勾）：那一行字已經把話講完了，
+        # 而多一個符號只是多一個要挑「這台機器有沒有這個字」的地方。
+        self.mark.setText(LEVEL_MARK.get(worst, ""))
         colour = {"error": TOKENS.get("danger_text", "#a83f33"),
                   "warning": TOKENS.get("accent", "#2f6fb2")}.get(worst, "")
         self.mark.setStyleSheet("color: %s" % colour if colour else "")
@@ -205,7 +216,7 @@ class ProblemsBar(QWidget):
         show = bool(on) and bool(self._rows)
         self._open = show
         self.list.setVisible(show)
-        self.btn_toggle.setText("Hide the list ▴" if show else "Show the list ▾")
+        self.btn_toggle.setText("Hide the list" if show else "Show the list")
 
     def toggle(self) -> None:
         self.set_open(not self.is_open())
