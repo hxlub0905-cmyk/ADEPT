@@ -342,9 +342,14 @@ def test_the_fit_floor_matches_each_canvas_role(window, qapp):
     assert view.zoom_percent() >= 50, \
         "開這份 recipe 之後停在 %d%%" % view.zoom_percent()
 
-    window.open_canvas_window()
-    assert window._popout_view.MIN_FIT_SCALE >= 0.7
-    window._canvas_popout.close()
+    # U5（2026-09-08）：彈出視窗退場了，「看全貌」是 Build 模式。
+    # 主畫布的 0.5 是**它自己的**設定（概覽條），而類別預設 0.7 仍然是
+    # 「讀得出副標」的那個值 —— 上面兩行問的正是那兩個不要互相污染。
+    window.set_layout_mode("build")
+    qapp.processEvents()
+    assert window.pipeline.MIN_FIT_SCALE == 0.5, \
+        "換版面不該把畫布的 fit 下限改掉"
+    window.set_layout_mode("tune")
     qapp.processEvents()
 
 

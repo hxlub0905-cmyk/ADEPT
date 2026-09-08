@@ -751,6 +751,10 @@ class StudioWindow(QMainWindow):
         # 跑完才 show，關掉不丟結果 —— 機制是對的，但使用者的心智模型裡「關掉
         # 視窗」通常等於「丟掉」，而鈕上沒有任何東西反駁那個猜測。
         self._refresh_results_button()
+        # Build ⇄ Tune（U5）。它排在 Results 旁邊 —— 兩顆都是「不屬於流程、
+        # 但要隨時找得到」的那一段。
+        self.btn_layout = self._tool_button(
+            "Build", "Switch layout (Ctrl+B)", self.toggle_layout_mode)
         self.btn_help = self._tool_button(
             "Help", "Reopen the getting-started tour (includes “Try it with "
                     "sample data”)",
@@ -814,6 +818,7 @@ class StudioWindow(QMainWindow):
 
         # 右邊：不屬於流程、但要隨時找得到的那幾顆。
         bar.addWidget(self.btn_results)
+        bar.addWidget(self.btn_layout)
         bar.addWidget(self.btn_help)
         bar.addWidget(self.btn_theme)
         bar.addSeparator()
@@ -928,6 +933,7 @@ class StudioWindow(QMainWindow):
         ("Ctrl+-", "zoom_out"), ("Ctrl+Shift+F", "zoom_fit"),
         ("Ctrl+F", "find_card"),
         ("Ctrl+Left", "prev_defect"), ("Ctrl+Right", "next_defect"),
+        ("Ctrl+B", "layout_mode"),
         # U18：Delete / Esc 以前只住在畫布與 cell_canvas 各自的 keyPressEvent
         # 裡，主快捷鍵表上沒有 —— 於是「這個工具有哪些鍵」這個問題有兩個答案，
         # 而使用者讀得到的是不完整的那一個。
@@ -961,6 +967,7 @@ class StudioWindow(QMainWindow):
             "find_card": self.focus_card_search,
             "prev_defect": lambda: self.step_defect(-1),
             "next_defect": lambda: self.step_defect(+1),
+            "layout_mode": self.toggle_layout_mode,
             "delete_selected": self._delete_selected_on_canvas,
             "clear_selection": self._clear_canvas_selection,
         }
@@ -1160,9 +1167,8 @@ class StudioWindow(QMainWindow):
 
         middle = QSplitter(Qt.Vertical, self)
         middle.addWidget(self.pipeline)
-        middle.addWidget(self.stack)
-        middle.setStretchFactor(0, 2)
-        middle.setStretchFactor(1, 3)
+        # 下半在 `_build_preview_pane` 跑完之後才接得起來（儀表是在那裡建的）
+        # —— 見 `_build_params_row`。
         self.canvas_column = middle
 
         # 「為什麼還不能跑」的常駐清單（U2）—— **整個視窗最下面一條，橫跨三欄**
@@ -1182,12 +1188,18 @@ class StudioWindow(QMainWindow):
         #（isVisible 之前那些數字沒有意義，docs/PITFALLS.md 的老坑）。
         self._layout_ratio_applied = False
         #: 畫布的彈出視窗（沒開著是 None）。
-        self._canvas_popout: Optional[Any] = None
-        self._popout_view: Optional[PipelineCanvas] = None
+        #: 版面模式（U5）。`tune` 是預設 —— 它就是這一輪之前的那個比例，
+        #: 所以開窗看到的東西一個位元都沒變。
+        self._layout_mode: str = "tune"
 
         # 右：單顆預覽（F7-5：Gallery 與直方圖搬到 Results 視窗，
         #     主視窗只留「編流程 + 看單顆」，影像因此拿得到整欄高度）
         self.preview_pane = self._build_preview_pane()
+        # 參數 ＋ 儀表同欄同框（U8）。要在 preview pane 之後 —— 儀表那幾個
+        # widget 是在那一支裡建的。
+        middle.addWidget(self._build_params_row())
+        middle.setStretchFactor(0, 2)
+        middle.setStretchFactor(1, 3)
 
         # Results 視窗（跑完才 show；先建好讓 histogram / gallery 一直有實體，
         # 這樣所有既有接線與測試都不用管它現在開著沒有）
@@ -1260,6 +1272,34 @@ class StudioWindow(QMainWindow):
         lay.addWidget(self.route_box)
         lay.addWidget(self.decide_panel, 1)
         return pane
+
+    def _build_params_row(self) -> QWidget:
+        """中欄的下半：**參數在左、這張卡的儀表在右，同一個框裡**（U8）。
+
+        為什麼它們必須挨著
+        ------------------
+        調參數的迴圈是「改一個數字 → 看那個數字怎麼變」。儀表以前住在右欄
+        下半，中間隔著整張影像 —— 每改一格眼睛就要橫跨半個螢幕來回一趟，而那
+        件事在一個 1366×768 的螢幕上尤其貴。
+
+        **卡名與階段色只出現一次**：ParamForm 自己的標頭就是那一次，儀表這一
+        邊只留 Card / Features 兩顆切換鈕。兩邊各畫一次的話，同一張卡的名字在
+        同一個框裡出現兩遍，而使用者要花一秒鐘確認那是不是兩張卡。
+
+        影像**不搬**：它是另一種迴圈（改參數 → 看圖），而且它要的是高度 ——
+        把它擠進這一列只會讓兩件事都變小。
+        """
+        row = QSplitter(Qt.Horizontal, self)
+        row.addWidget(self.stack)
+        row.addWidget(self.gauge_pane)
+        # 參數那一邊寬一點：它裝的是一排排可以拖的滑桿（F7-8），而儀表是
+        # 讀的東西。3:2 是量出來的 —— 再窄一點，`Borrow range from` 那種
+        # 兩行的 label 會開始折行。
+        row.setStretchFactor(0, 3)
+        row.setStretchFactor(1, 2)
+        row.setCollapsible(0, False)
+        self.params_row = row
+        return row
 
     def _build_preview_pane(self) -> QWidget:
         pane = QWidget(self)
@@ -1474,10 +1514,10 @@ class StudioWindow(QMainWindow):
         # F76 刀 4：這一塊從 `widgets.FeatureTable`（一條平的清單）換成
         # `feature_panel.FeaturePanel`（卡 › 區域 分段、四胞胎橫過來）。
         # 名字仍叫 `feature_panel`，取用口跟舊的那張表同名同義。
-        self.feature_panel = FeaturePanel(pane)
+        self.feature_panel = FeaturePanel(self)
         self.feature_panel.setMinimumHeight(120)
 
-        self.inspector_host = QWidget(pane)
+        self.inspector_host = QWidget(self)
         ihost = QVBoxLayout(self.inspector_host)
         ihost.setContentsMargins(0, 0, 0, 0)
         ihost.setSpacing(2)
@@ -1490,22 +1530,36 @@ class StudioWindow(QMainWindow):
         ihost.addWidget(self.inspector_summary)
         self._inspector: Optional[Any] = None
 
-        self.bottom_stack = QStackedWidget(pane)
+        self.bottom_stack = QStackedWidget(self)
         self.bottom_stack.addWidget(self.inspector_host)      # index 0
         self.bottom_stack.addWidget(self.feature_panel)       # index 1
 
+        # ---- 儀表搬到參數旁邊（U8，2026-09-08）--------------------------
+        #
+        # 這一塊（Card 儀表 / Features）以前住在**右欄下半**，而參數住在
+        # 中欄下半 —— 中間隔著整張影像。調參數的迴圈是「改一個數字 → 看那個
+        # 數字怎麼變」，而那兩件事每一次都要橫跨半個螢幕，眼睛來回一趟。
+        #
+        # 現在它跟參數同欄同框（見 `_build_params_row`）。**影像維持獨立**：
+        # 它是另一種迴圈（改參數 → 看圖），而且它需要的是高度。
+        self.gauge_pane = QWidget(self)
+        glay = QVBoxLayout(self.gauge_pane)
+        glay.setContentsMargins(0, 0, 0, 0)
+        glay.setSpacing(2)
         tabs = QHBoxLayout()
         tabs.setContentsMargins(0, 0, 0, 0)
         tabs.setSpacing(4)
-        self.btn_tab_card = small_button("Card", parent=pane, shape="wide")
-        self.btn_tab_features = small_button("Features", parent=pane, shape="wide")
+        self.btn_tab_card = small_button("Card", parent=self.gauge_pane,
+                                         shape="wide")
+        self.btn_tab_features = small_button("Features", parent=self.gauge_pane,
+                                             shape="wide")
         for i, b in enumerate((self.btn_tab_card, self.btn_tab_features)):
             b.setCheckable(True)
             b.clicked.connect(lambda _c=False, k=i: self.show_bottom_page(k))
             tabs.addWidget(b)
         tabs.addStretch(1)
-        lay.addLayout(tabs)
-        lay.addWidget(self.bottom_stack, 2)
+        glay.addLayout(tabs)
+        glay.addWidget(self.bottom_stack, 1)
 
         # ---- 判定那一塊（F76 刀 5，2026-09-02）----------------------------
         #
@@ -1631,7 +1685,10 @@ class StudioWindow(QMainWindow):
         view.tree_leaf_clicked.connect(self._on_tree_step_clicked)
         view.edge_added.connect(self._on_edge_added)
         view.edge_removed.connect(self._on_edge_removed)
-        view.popout_requested.connect(self.open_canvas_window)
+        # zoom bar 上那顆鈕以前開第二個視窗，現在換版面（U5）——
+        # 它問的一直都是「讓我看全貌」，而那件事不需要第二個視窗。
+        view.popout_requested.connect(
+            lambda: self.set_layout_mode("build"))
 
     def _wire_widgets(self) -> None:
         self.library.add_requested.connect(self._on_add_requested)
@@ -3687,10 +3744,11 @@ class StudioWindow(QMainWindow):
 
         兩個例外：
         * 分數面板是「我要編」，本來就該開著（`show_score_page` 自己開）；
-        * 畫布彈出去的時候中欄整欄都給設定（`open_canvas_window` 決定），
-          這裡不要跟它搶。
+        * **使用者自己切到 Build 模式的時候不要跟他搶**（U5）。這一條以前
+          問的是「畫布彈出去了嗎」，而 Build 就是那件事的新形狀：他明講了
+          「現在我要看流程」，選一張卡不該把設定區推回來。
         """
-        if self.canvas_popout_open():
+        if self._layout_mode == "build":
             return
         if self.stack.currentWidget() is not self.param_form:
             return
@@ -3721,13 +3779,23 @@ class StudioWindow(QMainWindow):
 
         追**明確狀態**而不是問 widget：`isVisible()` 在視窗 show 之前恆為
         False，那個坑這個 repo 踩過（見 docs/PITFALLS.md）。
+
+        ⚠ **它跟版面模式不是同一件事**（U5）：模式是使用者選的版面，這一個是
+        Tune 裡「選到一張卡就攤開」那個**自動**行為。Build 模式下它恆為 False
+        —— 那時候中欄整欄都是畫布，沒有設定區可以攤開。
         """
         return bool(self._params_open)
 
     def set_params_open(self, on: bool) -> bool:
         """攤開／收起設定區（中欄的下半）。預設是攤開的（D 案）——
-        畫布會 zoom，平面上只需要中上一塊；收起來是給「現在只想看流程」的人。"""
+        畫布會 zoom，平面上只需要中上一塊；收起來是給「現在只想看流程」的人。
+
+        ⚠ **Build 模式下這一支什麼都不做**（U5）：使用者明講了「現在我要看
+        流程」，而選一張卡不該把設定區推回來。要攤開設定就是切回 Tune。
+        """
         on = bool(on)
+        if self._layout_mode == "build":
+            return False
         self._params_open = on
         total = sum(self.canvas_column.sizes()) or self.canvas_column.height()
         if on:
@@ -3737,64 +3805,108 @@ class StudioWindow(QMainWindow):
             self.canvas_column.setSizes([total, 0])
         return on
 
-    # ---- 畫布的彈出視窗（F8-UI D 案）--------------------------------------
-    def open_canvas_window(self) -> None:
-        """把 pipeline 開在自己的視窗（全尺寸）。
+    # ---- Build / Tune 兩種模式（U5，2026-09-08）----------------------------
+    #: 兩種模式各自的中欄比例存在哪一格 QSettings。
+    #:
+    #: **兩格而不是一格**：使用者在 Build 裡把畫布拉高、在 Tune 裡把設定拉高，
+    #: 那是兩個不同的偏好。共用一格的話切一次模式就把另一個覆蓋掉，而使用者
+    #: 每次切回來都要再調一次。
+    #: ⚠ `tune` 用的是**舊的那一格**（`CANVAS_SPLIT_KEY`）—— 那是這一輪之前
+    #: 唯一的比例，而使用者已經調過它了。換一個新名字等於在升級的那一天把每
+    #: 個人的版面偷偷重設回預設值。
+    _SPLIT_KEYS = {"build": "ui/canvas_split_build",
+                   "tune": CANVAS_SPLIT_KEY}
 
-        主視窗的畫布只佔中上一塊 —— 要看全貌不是把主視窗的版面搶回來，
-        是到自己的視窗看。第二個視窗是**另一份 PipelineCanvas 接同一個
-        model**：所有訊號走同一批 handler，所以在彈出視窗拉線、拖卡、
-        選取，主視窗全部跟著動（反之亦然）。
+    LAYOUT_MODES = ("build", "tune")
+
+    def layout_mode(self) -> str:
+        """現在是哪一種版面（**明確狀態**，不去量 splitter）。"""
+        return self._layout_mode
+
+    def set_layout_mode(self, mode: str, remember: bool = True) -> str:
+        """換版面。回真的套上去的那一個。
+
+        為什麼是模式而不是一個彈出視窗（U5）
+        ------------------------------------
+        以前「看全貌」是把畫布開在**第二個視窗**裡（F8-UI D 案）。那條路能
+        work，但代價是兩份 `PipelineCanvas` 實體與兩份狀態 —— 每一個訊號都要
+        接兩次、每一次重畫都要記得兩邊都畫（`_canvases()` 的存在就是那個稅），
+        而**畫布是這個工具的賣點，卻是螢幕上第三大的東西**。
+
+        兩種模式共用同一份畫布：
+
+        * **Build** —— 畫布吃滿中欄。接線、看全貌、排版。
+        * **Tune** —— 現在這個比例（畫布 2 / 設定 3）。調參數、看影像。
+
+        ⚠ **切模式不重建畫布**：node id 與選取狀態原封不動（那是驗收條件）。
+        它動的只有 splitter 的兩個數字。
         """
-        from PySide6.QtWidgets import QDialog
-
-        if self._canvas_popout is not None:
-            self._canvas_popout.raise_()
-            self._canvas_popout.activateWindow()
-            return
-        dlg = QDialog(self)
-        dlg.setWindowTitle("Pipeline — full view")
-        lay = QVBoxLayout(dlg)
-        lay.setContentsMargins(0, 0, 0, 0)
-        view = PipelineCanvas(dlg, popout_button=False)
-        lay.addWidget(view)
-        self._wire_canvas(view)
-        fit_screen.fit(dlg, 1100, 700)
-        dlg.finished.connect(self._on_canvas_popout_closed)
-        self._canvas_popout, self._popout_view = dlg, view
-        # 畫布已經在別的視窗全尺寸攤開了，主視窗那一份就把位子讓出來 ——
-        # 設定往上補滿整欄（使用者要的 flexible）。關窗時還原原本的比例。
-        self._pre_popout_sizes = list(self.canvas_column.sizes())
-        total = sum(self._pre_popout_sizes) or self.canvas_column.height()
-        self.canvas_column.setSizes([0, total])
-        self._refresh_pipeline()          # 把現在的節點畫進新視窗
-        # 開窗那一刻跟主視窗長得一樣（含使用者拖過的位置）——
-        # 「彈出去被自動整理」正是使用者退掉的行為。
-        view.copy_positions_from(self.pipeline)
-        dlg.show()
-        view.fit_later()
-
-    def _on_canvas_popout_closed(self, *_a) -> None:
-        self._canvas_popout = None
-        self._popout_view = None
-        # 還原彈出前的版面。當時的比例就是使用者自己調的 —— 還原成那個，
-        # 不是還原成預設值。
-        saved = getattr(self, "_pre_popout_sizes", None)
-        if saved and sum(saved):
+        use = str(mode or "")
+        if use not in self.LAYOUT_MODES:
+            return self._layout_mode
+        if remember and self._layout_mode in self._SPLIT_KEYS:
+            sizes = list(self.canvas_column.sizes())
+            if sum(sizes):
+                _save_sizes(self._SPLIT_KEYS[self._layout_mode], sizes)
+        self._layout_mode = use
+        total = sum(self.canvas_column.sizes()) or self.canvas_column.height()
+        saved = _load_sizes(self._SPLIT_KEYS[use], 2)
+        if saved and sum(saved) and use == "tune":
             self.canvas_column.setSizes(saved)
+        elif use == "build":
+            self.canvas_column.setSizes([total, 0])
+        elif self.selected_node is not None:
+            keep = max(240, int(total * 0.6))
+            self.canvas_column.setSizes([max(0, total - keep), keep])
         else:
-            self.set_params_open(self._params_open)
+            # 沒選任何卡 → 設定區收著（開窗時的樣子）。
+            self.canvas_column.setSizes([total, 0])
+        # ⚠ **模式與 `params_open` 不是同一件事**（第一版把它們合在一起，
+        # 而那是錯的）：模式是**使用者選的版面**，`params_open` 是 Tune 裡
+        # 「選到一張卡就把設定攤開」那個**自動**行為。Build 模式下沒有設定區
+        # 可以攤開，所以那個旗標跟著關掉；切回 Tune 時交還給
+        # `_sync_params_pane` —— 有選卡就攤開，沒選就收著（開窗時的樣子）。
+        self._params_open = (use == "tune"
+                             and self.selected_node is not None)
+        self._sync_layout_button()
+        # 換到 Build 的時候把畫布重新 fit 一次：位子變大了而使用者要的正是
+        # 「看全貌」，停在原本的縮放等於那顆鈕只做了一半。
+        if use == "build":
+            self.pipeline.fit_later()
+        return use
 
-    def canvas_popout_open(self) -> bool:
-        """彈出視窗現在開著嗎（**明確狀態**，不問 widget）。"""
-        return self._canvas_popout is not None
+    def toggle_layout_mode(self) -> str:
+        """Build ⇄ Tune（工具列那顆鈕與 Ctrl+B）。"""
+        return self.set_layout_mode(
+            "tune" if self._layout_mode == "build" else "build")
+
+    def _sync_layout_button(self) -> None:
+        """鈕上寫的是**按下去會去哪裡**，不是現在在哪裡。
+
+        寫現在在哪裡的話，使用者要先讀懂「這是狀態不是動作」才知道按了會怎樣
+        —— 而一顆工具列的鈕沒有那麼多解釋的空間。
+        """
+        btn = getattr(self, "btn_layout", None)
+        if btn is None:
+            return
+        going = "Tune" if self._layout_mode == "build" else "Build"
+        btn.setText(going)
+        btn.setToolTip(
+            "Switch to %s layout (Ctrl+B) — %s"
+            % (going,
+               "canvas fills the column, for wiring and seeing the whole thing"
+               if going == "Build" else
+               "canvas on top, settings below, for tuning parameters"))
 
     def _canvases(self) -> List[PipelineCanvas]:
-        """現在活著的每一份畫布（主視窗的 + 彈出視窗的）。"""
-        views = [self.pipeline]
-        if self._popout_view is not None:
-            views.append(self._popout_view)
-        return views
+        """現在活著的每一份畫布。
+
+        **恆為一份**（U5 的驗收條件）。它以前會是兩份（主視窗 ＋ 彈出視窗），
+        而那正是每一個訊號要接兩次、每一次重畫要記得兩邊都畫的原因。這一支
+        留著是因為呼叫端寫的是「對每一份畫布做這件事」—— 那句話仍然是對的，
+        而且哪天真的又需要第二份時，改的地方只有這裡。
+        """
+        return [self.pipeline]
 
     # ==================================================================== #
     # 主題（F7-2）
@@ -7240,12 +7352,10 @@ class StudioWindow(QMainWindow):
                 autosave.offer_restore(self)
             except Exception:            # noqa: BLE001 — 一張網不准擋開窗
                 pass
-            self.set_params_open(self._params_open)
-            # 上一次的中欄比例只在**設定區攤開時**還原 —— 收起來的時候
-            # 那組數字講的是「畫布拿整欄」，套上去等於把剛決定的事推翻。
-            saved = _load_sizes(CANVAS_SPLIT_KEY, 2) if self._params_open else None
-            if saved:
-                self.canvas_column.setSizes(saved)
+            # 版面模式自己會去讀那一格 QSettings（U5）—— 這裡以前有一段
+            # 「只在設定區攤開時才還原」的判斷，而那個判斷現在住在
+            # `set_layout_mode` 裡（Build 模式不吃存下來的比例，它就是滿版）。
+            self.set_layout_mode(self._layout_mode, remember=False)
 
     def closeEvent(self, event) -> None:      # noqa: D102 - Qt hook
         if not self.confirm_close():
@@ -7259,10 +7369,11 @@ class StudioWindow(QMainWindow):
         self.autosave.stop()
         autosave.clear()
         _save_sizes(COLUMNS_KEY, self.root_splitter.sizes())
-        if self._params_open:
-            # 收起來時存進去的是「0 高的設定區」—— 下次開窗照著還原，
-            # 使用者會看到一個他從來沒有調成那樣的版面。
-            _save_sizes(CANVAS_SPLIT_KEY, self.canvas_column.sizes())
+        if self._layout_mode == "tune":
+            # **只存 Tune 的比例。** Build 模式的中欄是「畫布 100% / 設定 0」
+            # ——那不是一個使用者調出來的比例，存下來下次開窗照著還原的話，
+            # 他會看到一個他從來沒有調成那樣的版面。
+            _save_sizes(self._SPLIT_KEYS["tune"], self.canvas_column.sizes())
         for dlg in (self.welcome_dialog, self.library_dialog, self.results):
             try:
                 if dlg is not None:
