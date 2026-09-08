@@ -283,11 +283,40 @@ def test_who_makes_this_stream_reads_the_card_library():
     assert all(isinstance(m, str) and m for m in makers)
 
 
-def test_this_whole_file_never_imported_qt():
+def test_the_planner_does_not_need_qt():
     """**驗收條件本身**：這幾條不必開視窗就問得出來。
 
-    U6 換到的正是這件事 —— 而一條「後來偷偷把 Qt 拉進來」的測試會讓它安靜地
+    U6 換到的正是這件事 —— 而一條「後來偷偷把 Qt 拉進來」的相依會讓它安靜地
     失效（那一族本來就慢，多一支沒有人會發現）。
+
+    ⚠ **在一個新的行程裡問。** 這一條以前問的是
+    ``"PySide6.QtWidgets" not in sys.modules`` —— 而那是一個**行程層的事實**：
+    `tools/run_tests.py` 逐檔一個行程，所以它在本機是綠的；CI 用**一個行程**跑
+    整套，於是別的測試檔先把 Qt import 進來，這一條就紅了（實測：本機全綠、
+    CI 三個 Python 版本全紅）。
+
+    一條「只有在某一種跑法下才成立」的斷言不是一道關，它是一個會挑時間響的
+    鬧鐘。真正要問的是**這個模組自己需不需要 Qt**，而那件事只有在一個乾淨的
+    直譯器裡問得準。
+
+    ⚠ **這個 repo 已經學過這一課了**：`tests/test_no_qt.py::test_no_qt_after_import`
+    的說明從頭到尾講的就是同一件事（「以前是在測試行程裡直接看 `sys.modules`，
+    那讓這條測試變成跟執行順序有關」）。我沒有讀到它就重寫了一次同樣的錯 ——
+    寫下這一段是為了讓下一個人在**這裡**也讀得到那句話。
     """
-    assert "PySide6.QtWidgets" not in sys.modules, \
-        "這一支不該把 Qt 拉進來 —— 它跑在核心那一批裡"
+    import subprocess
+
+    code = (
+        "import sys, importlib\n"
+        "importlib.import_module('d4t.ui.edit_plan')\n"
+        "bad = [m for m in sys.modules if m.startswith('PySide6')]\n"
+        "print(','.join(sorted(bad)))\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=str(REPO),
+                         capture_output=True, text=True, timeout=120)
+    assert out.returncode == 0, out.stderr
+    pulled = [m for m in out.stdout.strip().split(",") if m]
+    assert not pulled, (
+        "`ui/edit_plan` 把 Qt 拉進來了：%s\n"
+        "  它是純函式層（吃 `RecipeModel`，而那個東西本來就不碰 Qt）——"
+        "  真的動 widget 的那一段住在 `studio.py`。" % pulled)
