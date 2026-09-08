@@ -28,6 +28,9 @@ from tests.region_cards import (  # noqa: E402
     add_region_step, region_card,
 )
 
+# 段落的順序、標題、副標只有一個家（U9）—— 這裡不 import Qt，所以放模組層。
+from d4t.core.pipeline.step import GROUPS as STAGE_GROUPS  # noqa: E402
+
 
 def _load_qt() -> None:
     """把 Qt 與待測模組 import 進來，注入本模組的 globals（只在 fixture 裡呼叫）。"""
@@ -636,11 +639,11 @@ def test_library_panel_groups_and_double_click(qapp):
     steps = _steps()
     panel.set_steps(steps)
 
-    # 標題與順序的**唯一出處**是 LibraryPanel.GROUPS（它自己再對齊
-    # step.GROUP_ORDER，由 tests/test_ui_f16_stages.py 鎖住）。這裡以前抄了
-    # 第四份，於是 F16 加兩段時它是「忘了改」的那一份。
+    # 標題與順序的**唯一出處**是 `step.GROUPS`（U9 之後 `GROUP_ORDER` 也是從
+    # 它推出來的）。這裡以前抄了第四份，於是 F16 加兩段時它是「忘了改」的
+    # 那一份。
     assert panel.section_titles() == [
-        t for _gid, t, _sub in widgets_mod.LibraryPanel.GROUPS]
+        t for _gid, t, _sub in STAGE_GROUPS]
     assert set(panel.step_keys()) == {s["key"] for s in steps}
 
     # 每張卡都被歸進宣告的那一段
@@ -657,7 +660,7 @@ def test_library_panel_groups_and_double_click(qapp):
     empties = [lbl for lbl in panel.findChildren(QLabel)
                if lbl.objectName() == "libEmpty"]
     assert len(empties) == sum(
-        1 for g, _t, _s in panel.GROUPS if not by_group.get(g))
+        1 for g, _t, _s in STAGE_GROUPS if not by_group.get(g))
 
     got = []
     panel.add_requested.connect(got.append)
@@ -748,8 +751,8 @@ def test_group_icons_are_painted_not_files(qapp):
     # 每個階段有兩個 icon：rail 上的大顆 + 展開區的小標題；
     # 再加 rail 底部的搜尋鈕（它不是流程階段，所以不在 stage_buttons 裡）
     icons = panel.findChildren(widgets_mod.GroupIcon)
-    assert len(icons) == 2 * len(panel.GROUPS) + 1
-    assert len(panel.stage_buttons) == len(panel.GROUPS)
+    assert len(icons) == 2 * len(STAGE_GROUPS) + 1
+    assert len(panel.stage_buttons) == len(STAGE_GROUPS)
     assert panel.search_button.group == "search"
     assert all(i.width() > 0 and i.height() > 0 for i in icons)
 
@@ -781,7 +784,7 @@ def test_every_stage_icon_is_a_different_shape(qapp):
 
     size = 15
     ink = {}
-    for gid, _t, _s in widgets_mod.LibraryPanel.GROUPS:
+    for gid, _t, _s in STAGE_GROUPS:
         pm = QPixmap(size, size)
         pm.fill(QColor("#ffffff"))
         p = QPainter(pm)
@@ -1193,11 +1196,15 @@ def test_verdict_chip(qapp):
     assert chip.tone() == "bad"
     assert theme_mod.TOKENS["chip_bad_bg"] in chip.styleSheet()
 
-    # is_real_style：bin 1 = 抓到真缺陷 = 壞消息（紅），bin 0 = 乾淨（綠）
+    # is_real_style：bin 1 = 抓到真缺陷 = 壞消息（紅），bin 0 = 乾淨（綠）。
+    # ⚠ **字也要跟著翻面**（U13，2026-09-08）。這幾行以前斷言的是
+    # 「文字兩種模式都一樣，只有顏色換邊」—— 而那正是那一輪要修掉的 bug：
+    # 同一個綠色 chip 在兩份 recipe 裡意思相反，畫面上沒有東西講得出是哪一種。
+    # 完整的一組在 tests/test_ui_verdict_wording.py。
     chip.set_verdict(1, is_real_style=True)
-    assert chip.text() == "bin 1 · ≥ threshold" and chip.tone() == "bad"
+    assert chip.text() == "real · bin 1" and chip.tone() == "bad"
     chip.set_verdict(0, is_real_style=True)
-    assert chip.text() == "bin 0 · < threshold" and chip.tone() == "good"
+    assert chip.text() == "nuisance · bin 0" and chip.tone() == "good"
 
     chip.set_verdict(None)
     assert chip.text() == "—" and chip.verdict() is None
@@ -1235,9 +1242,9 @@ def test_stage_rail_drills_down_one_stage_at_a_time(qapp):
     panel = widgets_mod.LibraryPanel()
     panel.set_steps(_steps())
 
-    assert len(panel.stage_buttons) == len(panel.GROUPS)
+    assert len(panel.stage_buttons) == len(STAGE_GROUPS)
     # 每顆按鈕標出該段有幾張卡
-    for gid, _t, _s in panel.GROUPS:
+    for gid, _t, _s in STAGE_GROUPS:
         n = sum(1 for d in _steps() if d["group"] == gid)
         assert panel.stage_buttons[gid].count.text() == ("" if n == 0 else str(n))
 
@@ -1279,7 +1286,7 @@ def test_every_stage_opens_at_the_same_height(qapp):
 
     tops = {}
     panel.toggle_group(None)
-    for gid, _t, _s in panel.GROUPS:
+    for gid, _t, _s in STAGE_GROUPS:
         panel.toggle_group(gid)
         qapp.processEvents()
         head = panel._headers[gid]

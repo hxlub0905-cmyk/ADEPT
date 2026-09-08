@@ -214,7 +214,8 @@ class _ParamRow(QFrame):
             self.hint.set_full_text("⚠ " + str(msg))
             self.hint.setProperty("error", "true")
             self.hint.setStyleSheet(
-                "color:%s; font-size:11px; font-weight:600;" % TOKENS["danger_text"])
+                "color:%s; font-size:%s; font-weight:600;"
+                % (TOKENS["danger_text"], TOKENS["font_small"]))
             self.hint.show()
         else:
             self.hint.setProperty("error", "false")
@@ -249,12 +250,14 @@ class _ParamRow(QFrame):
         """沒有錯誤的時候，列面上唯一可能出現的字是「不生效」註記。"""
         if self._dim_note:
             self.hint.set_full_text("· " + self._dim_note)
-            self.hint.setStyleSheet("color:%s; font-size:11px; font-style:italic;"
-                                    % TOKENS["text_disabled"])
+            self.hint.setStyleSheet(
+                "color:%s; font-size:%s; font-style:italic;"
+                % (TOKENS["text_disabled"], TOKENS["font_small"]))
             self.hint.show()
         else:
             self.hint.set_full_text(str(self.spec.get("help", "")))
-            self.hint.setStyleSheet("color:%s; font-size:11px;" % TOKENS["text_hint"])
+            self.hint.setStyleSheet("color:%s; font-size:%s;"
+                                    % (TOKENS["text_hint"], TOKENS["font_small"]))
             self.hint.hide()
 
 
@@ -1214,8 +1217,9 @@ class TemplateField(QWidget):
         # 「還沒有模板」不是說明文字，是**這張卡現在跑不了**。用同一種灰字講，
         # 它就沉進下面那段說明裡了。
         self.summary.setStyleSheet(
-            "color:%s; font-size:11px;%s"
+            "color:%s; font-size:%s;%s"
             % (TOKENS["text_hint"] if self.has_template() else TOKENS["danger_text"],
+               TOKENS["font_small"],
                "" if self.has_template() else " font-weight:600;"))
         # ⚠ ``&&`` 不是筆誤：Qt 把單一個 ``&`` 當成助憶鍵的記號吃掉，畫出來
         # 少一個 ``&`` 又多一條底線（``Build template _regions…``）。
@@ -1338,8 +1342,9 @@ class CellRoisField(QWidget):
         self._value = str(value or "")
         self.summary.setText(self.describe())
         self.summary.setStyleSheet(
-            "color:%s; font-size:11px;%s"
+            "color:%s; font-size:%s;%s"
             % (TOKENS["text_hint"] if self.has_regions() else TOKENS["danger_text"],
+               TOKENS["font_small"],
                "" if self.has_regions() else " font-weight:600;"))
 
     def has_regions(self) -> bool:

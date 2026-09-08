@@ -55,6 +55,7 @@ from typing import Any, Dict, Tuple
 __all__ = [
     "REGION_COLORS", "region_hex",
     "TOKENS", "PALETTES", "THEMES", "DEFAULT_THEME", "current_theme", "radius",
+    "font_px",
     "set_theme", "SEG_LABELS", "seg_hex", "seg_color", "seg_bg",
     "group_hex", "group_color", "build_stylesheet", "apply_theme",
 ]
@@ -262,6 +263,24 @@ _LIGHT: Dict[str, Any] = {
     # 工具列的圖示鈕（F11 Region-1 第四輪）。24 px 的鈕配 14 px 的圖示，
     # 圖示只佔一半 —— 使用者回報「蠻醜的」。34 讓圖示有地方呼吸。
     "control_tool": "34px",
+    #: **字級**（U12，2026-09-08）。在這之前每一支 `setStyleSheet()` 自己寫
+    #: `font-size:11px`，於是 `d4t/ui` 底下同時活著 9 / 10 / 11 / 12 / 15 五種
+    #: 字級、十九個各自寫死的地方 —— F7-23 修掉過一次的那件事正在回流。
+    #:
+    #: 名字照**角色**取，不照大小取。`font_small` 改成 12px 的那天，所有「一句
+    #: 補充說明」會一起變大，而那正是想要的；叫它 `font_11` 的話，改的人得先
+    #: 一個一個看那十九個地方各是什麼意思。
+    #:
+    #: ⚠ 這是 QSS 的字串（帶 `px`）。自繪那一面要的是數字 —— 用
+    #: :func:`font_px`，不要自己 `int(...[:-2])`。
+    "font_micro": "9px",     #: rail 上的階段名、卡片數 —— 排在直立的窄條裡
+    "font_tiny": "10px",     #: 膠囊分組的那一行小標
+    "font_small": "11px",    #: 一句補充說明（hint、summary、空狀態）
+    "font_body": "12px",     #: 面板上正常的一行字
+    "font_title": "15px",    #: 空白狀態與導覽的標題
+    #: 一條線的粗細。`1px` 在 QSS 裡出現十幾次，而它跟字級是同一個問題：
+    #: 螢幕變了要一起改，而「一起」的前提是只有一個地方。
+    "hairline": "1px",
 }
 
 #: 暗色。n8n 的畫布是深中性色，不是純黑（純黑對比太硬，看久了刺眼）。
@@ -505,6 +524,21 @@ def contrast_ratio(a: str, b: str) -> float:
     la, lb = relative_luminance(a), relative_luminance(b)
     hi, lo = max(la, lb), min(la, lb)
     return (hi + 0.05) / (lo + 0.05)
+
+
+def font_px(name: str = "font_body") -> int:
+    """字級的**數字**版（自繪那一面用 —— ``QFont.setPixelSize`` 吃 int）。
+
+    跟 :func:`radius` 同一個形狀、同一個理由：QSS 那一面吃
+    ``font-size:$font_small``，而 `QPainter` 那一面吃一個整數，兩邊要是同一個
+    數字。不認得的名字回 `font_body` 的值，不拋例外 —— 一個畫錯大小的字比一個
+    畫不出來的面板好救。
+    """
+    raw = str(TOKENS.get(str(name), TOKENS["font_body"]))
+    try:
+        return int(raw.rstrip("px"))
+    except ValueError:
+        return 12
 
 
 def radius(name: str = "radius_md") -> float:

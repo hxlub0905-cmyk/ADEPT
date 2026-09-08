@@ -111,10 +111,22 @@ FILE_CEILINGS = {
     # `ui/edit_plan.py`（純函式、不碰 Qt），這裡只剩「照計畫動 model」——
     # 那一段留著是因為它的**順序**有意義（`add_edge` 會因為成環而失敗，而失敗
     # 的那條線不該留下任何痕跡）。降下來的這一格就是把那件事鎖住。
-    "d4t/ui/studio.py": 7037,
+    #
+    # 2026-09-08（U13/X7 ＋ X5/X6 ＋ U21 ＋ U17）：7,037 → 7,170（+133）。
+    # **四件事，而內容全在別的地方**：那顆「下一步」鈕住在 `ui/status_action.py`
+    # （X5 開資料夾 ＋ X6 就地反悔共用同一個機制）、「這份 recipe 升級了什麼」
+    # 算在 `recipe.describe_migration` 上。這裡加的是接線與四支小方法
+    # （`_status_next_step` / `_open_output_folder` / `_refresh_results_button`
+    # / `_describe_upgrade` ＋ `_show_upgrade_detail`）。
+    "d4t/ui/studio.py": 7170,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
-    "d4t/core/pipeline/recipe.py": 3732,
+    #
+    # 2026-09-08（U17）：3,732 → 3,830（+98）。`describe_migration` ——
+    # 「這份舊 recipe 開起來被升級了什麼」講成人話。它**比對前後**而不是讓
+    # 19 道 `_migrate_*` 各自回報：那會是 19 個要維護的字串，而第 20 道一定
+    # 會忘（`ALLOWED_ERRORS` 學到的同一課）。
+    "d4t/core/pipeline/recipe.py": 3830,
     # 逐卡儀表板。這一支變長**通常是健康的**（加一張卡就多一個面板），所以
     # 這一格比其他四格更常需要調高 —— 那沒關係，重點是調高時有人看見。
     "d4t/ui/inspectors.py": 3622,
@@ -247,7 +259,12 @@ COUNT_CEILINGS = {
     ),
     # god object 的兩個投影。261 → 268（六天）。
     "studio_window_methods": (
-        275,
+        280,
+        # 2026-09-08（那四件事）：275 → 280。五支，每一支都是接線：
+        # `_status_next_step`（一句話 ＋ 它旁邊那顆鈕）、`_open_output_folder`
+        # （X5，開不起來要說出來）、`_refresh_results_button`（U21）、
+        # `_describe_upgrade` / `_show_upgrade_detail`（U17 的兩半：算出來、
+        # 講出來）。四件事的**內容**分別在 `status_action.py` 與 `recipe.py`。
         # 2026-09-08（U6）：274 → 275。**搬走了一堆行，方法卻多一支** —— 那不是
         # 帳算錯了：`_drop_conflicting_edges` 裡「算出誰要被剪」與「真的剪掉並
         # 講一句話」本來黏在一起，前者進了 `edit_plan.conflicting_edges`，後者
@@ -268,7 +285,9 @@ COUNT_CEILINGS = {
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[0],
     ),
     "studio_window_attributes": (
-        400,
+        406,
+        # 2026-09-08：400 → 406。`status_action`（那顆鈕）加上它與 U21／U17
+        # 用到的既有名字。
         # 2026-09-08（U6）：403 → 400。`REGION_TYPES` 那一組判斷跟著
         # `edit_plan.is_region_param` 走了，連帶三個只有它在讀的名字。
         #

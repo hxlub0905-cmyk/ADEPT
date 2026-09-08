@@ -1,13 +1,14 @@
 # d4t tests — F16：畫布上的段落
 """段落的順序只有一個真相。
 
-`GROUP_ORDER`（`core/pipeline/step.py`）與 `LibraryPanel.GROUPS`（`ui/widgets.py`）
-是同一件事的兩半：前者是引擎認得的 id 與順序，後者多帶給人看的標題與副標。
-**兩份漂開的話，卡片庫的順序會跟引擎講的不一樣**，而那件事在畫面上看不出來 ——
-使用者只會覺得「這個 app 的段落順序有點怪」。
+**2026-09-08（U9）：那兩份合併成一份了。** 順序、標題、副標現在都住在
+`core/pipeline/step.py::GROUPS`，`GROUP_ORDER` 由它推導，而 UI 只讀不寫 ——
+`LibraryPanel.GROUPS` 那個常數不存在了。
 
-這個 repo 記過好幾次同一個形狀（同一件事有兩個地方存，抄第二份出來的那份會漂）。
-所以這裡不是「檢查一下」，是把兩份綁在一起。
+⚠ 所以這一份的第一條測試**換了問題**。以前它問「兩份一不一樣」，而合併之後
+那句話是恆真的（兩邊是同一個物件），也就是 F40 那種**永遠不會失敗的斷言**
+—— 比沒有斷言更糟，因為它會讓下一個人以為有人在守。現在它問的是那件事的
+**因**：UI 上沒有第二份，而畫面上的區塊真的是從 `step.GROUPS` 長出來的。
 
 ⚠ **2026-08-27（Phase 3）刪了 ``the_absorbed_algo_cards_never_read_an_image_stream``。**
 它掃的是「`feature_math` / `feature_fill`，以及任何掛在 ``GROUP_ALGO`` 上的卡，
@@ -29,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from d4t.core.pipeline import step as step_mod   # noqa: E402 — Qt-free
 from d4t.core.pipeline.step import (      # noqa: E402 — Qt-free
-    GROUP_ORDER, GROUP_OUTPUT, REGISTRY,
+    GROUPS as STAGE_GROUPS, GROUP_ORDER, GROUP_OUTPUT, REGISTRY,
 )
 import d4t.core.steps  # noqa: F401,E402 — 觸發卡片註冊
 
@@ -48,18 +49,43 @@ def qapp():
     yield app
 
 
-def test_the_library_and_the_engine_agree_on_the_order(qapp):
-    """兩份表逐項相同 —— id 與順序都要對得起來。"""
-    lib = tuple(gid for gid, _title, _sub in widgets_mod.LibraryPanel.GROUPS)
-    assert lib == tuple(GROUP_ORDER), (
-        "卡片庫的段落順序跟 GROUP_ORDER 不一樣：\n"
-        "  widgets.LibraryPanel.GROUPS = %s\n"
-        "  step.GROUP_ORDER            = %s" % (list(lib), list(GROUP_ORDER)))
+def test_the_library_keeps_no_copy_of_the_order(qapp):
+    """**UI 上不准再有第二份**（U9 的驗收條件）。
+
+    `LibraryPanel.GROUPS` 曾經是 `GROUP_ORDER` 的第二份，多帶標題與副標，
+    靠這一份測試綁著不漂。而一條測試是補丁不是解法：它擋得住「兩份不一致」，
+    擋不住「改的人根本不知道有第二份」—— 順序、標題、副標是同一件事的三半，
+    分開存的那天就開始漂了。
+    """
+    panel = widgets_mod.LibraryPanel
+    assert not any("GROUPS" == n for n in vars(panel)), (
+        "LibraryPanel 又自己長出一份 GROUPS 了 —— 段落的順序、標題與副標"
+        "住在 core/pipeline/step.py 的 GROUPS，UI 只讀不寫。")
+    assert panel._GROUPS is STAGE_GROUPS, \
+        "卡片庫畫的不是 step.GROUPS 那一份"
+
+
+def test_the_order_is_derived_from_the_one_table(qapp):
+    """`GROUP_ORDER` 是從 `GROUPS` 推出來的，不是另外打的一串字。"""
+    assert tuple(GROUP_ORDER) == tuple(g for g, _t, _s in STAGE_GROUPS)
+
+
+def test_the_sections_on_screen_come_from_that_table(qapp):
+    """真的開一個卡片庫出來，區塊標題要逐字等於那張表。
+
+    上面兩條問的是資料，這一條問的是**畫面** —— 中間那一段（`_make_header`
+    怎麼用它）壞掉的話，前兩條照樣綠。
+    """
+    panel = widgets_mod.LibraryPanel()
+    try:
+        assert panel.section_titles() == [t for _g, t, _s in STAGE_GROUPS]
+    finally:
+        panel.deleteLater()
 
 
 def test_every_stage_has_a_title_and_a_subtitle(qapp):
     """新加一段的人最容易漏掉副標，而 rail 上只剩一個看不懂的字。"""
-    for gid, title, sub in widgets_mod.LibraryPanel.GROUPS:
+    for gid, title, sub in STAGE_GROUPS:
         assert title.strip(), "段落 %r 沒有標題" % gid
         assert sub.strip(), "段落 %r 沒有副標（rail 上會只剩一個字）" % gid
 

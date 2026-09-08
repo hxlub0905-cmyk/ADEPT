@@ -259,8 +259,8 @@ class _SegmentStrip(QWidget):
         for i, (cat, line) in enumerate(_SEG_LINES):
             if i:
                 arrow = QLabel("▶", self)
-                arrow.setStyleSheet("color:%s; font-size:15px;"
-                                    % TOKENS["text_hint"])
+                arrow.setStyleSheet("color:%s; font-size:%s;"
+                                    % (TOKENS["text_hint"], TOKENS["font_title"]))
                 lay.addWidget(arrow, 0)
             lay.addWidget(self._card(cat, line), 1)
 
@@ -269,8 +269,9 @@ class _SegmentStrip(QWidget):
         card = QFrame(self)
         card.setObjectName("segCard")
         card.setStyleSheet(
-            "QFrame#segCard { background:%s; border:1px solid %s;"
-            " border-radius:8px; }" % (bg, fg))
+            "QFrame#segCard { background:%s; border:%s solid %s;"
+            " border-radius:%s; }"
+            % (bg, TOKENS["hairline"], fg, TOKENS["radius_md"]))
         card.setProperty("category", category)
         card.setMinimumHeight(58)
         box = QVBoxLayout(card)
@@ -278,10 +279,12 @@ class _SegmentStrip(QWidget):
         box.setSpacing(2)
 
         title = QLabel(SEG_LABELS[category], card)
-        title.setStyleSheet("color:%s; font-weight:700; font-size:12px;" % fg)
+        title.setStyleSheet("color:%s; font-weight:700; font-size:%s;"
+                            % (fg, TOKENS["font_body"]))
         body = QLabel(line, card)
         body.setWordWrap(True)
-        body.setStyleSheet("color:%s; font-size:11px;" % TOKENS["text_secondary"])
+        body.setStyleSheet("color:%s; font-size:%s;"
+                           % (TOKENS["text_secondary"], TOKENS["font_small"]))
         box.addWidget(title)
         box.addWidget(body)
         self.cards.append(card)
@@ -525,8 +528,10 @@ class RecipeLibraryDialog(QDialog):
         self.detail.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.detail.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.detail.setStyleSheet(
-            "background:%s; border:1px solid %s; border-radius:8px; padding:10px;"
-            % (TOKENS["bg_surface"], TOKENS["border_default"]))
+            "background:%s; border:%s solid %s; border-radius:%s;"
+            " padding:10px;"
+            % (TOKENS["bg_surface"], TOKENS["hairline"],
+               TOKENS["border_default"], TOKENS["radius_md"]))
         body.addWidget(self.detail, 3)
         root.addLayout(body, 1)
 

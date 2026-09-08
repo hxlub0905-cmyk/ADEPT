@@ -137,12 +137,48 @@ GROUP_OUTPUT = "output"
 #: 上下順序與階段顏色），所以「Compare 排在 Measure 後面」不代表 ``diff`` 會
 #: 晚一步產生：那件事由線保證。
 #:
-#: ⚠ 這份順序在 UI 有第二份：``ui/widgets.py`` 的 ``LibraryPanel.GROUPS``
-#: （它多帶標題與副標）。兩份要一致，``tests/test_ui_f16_stages.py`` 鎖著。
-GROUP_ORDER = (GROUP_INPUT, GROUP_ENHANCE, GROUP_REGION, GROUP_MEASURE,
-               GROUP_COMPARE, GROUP_ADC, GROUP_OUTPUT)
+#: **卡片庫那七段各自的 id、標題與副標。**
+#:
+#: 標題與副標住在這裡而不是 UI，是因為它們跟順序是**同一件事的三半**：
+#: 「這個階段排第幾、叫什麼、一句話是什麼」。分成兩份的那天，改了其中一份的
+#: 人不會知道另一份在哪（`CLAUDE.md` §0：抄第二份出來的那份一定會漂移）。
+#:
+#: ⚠ **這裡不 import Qt，也不該有任何 Qt 的味道**（鐵則 1）—— 它是純資料，
+#: UI 拿去畫。副標是給不會寫 code 的製程工程師看的一句白話（推廣鐵則），
+#: 不是型別簽章。
+#:
+#: Algo 那一列拿掉了（F24 §5，使用者 2026-08-24 點頭）：算式、補值、跨顆換算
+#: 全部住進判定（working numbers），這一段清空之後留著只是一個永遠空白的抽屜。
+GROUPS = (
+    (GROUP_INPUT, "Input", "Load this defect's images"),
+    (GROUP_ENHANCE, "Enhance", "Image in, image out"),
+    (GROUP_REGION, "ROI", "Decide where to look"),
+    (GROUP_MEASURE, "Measure", "Image + region in, numbers out"),
+    (GROUP_COMPARE, "Compare", "Two images in, difference out"),
+    (GROUP_ADC, "ADC", "Numbers in, score and bin out"),
+    (GROUP_OUTPUT, "Output", "The end of the line - write it somewhere"),
+)
+
+#: ⚠ **這份順序以前在 UI 有第二份**（``LibraryPanel.GROUPS``，它多帶給人看的
+#: 標題與副標），靠 ``tests/test_ui_f16_stages.py`` 綁著不漂 —— 而一條測試是
+#: 補丁，不是解法：它只擋得住「兩份不一致」，擋不住「有人只改了其中一份而
+#: 剛好也改了測試」。U9（2026-09-08）把標題與副標搬來這裡，UI 只讀不寫。
+GROUP_ORDER = tuple(g for g, _t, _s in GROUPS)
 _GROUPS = GROUP_ORDER
 _CATEGORIES = (CATEGORY_IMAGE, CATEGORY_ALGO, CATEGORY_ADC, CATEGORY_BATCH)
+
+_GROUP_META = {gid: (title, sub) for gid, title, sub in GROUPS}
+
+
+def group_title(gid: str) -> str:
+    """這個階段給人看的名字（不認得的 id 回原字串 —— 外掛卡可能宣告別的）。"""
+    return _GROUP_META.get(str(gid), (str(gid), ""))[0]
+
+
+def group_subtitle(gid: str) -> str:
+    """這個階段那一句白話（不認得的 id 回空字串）。"""
+    return _GROUP_META.get(str(gid), ("", ""))[1]
+
 
 #: ``curve`` 是一個「值是控制點字串」的參數（見 ``pipeline/curve.py``）——
 #: 跟 ``image_key`` 一樣，型別上就是 str，但 UI 認得它、會給專用編輯器。
