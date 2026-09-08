@@ -151,6 +151,11 @@ GLOBAL_APPLIES: Dict[str, Tuple[str, ...]] = {
     # ⚠ **規格線畫在「值那一軸」上，而熱圖沒有那條軸** —— 那張圖的值是顏色。
     # 硬畫的話那條線會落在一條位置軸上，讀起來是「規格在畫面的這個位置」。
     "ref_lines": (CHART_BOX, CHART_HIST, CHART_PROFILE, CHART_CUSTOM),
+    # ⚠ **只有自己配的那一張**（F89-5）。四張預設圖各自有一支寫死的繪圖程式
+    # 碼（F88 §14 量過為什麼不合併），而它們不讀這兩格 —— 攤在那裡的話，
+    # 使用者在 Box plot 分頁上把軸切成 log 會**什麼都不發生**。
+    "yscale": (CHART_CUSTOM,),
+    "slot_order": (CHART_CUSTOM,),
 }
 
 #: `CHART_CUSTOM` 那一張**還要看它畫成哪一種記號** —— ``鍵 -> 哪幾種記號真的
@@ -167,6 +172,11 @@ GLOBAL_APPLIES: Dict[str, Tuple[str, ...]] = {
 CUSTOM_BY_MARK: Dict[str, Tuple[str, ...]] = {
     # 格子的兩條軸都是類別 —— 「132 在哪裡」在那張圖上沒有答案。
     "ref_lines": ("point", "line", "bar", "box"),
+    # 值那一軸是類別的時候沒有 log 可言（格子的 Y 是槽）。
+    "yscale": ("point", "line", "bar", "box"),
+    # ⚠ **只有長條與盒鬚**：散佈圖與折線排過之後 X 軸不再是那一欄的值
+    # （說謊），而格子排過之後 wafer map 的兩條軸會被打亂。
+    "slot_order": ("bar", "box"),
     "whiskers": ("box",),
     "map_values": ("cell",),
     "points": ("line", "box"),

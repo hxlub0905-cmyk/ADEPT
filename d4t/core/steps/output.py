@@ -362,9 +362,15 @@ CONTENT_RECIPE = "recipe"
 #: F38 併進來的兩樣（原 ``output_report`` 的 Excel 與 ``output_boxplot``）。
 CONTENT_EXCEL = "excel"
 CONTENT_BOXPLOT = "boxplot"
+#: F89-4：**一張跨顆的圖**（一列一顆 defect 的長表 ＋ 使用者自己配的角色）。
+#:
+#: 為什麼它在這張卡而不是 `Write charts`：那張卡是**一顆一頁**（它的長表是
+#: 「一顆之內、一列一格框」），而這一張問的是「這一批 400 顆怎麼散」「哪一個
+#: die 特別差」。手冊本來就寫著「跨整批的一列一顆請用 Write report」。
+CONTENT_LOTCHART = "lotchart"
 #: **勾得到的全部**（＝驗證表）。
 CONTENTS = (CONTENT_REPORT, CONTENT_TABLE, CONTENT_PICTURES, CONTENT_RECIPE,
-            CONTENT_EXCEL, CONTENT_BOXPLOT)
+            CONTENT_EXCEL, CONTENT_BOXPLOT, CONTENT_LOTCHART)
 
 #: **預設勾哪幾個** —— 跟 :data:`CONTENTS` 是**兩份**，這一點很要緊。
 #:
@@ -415,6 +421,13 @@ def contents_spec() -> ParamSpec:
             CONTENT_BOXPLOT: "One box plot per number, with a box for each "
                              "class the decision came up with - so you can "
                              "see at a glance whether the classes separate.",
+            CONTENT_LOTCHART: "One chart you build yourself, over the "
+                              "whole lot - one point per defect instead of "
+                              "one per measurement box. Pick which two "
+                              "columns go on the axes beside “Lot chart”. "
+                              "With a KLARF you also get the die each defect "
+                              "sits in, so die column x die row coloured by "
+                              "a number is a wafer map.",
             CONTENT_RECIPE: "The settings that produced all of this, so the "
                             "run can be reproduced later.",
         },
@@ -686,11 +699,25 @@ class OutputReportStep(_OutputStep):
         ParamSpec(
             name="look", type="chart_style", default="",
             label="Chart look", section="Box plot",
-            help=("How the box plot looks: text size and colour, marker and "
-                  "line width, whiskers, tick counts - and whether the value "
-                  "scale is locked. Press “Chart settings…” beside this row. "
-                  "It is the same editor the uniformity charts use, so a deck "
-                  "with both kinds of chart can be made to match."),
+            help=("How the charts look: text size and colour, marker and "
+                  "line width, whiskers, tick counts, spec limits - and "
+                  "whether the value scale is locked. Press “Chart settings…” "
+                  "beside this row. It is the same editor the charts card "
+                  "uses, so a deck with both kinds of chart can be made to "
+                  "match."),
+        ),
+        ParamSpec(
+            name="spec", type="chart_spec", default="",
+            label="Lot chart: what goes where", section="Box plot",
+            # 沒勾那張圖就別問這件事（同 `Write charts` 的 `spec`）。
+            show_when=("contents", (CONTENT_LOTCHART,)),
+            help=("The one chart you build yourself over the whole lot - "
+                  "**one point per defect**, not per measurement box. Pick "
+                  "which measured number runs across the bottom, which one "
+                  "runs up the side, and what the colour and marker size "
+                  "mean. With a KLARF you also get the die each defect sits "
+                  "in: die column across, die row up the side, coloured by a "
+                  "number, is a wafer map."),
         ),
         # 從 `output_boxplot` 併進來的 `features`，**改名了**（F38）。
         #
@@ -729,6 +756,7 @@ class OutputReportStep(_OutputStep):
     RECIPE_NAME = "recipe.json"
     EXCEL_NAME = "report.xlsx"
     PLOT_NAME = "spread.html"
+    LOTCHART_NAME = "lot-chart.svg"
     IMAGE_DIR = "images"
 
     #: 判定沒有給出類別時（一份沒有 `decide` 的 recipe），全部畫成一個盒子。
@@ -790,6 +818,7 @@ class OutputReportStep(_OutputStep):
                 (CONTENT_TABLE, "the spreadsheet", cls.CSV_NAME),
                 (CONTENT_EXCEL, "the Excel report", cls.EXCEL_NAME),
                 (CONTENT_BOXPLOT, "the box plot", cls.PLOT_NAME),
+                (CONTENT_LOTCHART, "the chart you built", cls.LOTCHART_NAME),
                 (CONTENT_RECIPE, "the recipe", cls.RECIPE_NAME)):
             if tick in want:
                 out.append({"tick": tick, "what": what, "name": name})
@@ -803,7 +832,13 @@ class OutputReportStep(_OutputStep):
 
     @classmethod
     def chart_kinds(cls, params: Dict[str, Any]) -> List[str]:   # noqa: D102
-        return [export_unif.CHART_BOX]
+        # ⚠ 勾了跨顆那張圖，設定編輯器就要多一個分頁 —— 不然它的標題與軸名
+        # 改不到（同 `Write charts` 的 `charts`）。
+        got = parse_key_list(str(params.get("contents", "") or ""))
+        kinds = [export_unif.CHART_BOX]
+        if CONTENT_LOTCHART in got:
+            kinds.append(export_unif.CHART_CUSTOM)
+        return kinds
 
     def _charts(self, bctx: Any, names: List[str],
                 groups: List[Dict[str, Any]],
@@ -855,6 +890,30 @@ class OutputReportStep(_OutputStep):
                 % (", ".join("“%s”" % n for n in empty),
                    "it was" if len(empty) == 1 else "they were"))
         return charts
+
+    def lot_frame(self, bctx: Any) -> Any:
+        """這一批的長表：**一列一顆 defect**（F89-4）。
+
+        ⚠ 座標從 `bctx.dataset.items` 接上來 —— 結果那一列裡沒有它們
+        （`result_to_json_dict` 只裝 id / ok / score / bin / features）。
+        有 KLARF 的話 `die_x` × `die_y` 配一個統計量當顏色就是一張 wafer map。
+        """
+        return export_frame.build_lot_frame(
+            bctx.rows, list(getattr(bctx.dataset, "items", None) or []))
+
+    def _write_lot_chart(self, bctx: Any, p: Dict[str, Any],
+                         path: str) -> None:
+        """跨整批那一張圖。**畫不出來也要寫一個說得出原因的檔**。
+
+        使用者勾了它就是要一個檔；一個消失的檔案跟「這張卡沒跑到」在資料夾裡
+        長得一模一樣（同 `_empty` 那條規矩）。
+        """
+        svg = export_unif.build_chart_svg(
+            {}, export_unif.CHART_CUSTOM,
+            export_unif.resolve_style(p.get("look", ""),
+                                      export_unif.CHART_CUSTOM),
+            frame=self.lot_frame(bctx), spec=p.get("spec", ""))
+        _write_text(svg, path)
 
     def _write_boxplot(self, bctx: Any, p: Dict[str, Any], path: str) -> None:
         """一片葉子一個盒子（原 `output_boxplot`，行為逐字不變）。
@@ -988,6 +1047,8 @@ class OutputReportStep(_OutputStep):
             CONTENT_EXCEL: lambda path: export_report.write_excel(
                 rows, path, recipe=bctx.recipe),
             CONTENT_BOXPLOT: lambda path: self._write_boxplot(bctx, p, path),
+            CONTENT_LOTCHART: lambda path: self._write_lot_chart(
+                bctx, p, path),
             # **沒有它，半年後沒人重現得出這份報表。** 那不是保險，是這份東西
             # 有沒有用的分界：一疊數字沒有配方，等於一句「我們那時候量到這樣」。
             CONTENT_RECIPE: lambda path: write_recipe_json(bctx, path),

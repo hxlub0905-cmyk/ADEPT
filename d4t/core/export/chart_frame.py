@@ -89,9 +89,20 @@ class Frame(object):
     """一張長表。**純資料** —— 不畫圖、不認識任何一種圖。"""
 
     def __init__(self, columns: Sequence[str],
-                 rows: Sequence[Dict[str, Any]]) -> None:
+                 rows: Sequence[Dict[str, Any]],
+                 categories: Optional[Sequence[str]] = None,
+                 labels: Optional[Dict[str, str]] = None) -> None:
         self.columns: List[str] = [str(c) for c in columns]
         self.rows: List[Dict[str, Any]] = [dict(r) for r in rows]
+        #: ⚠ **哪幾欄是類別，是這一張表自己的事**（F89-4）。以前它讀模組層的
+        #: `CATEGORY_COLUMNS`，而那是「一列一格框」那張表的清單 —— 第二張表
+        #: （一列一顆 defect）的 `die_x` 會被當成一個量，於是「第 3 欄的 die
+        #: 比第 1 欄大兩欄」這件沒有意義的事被畫成一條連續軸。
+        self.categories: Tuple[str, ...] = tuple(
+            categories if categories is not None else CATEGORY_COLUMNS)
+        #: 這一張表的欄名 → 給人看的字（沒登記的就是它自己的名字）。
+        self.labels: Dict[str, str] = dict(
+            labels if labels is not None else COLUMN_LABELS)
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -102,11 +113,15 @@ class Frame(object):
 
     def numeric_columns(self) -> List[str]:
         """可以放到 X / Y / 大小 上的那幾欄。"""
-        return [c for c in self.columns if c not in CATEGORY_COLUMNS]
+        return [c for c in self.columns if c not in self.categories]
 
     def category_columns(self) -> List[str]:
         """可以放到 顏色 / 分組 上的那幾欄。"""
-        return [c for c in self.columns if c in CATEGORY_COLUMNS]
+        return [c for c in self.columns if c in self.categories]
+
+    def label(self, name: str) -> str:
+        """一欄在畫面上叫什麼（見 `column_label`）。"""
+        return self.labels.get(str(name), str(name))
 
     def values(self, name: str) -> List[float]:
         """一欄裡**畫得出來的**那些數（跳過缺值與 NaN）。"""
@@ -243,6 +258,102 @@ def _slot_index(positions: Sequence[Any]):
         return int(np.abs(centres - float(value)).argmin())
 
     return at
+
+
+# --------------------------------------------------------------------------- #
+# 第二張長表：**一列一顆 defect**（F89-4）
+# --------------------------------------------------------------------------- #
+#: 一列一顆時的固定欄。
+LOT_ID = "defect_id"
+LOT_SCORE, LOT_BIN, LOT_OK = "score", "bin", "measured"
+LOT_DIE_X, LOT_DIE_Y = "die_x", "die_y"
+LOT_UM_X, LOT_UM_Y = "x_um", "y_um"
+
+LOT_COLUMNS_FIXED: Tuple[str, ...] = (LOT_ID, LOT_OK, LOT_SCORE, LOT_BIN,
+                                      LOT_DIE_X, LOT_DIE_Y,
+                                      LOT_UM_X, LOT_UM_Y)
+
+#: 這幾欄是**類別**（`die_x` / `die_y` 是晶片在晶圓上的第幾格，不是量）。
+LOT_CATEGORY_COLUMNS: Tuple[str, ...] = (LOT_ID, LOT_OK, LOT_BIN,
+                                         LOT_DIE_X, LOT_DIE_Y)
+
+LOT_COLUMN_LABELS: Dict[str, str] = {
+    LOT_ID: "Defect",
+    LOT_OK: "Measured without error",
+    LOT_SCORE: "Score",
+    LOT_BIN: "Class (bin)",
+    LOT_DIE_X: "Die column",
+    LOT_DIE_Y: "Die row",
+    LOT_UM_X: "X in the die (um)",
+    LOT_UM_Y: "Y in the die (um)",
+}
+
+
+def build_lot_frame(rows: Sequence[Any],
+                    items: Optional[Sequence[Any]] = None) -> Frame:
+    """一批跑完的結果 → **一列一顆 defect** 的長表。
+
+    為什麼要有第二張表（F89-4，使用者 2026-09-08：「可以設計的東西還是太少」）
+    ------------------------------------------------------------------------
+    :func:`build_frame` 是「**一顆之內**、一列一格框」，所以拿它畫得出來的問題
+    全部被鎖在一張影像裡。而工程師真正常問的兩句是**跨顆**的：
+    「這一批 400 顆怎麼散」「哪一個 die 特別差」。那不是 builder 缺旋鈕，
+    是缺這一張表。
+
+    ``rows`` 是 `run_batch` 回的那幾列（``defect_id / ok / score / bin /
+    features``）。``items`` 選填 —— 給了就把**座標**也接上來
+    （`DefectItem.die` 與 `xrel_nm` / `yrel_nm`），而 `die_x` × `die_y` 配一個
+    統計量當顏色就是一張 **wafer map**。
+
+    ⚠ **nm 換成 µm**：一顆 defect 的 die 內座標動輒是幾百萬 nm，而軸上印
+    `4520000` 沒有人讀得動。除以 1000 是這裡唯一做的換算，而欄名寫著單位。
+
+    ⚠ **算不出來的那一格留白**（``None``），不是 0 —— 沒有 KLARF 的那兩種輸入
+    整欄都是空的，而「沒有座標」跟「座標在原點」是兩件事。
+    """
+    by_id: Dict[str, Any] = {}
+    for it in (items or ()):
+        got = str(getattr(it, "defect_id", "") or "")
+        if got:
+            by_id[got] = it
+
+    picked: List[str] = []
+    out: List[Dict[str, Any]] = []
+    for row in (rows or ()):
+        if not isinstance(row, dict):
+            continue
+        did = str(row.get("defect_id", "") or "")
+        feats = row.get("features") or {}
+        one: Dict[str, Any] = {
+            LOT_ID: did,
+            # 「這一顆量出來了嗎」是**類別**，而它值得在圖上分得出來：
+            # 一批裡有幾顆整條 pipeline 出錯是使用者要先知道的事（鐵則 7 是
+            # 「不殺整批」，不是「當作沒發生」）。
+            LOT_OK: "yes" if row.get("ok") else "no",
+            LOT_SCORE: _num(row.get("score")),
+            LOT_BIN: "" if row.get("bin") is None else str(row.get("bin")),
+            LOT_DIE_X: "", LOT_DIE_Y: "",
+            LOT_UM_X: None, LOT_UM_Y: None,
+        }
+        item = by_id.get(did)
+        if item is not None:
+            die = getattr(item, "die", None)
+            if die is not None and len(tuple(die)) == 2:
+                one[LOT_DIE_X] = str(int(tuple(die)[0]))
+                one[LOT_DIE_Y] = str(int(tuple(die)[1]))
+            for key, attr in ((LOT_UM_X, "xrel_nm"), (LOT_UM_Y, "yrel_nm")):
+                nm = _num(getattr(item, attr, None))
+                one[key] = None if nm is None else round(nm / 1000.0, 4)
+        for name, value in feats.items():
+            got = str(name)
+            if got not in picked:
+                picked.append(got)
+            one[got] = _num(value)
+        out.append(one)
+
+    # 特徵**照名字排**（一顆一顆量出來的順序不見得一樣，而選單跳來跳去讀不動）
+    return Frame(list(LOT_COLUMNS_FIXED) + sorted(picked), out,
+                 categories=LOT_CATEGORY_COLUMNS, labels=LOT_COLUMN_LABELS)
 
 
 def write_csv(frame: Frame, path: str) -> str:

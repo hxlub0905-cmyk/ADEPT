@@ -91,6 +91,9 @@ CHIP_ICONS = (
     "ramp_mono", "ramp_rainbow",          # 顏色代表大小時走單色階還是彩虹
     # Graph builder（F88 第三刀）：**這張圖用哪一種記號**。
     "mark_dots", "mark_line", "mark_bars",
+    # F89-5：值那一軸的尺、以及長條要不要照值排
+    "scale_linear", "scale_log",
+    "sort_none", "sort_asc", "sort_desc",
 )
 
 #: 「原本就在那裡的東西」的透明度。跟 `widgets._draw_profile_glyph` 同一個值
@@ -849,6 +852,27 @@ def _mark_bars(g: _Pad) -> None:
     g.line(0.08, 0.86, 0.92, 0.86, True, 0.06)
 
 
+def _scale_kind(g: _Pad, log: bool) -> None:
+    # 一條軸 ＋ 幾個刻度。**線性**是等距，**log** 是愈往上愈密 —— 那正是
+    # 那條軸在做的事，而它畫得出來。
+    g.line(0.16, 0.10, 0.16, 0.90, True, 0.07)
+    stops = ((0.90, 0.70, 0.50, 0.30, 0.10) if not log
+             else (0.90, 0.56, 0.36, 0.23, 0.12))
+    for y in stops:
+        g.line(0.16, y, 0.42, y, True, 0.06)
+
+
+def _sort_bars(g: _Pad, order: str) -> None:
+    # 三根長條。**沒排**是高低不一，**asc** 由矮到高，**desc** 反過來 ——
+    # 差別做在形狀，不做在別的地方（同這一排其他圖示）。
+    tops = {"asc": (0.62, 0.42, 0.18),
+            "desc": (0.18, 0.42, 0.62)}.get(order, (0.44, 0.16, 0.60))
+    for i, top in enumerate(tops):
+        x = 0.14 + i * 0.26
+        g.blk(x, top, x + 0.18, 0.88, True)
+    g.line(0.08, 0.90, 0.92, 0.90, True, 0.05)
+
+
 def _ramp(g: _Pad, rainbow: bool) -> None:
     # 一條色階。**單色**是一路變深的四段；**彩虹**是四段各自跳一次
     # （差別做在「有沒有台階」而不是顏色 —— 這一排圖示只有一種墨色）。
@@ -967,6 +991,11 @@ _DRAW = {
     "mark_dots": _mark_dots,
     "mark_line": _mark_line,
     "mark_bars": _mark_bars,
+    "scale_linear": lambda g: _scale_kind(g, False),
+    "scale_log": lambda g: _scale_kind(g, True),
+    "sort_none": lambda g: _sort_bars(g, ""),
+    "sort_asc": lambda g: _sort_bars(g, "asc"),
+    "sort_desc": lambda g: _sort_bars(g, "desc"),
     "adc_number": _adc_number,
     "adc_question": _adc_question,
     "adc_tray": _adc_tray,

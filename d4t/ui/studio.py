@@ -5084,6 +5084,10 @@ class StudioWindow(QMainWindow):
         # 沒有 KLARF 的兩種輸入這一格就是 None，面板會退回估算並標明。
         meta = dict(meta or {})
         meta["_klarf_doc"] = getattr(self.dataset, "klarf", None)
+        # 跨顆那張圖的座標（`die_x` / `x_um`）在**結果那幾列裡沒有** ——
+        # 它們住在 `Dataset.items`。同 `_klarf_doc` 的理由由這裡遞過去，
+        # 不然選單裡少掉 die 那兩欄，而 die 圖正是那張圖最有用的一種。
+        meta["_items"] = list(getattr(self.dataset, "items", None) or [])
         insp.set_context(self.selected_node or "",
                          params=dict(node.params) if node else {},
                          result=one, batch=self.trial_results, meta=meta,

@@ -294,3 +294,42 @@ def test_the_card_is_an_end_point_like_every_other_output_card(tmp_path):
     assert card.resolve_writes(p) == []
     assert card.resolve_features(p) == []
     assert card.configuration_issues({"folder": ""}), "沒填路徑要講"
+
+
+# --------------------------------------------------------------------------- #
+# F89-4：跨整批那一張圖（`Write report` 的 `lotchart`）
+# --------------------------------------------------------------------------- #
+def test_the_lot_chart_is_offered_and_planned(tmp_path):
+    from d4t.core.pipeline import get_step
+    from d4t.core.steps.output import CONTENT_LOTCHART
+
+    card = get_step("output_report")
+    assert CONTENT_LOTCHART in [p for p in card.params
+                                if p.name == "contents"][0].choices
+    planned = card.planned_files({"folder": str(tmp_path),
+                                  "contents": CONTENT_LOTCHART})
+    assert [f["name"] for f in planned] == [card.LOTCHART_NAME]
+
+
+def test_the_lot_chart_row_is_hidden_until_it_is_ticked():
+    """沒勾那張圖就別問「哪一欄放到哪裡」（同 `Write charts` 的 `spec`）。"""
+    from d4t.core.pipeline import get_step
+    from d4t.core.pipeline.step import param_visible
+    from d4t.core.steps.output import CONTENT_LOTCHART, CONTENT_TABLE
+
+    spec = [p for p in get_step("output_report").params if p.name == "spec"][0]
+    assert not param_visible(spec.show_when, {"contents": CONTENT_TABLE})
+    assert param_visible(spec.show_when,
+                         {"contents": "%s,%s" % (CONTENT_TABLE,
+                                                 CONTENT_LOTCHART)})
+
+
+def test_ticking_it_adds_a_tab_to_the_chart_settings_editor():
+    """不然那張圖的標題與軸名改不到。"""
+    from d4t.core.export import uniformity_charts as uc
+    from d4t.core.pipeline import get_step
+    from d4t.core.steps.output import CONTENT_LOTCHART
+
+    card = get_step("output_report")
+    assert card.chart_kinds({"contents": "table"}) == [uc.CHART_BOX]
+    assert uc.CHART_CUSTOM in card.chart_kinds({"contents": CONTENT_LOTCHART})

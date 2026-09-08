@@ -153,3 +153,93 @@ def test_the_two_csv_files_format_numbers_the_same_way():
     mine = Frame(["v"], [{"v": 132.79999999999998}]).to_csv()
     assert mine.strip().split("\n")[1] == theirs
     assert hasattr(_report, "write_csv")
+
+
+# --------------------------------------------------------------------------- #
+# F89-4：第二張長表 —— **一列一顆 defect**
+# --------------------------------------------------------------------------- #
+class _Item(object):
+    def __init__(self, did, die=None, x=None, y=None):
+        self.defect_id, self.die = did, die
+        self.xrel_nm, self.yrel_nm = x, y
+
+
+def _result(i, ok=True):
+    return {"defect_id": "d%d" % i, "ok": ok, "score": 0.1 * i,
+            "bin": i % 3, "features": {"glv_median": 110.0 + i,
+                                       "cd_median": 5.0 + 0.2 * i}}
+
+
+def test_one_row_per_defect_with_the_features_spread_across_columns():
+    from d4t.core.export.chart_frame import build_lot_frame
+
+    f = build_lot_frame([_result(i) for i in range(5)])
+    assert len(f) == 5
+    assert f.columns[:8] == list(chart_frame_lot_fixed())
+    # 特徵**照名字排** —— 一顆一顆量出來的順序不見得一樣，而選單跳來跳去
+    # 讀不動。
+    assert f.columns[8:] == ["cd_median", "glv_median"]
+
+
+def chart_frame_lot_fixed():
+    from d4t.core.export.chart_frame import LOT_COLUMNS_FIXED
+
+    return LOT_COLUMNS_FIXED
+
+
+def test_the_die_a_defect_sits_in_comes_from_the_dataset_not_the_result():
+    """結果那一列裡沒有座標（`result_to_json_dict` 只裝 id/ok/score/bin/
+    features）—— `die_x` × `die_y` 配一個統計量當顏色就是一張 wafer map，
+    而那是這張表最有用的一種圖。"""
+    from d4t.core.export.chart_frame import build_lot_frame
+
+    items = [_Item("d%d" % i, die=(i % 2, i // 2), x=4_520_000.0, y=900_500.0)
+             for i in range(4)]
+    f = build_lot_frame([_result(i) for i in range(4)], items)
+    assert f.column("die_x") == ["0", "1", "0", "1"]
+    assert f.column("die_y") == ["0", "0", "1", "1"]
+    # nm → um：軸上印 `4520000` 沒有人讀得動
+    assert f.column("x_um")[0] == 4520.0
+    assert f.column("y_um")[0] == 900.5
+
+
+def test_with_no_klarf_the_position_columns_are_blank_not_zero():
+    """「沒有座標」跟「座標在原點」是兩件事。"""
+    from d4t.core.export.chart_frame import build_lot_frame
+
+    f = build_lot_frame([_result(i) for i in range(3)])
+    assert set(f.column("die_x")) == {""}
+    assert set(f.column("x_um")) == {None}
+
+
+def test_the_die_index_is_a_category_not_a_measurement():
+    """「第 3 欄的 die 比第 1 欄大兩欄」沒有意義，而把它畫在數值軸上會讓人
+    以為有。⚠ 這一條也是「哪幾欄是類別是**每一張表自己的事**」的理由 ——
+    以前它讀模組層那一張（一列一格框的）清單。"""
+    from d4t.core.export.chart_frame import build_lot_frame
+
+    f = build_lot_frame([_result(i) for i in range(3)])
+    assert "die_x" in f.category_columns()
+    assert "die_x" not in f.numeric_columns()
+    assert "score" in f.numeric_columns()
+
+
+def test_a_defect_that_failed_is_still_a_row():
+    """鐵則 7 是「單顆出錯不殺整批」，不是「當作沒發生」—— 一批裡有幾顆整條
+    pipeline 出錯，是使用者要先知道的事。"""
+    from d4t.core.export.chart_frame import build_lot_frame
+
+    f = build_lot_frame([_result(0), _result(1, ok=False)])
+    assert f.column("measured") == ["yes", "no"]
+    assert "measured" in f.category_columns()
+
+
+def test_the_two_frames_do_not_share_one_list_of_category_columns():
+    """一列一格框跟一列一顆是**兩套欄名**。共用一張清單的話，其中一張表的
+    類別欄會被當成一個量（而那張圖畫得出來、有數字、而且是錯的）。"""
+    from d4t.core.export.chart_frame import build_lot_frame
+
+    per_box = build_frame([_note("epi", 110.0)])
+    per_defect = build_lot_frame([_result(0)])
+    assert per_box.categories != per_defect.categories
+    assert per_box.labels != per_defect.labels
