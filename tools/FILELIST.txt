@@ -134,7 +134,7 @@ cb197cc37ceacb37f9e817f098aac0649c0f4c03 d4t/ui/scope.py
 06cd15bd049d2aef064a2c3299d0012a72497c3f d4t/ui/status_action.py
 bd45db6478fdf58b021de5a75a1d0a7ee82d7986 d4t/ui/status_log.py
 82e570d6cfcedb4c3b39be51c6d5e8b277cc2ffc d4t/ui/strings.py
-88937de7f53e918b92c855463b44d106613db576 d4t/ui/studio.py
+07aad0ea16ee7e4df9351d5b18736213a31f364e d4t/ui/studio.py
 fbdca3619508686b4ec0ffb17537b8507027a553 d4t/ui/template_dialog.py
 b876eb28ec126014af8e12938d1f0ba03c11df00 d4t/ui/theme.py
 3cc7d61199e03eaba0eb61f5a749b9f6cfca9ba5 d4t/ui/threshold_view.py
@@ -307,7 +307,7 @@ e742fafb0360528be033f527192756ce0f52afc9 tests/test_sampling.py
 d4970b4251f7710ec2dc51413496330f07a1c2bf tests/test_scale.py
 f0e07cf8dc9ac1245b12e9ef2937c3428f012334 tests/test_shipped_recipes.py
 cfc99c167d84014f55bd0516ca45eb8704237d48 tests/test_show_template.py
-336dd67bc3f7805d58d6d3a4bb451e10d2ec7cb7 tests/test_size_ceilings.py
+fb5a9ac3a9856ef6dc618dcaa82e3967caf29386 tests/test_size_ceilings.py
 b916e62bdadbb86a8bcec464b3c5dc3669db66be tests/test_snr.py
 77d7c1c131126bc0c2205f77fbdf22caaa6f7a17 tests/test_steps.py
 8205dbdf48a2b5cd1a111738039020b6ddb65cc9 tests/test_subpixel.py

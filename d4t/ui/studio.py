@@ -510,7 +510,6 @@ class StudioWindow(QMainWindow):
         self.ground_truth: Optional[Dict[Any, Any]] = None
         #: ``_point_at_stream`` 剛剛把線綁到哪個參數（F9-5b 的 ``dst_in``）。
         #: 它是那個函式的第二個回傳值，用屬性傳是為了不動既有呼叫端的形狀。
-        self._bound_param: str = ""
 
         self._preview_images: Dict[str, Any] = {}
         self._last_result: Optional[Any] = None
@@ -3036,11 +3035,17 @@ class StudioWindow(QMainWindow):
             if spec is None or spec.type not in ("image_key", "image_keys"):
                 continue
             # 這就是這張卡吃影像流的那個參數 = 這條線的 ``dst_in``（F9-5b）。
-            # **要在這裡記，不能等到真的改了值才記** —— 參數的預設值本來就等於
-            # 那條流時，下面會提早 return（沒有東西要改），但線還是接在這個
-            # 參數上。漏掉的話那條線在引擎眼裡就是「沒指定」，於是退回用
-            # 「執行順序上最後一個寫它的人」推 —— 分支當場失效。
-            self._bound_param = name
+            #
+            # ⚠ **那件事不在這一支做**：`_connect` 早就把它交給 `add_edge` 了
+            # （`dst_in=plan.param`），而且是在呼叫這裡**之前**。順序有意義 ——
+            # 參數的預設值本來就等於那條流時，下面會提早 return（沒有東西要
+            # 改），但線還是接在這個參數上。落在這一支的話那條線在引擎眼裡就是
+            # 「沒指定」，於是退回用「執行順序上最後一個寫它的人」推 ——
+            # 分支當場失效。
+            #
+            # 這裡以前還有一個 `self._bound_param = name`（上下各一次）——
+            # 那是那個舊機制的殘留：**寫了三次、一次都沒有被讀過**。真相搬到
+            # 邊上之後它就只是一個會讓人以為「有人在用它」的欄位。2026-09-08 刪。
             current = str(node.params.get(name, "") or "")
             if spec.type == "image_keys" and accumulate:
                 keys = [k.strip() for k in current.split(",") if k.strip()]
@@ -3056,9 +3061,6 @@ class StudioWindow(QMainWindow):
                 self.model.set_param(str(node_id), name, value)
             except ParamError:                 # pragma: no cover — 值就是流名
                 return ""
-            # F9-5b：把「這條線落在哪個參數」寫回邊上。引擎靠它決定資料從哪來
-            # （而不是靠「執行順序上最後一個寫這條流的人」），分支才成立。
-            self._bound_param = name
             if joined and "," in value:
                 return (" — “%s” now works on %s (same settings for both)"
                         % (node_id, " and ".join(value.split(","))))
