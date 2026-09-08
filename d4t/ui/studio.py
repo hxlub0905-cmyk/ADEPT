@@ -1820,12 +1820,31 @@ class StudioWindow(QMainWindow):
 
         **每次跑都給一個新種子**（`first` 除外，它不用）：使用者按第二次
         「Run trial」的意思是「再抽一批看看」，不是「把剛才那批再跑一次」。
-        要重現某一批的話，種子在 `sample_note` 裡，也寫進 run 紀錄。
+        要重現某一批的話，種子在跑完那句話裡（見 `_sample_line`），也留在
+        `sample_note` 上。⚠ **Studio 不寫 runs.db**（只有 CLI 寫），所以那句話
+        就是使用者唯一讀得到它的地方 —— 不要把它拿掉。
         """
         if self.sample_mode == "first":
             return {"mode": "first"}
         return {"mode": self.sample_mode, "seed": sampling.new_seed(),
                 "column": "CLASSNUMBER"}
+
+    def _sample_line(self) -> str:
+        """跑完那句話後面的抽樣註記（`first` 是空的 —— 那是預設，不必說）。
+
+        ⚠ 它回的是**真的發生的那一個 mode**，不是使用者選的那一個：分層的那
+        一欄整批是空的時候 `sampling.pick` 會退成 random，而說謊比不說更糟。
+        """
+        note = dict(self.sample_note or {})
+        mode = str(note.get("mode", "") or "")
+        if not mode or mode == "first":
+            return ""
+        word = sampling.describe(mode)[0].lower()
+        seed = note.get("seed")
+        if seed is None:
+            return "  ·  %s sample" % word
+        return ("  ·  %s sample, seed %s (run again with this seed to get "
+                "the same defects)" % (word, seed))
 
     def _refresh_results_button(self) -> None:
         """Results 那顆鈕要說出**裡面現在有幾顆**（U21）。
@@ -6511,6 +6530,10 @@ class StudioWindow(QMainWindow):
         msg = ("%s: %d defects (%d ok, %d failed) in %.1f s"
                % ("Run stopped" if stopped else "Run finished",
                   len(results), ok, fail, float(elapsed)))
+        # **抽樣的種子要講出來**（X3）。一次「random 200」跑出漂亮的結果而重現
+        # 不了，等於沒有跑過 —— 而在這之前它只存在 `sample_note` 這個欄位上，
+        # 使用者看不到。這是他唯一會讀到它的地方。
+        msg += self._sample_line()
         # 跑之前的 lint 警告在這裡才講：跑之前講會被「Running: 3 / 200」洗掉。
         # 警告不擋執行，但它描述的是「跑得完、數字卻不是你以為的那個」——
         # 例如兩張量測卡撞名，後面那張把前面那張蓋掉了。

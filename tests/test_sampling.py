@@ -181,3 +181,37 @@ def test_the_seed_is_small_enough_to_read_out_loud():
     """它會被寫進 run 紀錄，而使用者要能把它唸給同事聽。"""
     for _ in range(20):
         assert 100000 <= sampling.new_seed() <= 999999
+
+
+# --------------------------------------------------------------------------- #
+# 5. 種子要讓使用者讀得到（不然它等於不存在）
+# --------------------------------------------------------------------------- #
+def test_the_seed_reaches_the_user(monkeypatch):
+    """**一次「random 200」跑出漂亮結果而重現不了，等於沒有跑過。**
+
+    種子存在 `sample_note` 上還不夠 —— Studio 不寫 runs.db（只有 CLI 寫），
+    所以跑完那句話是使用者唯一讀得到它的地方。
+    """
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from d4t.ui.studio import StudioWindow
+
+    win = StudioWindow()
+    try:
+        win.sample_note = {"mode": "random", "seed": 424242, "n": 200,
+                           "of": 6000}
+        line = win._sample_line()
+        assert "424242" in line, line
+        assert "random" in line, line
+
+        # `first` 是預設 —— 不必說（每一句多餘的話都在跟真正重要的那句搶注意）
+        win.sample_note = {"mode": "first", "seed": None}
+        assert win._sample_line() == ""
+
+        # 退成 random 的時候要講**真的發生的那一個**，不是使用者選的那一個
+        win.sample_note = {"mode": "random", "seed": 7, "column": ""}
+        assert "random" in win._sample_line()
+    finally:
+        win.close()
