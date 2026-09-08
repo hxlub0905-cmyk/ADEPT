@@ -379,13 +379,34 @@ def _draw_parts(p: QPainter, rect: QRectF, parts: List[str]) -> str:
     return text
 
 
-def region_color() -> QColor:
-    """區域線與區域埠的顏色 —— Region 段的階段色（F12）。
+def region_color(name: str = "", index: int = -1) -> QColor:
+    """區域線與區域埠的顏色。
 
-    用階段色而不是另外挑一個：使用者已經在卡片庫、左側 rail、卡片左邊那顆
-    圖示磚上看過這個顏色三次了，它就是「這是區域的事」的意思。
+    **兩種**（U20，2026-09-08）：
+
+    * 沒指名（埠本身）→ Region 段的階段色（F12）。使用者已經在卡片庫、左側
+      rail、卡片左邊那顆圖示磚上看過這個顏色三次了，它就是「這是區域的事」。
+    * 指名了某一個區域（線）→ `theme.region_hex(index)`，**那組本來就是為了
+      「哪一個區域」設計的**調色盤（影像上的框、特徵表上的圓點都吃它）。
+
+    為什麼線要換成第二種
+    --------------------
+    影像流的線畫**來源那張卡的階段色調淡一半**（`line_color`）。所以一張 ROI
+    卡拉出去的兩條線 —— 一條實線影像流、一條虛線區域 —— 是同一個色相的濃淡兩
+    版；而主畫布常態在 50% 縮放，虛線與實線在那個尺度下幾乎看不出差別。整個
+    區分就只剩「深一點／淺一點」。
+
+    換成區域調色盤之後，那兩條線是**不同色相**，縮小了靠餘光也分得開；順帶
+    地，接到同一張量測卡的 `epi` 與 `mg` 兩條虛線也分得出誰是誰。
+
+    ⚠ **它不保證跟預覽影像上那個框同色。** 影像上的框是照「這張卡用到的區域」
+    當場編號的（`ImageView._overlay_order`，逐卡不同），而線要的是一個整張
+    畫布都成立的編號 —— 兩個不是同一個序。講明是因為「顏色一樣＝同一個區域」
+    是很自然的猜測，而它在這裡只是**常常**成立。
     """
-    return QColor(theme.group_hex("region"))
+    if index is None or int(index) < 0:
+        return QColor(theme.group_hex("region"))
+    return QColor(theme.region_hex(int(index)))
 
 
 def badge_paints(level: str) -> bool:
@@ -1440,9 +1461,12 @@ class _EdgeItem(QGraphicsItem):
             col = QColor(TOKENS["canvas_edge_active"])
             width = 2.4
         elif region:
-            # 區域線本來就畫原色（它是虛線，已經跟影像流分得開），所以 ``near``
-            # 在這一支只剩加粗 —— 濃度沒有可以再調的空間。
-            col = region_color()
+            # 區域線畫**那個區域自己的顏色**（U20）—— 它是虛線沒錯，但虛線與
+            # 實線在 50% 縮放（主畫布常態）下幾乎看不出差別，而同色相的濃淡
+            # 兩版更是。所以 ``near`` 在這一支只剩加粗 —— 濃度沒有可以再調的
+            # 空間。
+            col = region_color(self.out_name(),
+                               self.canvas.region_index(self.out_name()))
         else:
             col = self.line_color(strength)
         if state == "far" and not (self.isSelected() or self._hover):
@@ -1567,6 +1591,10 @@ class PipelineCanvas(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setFrameShape(QGraphicsView.NoFrame)
         self.setMinimumHeight(180)
+        # 鍵盤走得到這裡（U18）。`QGraphicsView` 預設是 `StrongFocus`，但把它
+        # 寫出來是**把依賴講明**：Tab / Esc / Delete 三個鍵全靠焦點在這裡，
+        # 而哪天有人為了別的理由設了 `NoFocus`，那三個會一起安靜地失效。
+        self.setFocusPolicy(Qt.StrongFocus)
 
         self._items: Dict[str, _NodeItem] = {}
         self._edges: List[_EdgeItem] = []
@@ -2638,16 +2666,134 @@ class PipelineCanvas(QGraphicsView):
 
     def keyPressEvent(self, e) -> None:        # noqa: D102
         if e.key() in (Qt.Key_Delete, Qt.Key_Backspace):
-            for item in list(self._scene.selectedItems()):
-                if isinstance(item, _EdgeItem):
-                    a, b = item.pair()
-                    self.edge_removed.emit(a, b, item.out_name(),
-                                           item.dst_name())
-                elif isinstance(item, _NodeItem):
-                    self.remove_requested.emit(item.node_id)
+            self.delete_selected()
             e.accept()
             return
+        # Esc = 放掉手上的東西（U18）。**只在真的有東西選著的時候吞掉它** ——
+        # Esc 在 Qt 裡還有一個更常見的意思（關掉這個對話框），而一個永遠吞掉
+        # Esc 的畫布會讓包著它的對話框關不掉。
+        if e.key() == Qt.Key_Escape:
+            if self._scene.selectedItems():
+                self.clear_selection()
+                e.accept()
+                return
+            super().keyPressEvent(e)
+            return
+        # Tab / Shift+Tab = 換下一張卡（U18：畫布節點納入 Tab 序）。
+        #
+        # 為什麼做在這裡而不是主視窗的快捷鍵表：Tab 是 Qt 的焦點鍵，綁成
+        # window-level 的 QShortcut 會讓參數區的每一個輸入框都跳不出去。
+        # 這裡只在**畫布自己有焦點**的時候管用，那正是使用者想換卡的時候。
+        if e.key() in (Qt.Key_Tab, Qt.Key_Backtab):
+            if self.step_selection(-1 if e.key() == Qt.Key_Backtab else +1):
+                e.accept()
+                return
         super().keyPressEvent(e)
+
+    def clear_selection(self) -> None:
+        """放掉手上的東西（Esc）—— **兩份選取狀態一起放**。
+
+        `set_selected(None)` 管卡片那一份；`clearSelection()` 還要再叫一次，
+        因為**線也是可選的**，而選著一條線按 Esc 的時候要放掉的正是它。
+        """
+        self.set_selected(None)
+        self._scene.clearSelection()
+
+    def region_index(self, name: str) -> int:
+        """這個區域名在**整張畫布上**排第幾（沒有的話回 -1）。
+
+        編號的依據是「哪一條區域線先出現」，而線的順序照 `set_nodes` 收到的
+        執行順序 —— 所以同一份 recipe 每次開起來顏色都一樣，而拖一張卡到別的
+        地方不會讓線換色（拖曳不改 `_lines`）。
+
+        ⚠ 這**不是** `ImageView` 那個逐卡編號（見 `region_color` 的說明）。
+        兩個序不必相同，而假裝它們相同會讓「顏色一樣＝同一個區域」在某些選取
+        狀態下悄悄變成假的。
+        """
+        want = str(name or "")
+        if not want:
+            return -1
+        seen: List[str] = []
+        for _src, _dst, out_name, _dst_in in getattr(self, "_lines", []) or []:
+            if out_name and out_name not in seen and self._is_region_line(out_name):
+                seen.append(out_name)
+        return seen.index(want) if want in seen else -1
+
+    def _is_region_line(self, out_name: str) -> bool:
+        """這個埠名是區域還是影像流。
+
+        判準是**畫布上真的有一條這樣的線**，而 `_EdgeItem.kind()` 已經答得出
+        來 —— 不要在這裡再發明第二套判斷（`recipe.is_region_edge` 是那件事的
+        規範出處，而畫布拿到的是它算完的結果）。
+        """
+        return any(e.out_name() == out_name and e.kind() == "region"
+                   for e in self._edges)
+
+    def first_wire_hint(self) -> str:
+        """畫布上現在該提示什麼（沒有就回空字串）。**測試讀這個，不去讀畫素。**
+
+        兩種情況，都是「新手真正卡住的地方」（U19）——
+        welcome 的導覽講的是三段式與四種 source，而卡住的人卡在**怎麼把兩張卡
+        接起來**：埠在哪、要用拖的、菱形埠與圓形埠不一樣。
+
+        * 只有一張卡、一條線都沒有 → 從輸出埠拉一條線出去；
+        * 選到的那張卡會定義區域（有菱形埠）、而它的區域還沒被用 →
+          講菱形埠那條虛線。
+
+        **有線之後兩種都自動消失** —— 一個學會之後還一直在的提示會被忽略，
+        而被忽略的提示會連帶讓旁邊真的重要的東西一起被忽略（推廣鐵則）。
+        """
+        if self._lines:
+            return ""
+        if len(self._items) == 1:
+            return "Drag from this port to the next card"
+        if any("region" in it.out_kinds() and it.isSelected()
+               for it in self._items.values()):
+            return "The diamond port carries a region, not an image"
+        return ""
+
+    def delete_selected(self) -> int:
+        """刪掉現在選著的卡片與線，回刪了幾個。
+
+        **一份實作兩個入口**（U18）：畫布自己的 Delete 鍵與主視窗快捷鍵表上
+        那一格走同一支。以前刪除只寫在 `keyPressEvent` 裡，而把它抄第二份到
+        主視窗上正是這個 repo 最怕的形狀（抄出來的那份會漂）。
+        """
+        n = 0
+        for item in list(self._scene.selectedItems()):
+            if isinstance(item, _EdgeItem):
+                a, b = item.pair()
+                self.edge_removed.emit(a, b, item.out_name(), item.dst_name())
+                n += 1
+            elif isinstance(item, _NodeItem):
+                self.remove_requested.emit(item.node_id)
+                n += 1
+        return n
+
+    def step_selection(self, delta: int) -> bool:
+        """換選下一張／上一張卡（照執行順序）。真的換了回 True。
+
+        沒有選任何東西的時候選**第一張** —— 使用者按 Tab 的意思是「開始」，
+        不是「從第 0 張的前一張開始」。到底之後回頭（一張畫布上的卡不多，
+        走到底就卡住只會讓人多按幾次）。
+        """
+        order = [nid for nid in self._order if nid in self._items]
+        if not order:
+            return False
+        picked = [nid for nid in order if self._items[nid].isSelected()]
+        if not picked:
+            nxt = order[0] if delta >= 0 else order[-1]
+        else:
+            i = order.index(picked[0])
+            nxt = order[(i + int(delta)) % len(order)]
+        # **走 `set_selected` 並發訊號**，不要只把圖元標選中：選取有兩份狀態
+        # （`_selected` 與圖元自己的旗標），而參數區、儀表、影像上的框全部跟
+        # 的是**訊號**。只改圖元的話，Tab 會讓卡片畫出外框而畫面其他地方停在
+        # 上一張 —— 那是「看起來動了、其實沒動」的那種 bug。
+        self.set_selected(nxt)
+        self.node_selected.emit(nxt)
+        self.ensureVisible(self._items[nxt], 40, 40)
+        return True
 
     #: 縮放範圍。沒有下限的話滾兩下就把整張圖縮成一個點，而且**看不出自己在
     #: 哪裡**（背景是點陣，縮小之後每一格都長得一樣）；沒有上限則會滾進一片
@@ -2676,6 +2822,42 @@ class PipelineCanvas(QGraphicsView):
     def wheelEvent(self, e) -> None:           # noqa: D102
         self.zoom_by(1.15 if e.angleDelta().y() > 0 else 1 / 1.15)
         e.accept()
+
+    def drawForeground(self, p: QPainter, rect: QRectF) -> None:  # noqa: D102
+        """第一次接線的提示（U19）—— 畫在輸出埠旁邊，有線之後自己消失。
+
+        為什麼畫在畫布上而不是弄一塊面板：新手卡住的是**那顆埠**，而一塊講
+        「要用拖的」的面板在畫面別的地方，讀完還要自己找埠在哪。提示要長在
+        它講的那個東西旁邊 —— 跟 F7-22 那顆「斷開」的 × 同一條規矩（刪除的
+        入口長在被刪的東西上面）。
+
+        淡的、不吃滑鼠、不進版面計算：它是一句耳語，不是一個元件。
+        """
+        super().drawForeground(p, rect)
+        text = self.first_wire_hint()
+        if not text:
+            return
+        item = None
+        for nid in self._order:
+            it = self._items.get(nid)
+            if it is not None and (len(self._items) == 1 or it.isSelected()):
+                item = it
+                break
+        if item is None:
+            return
+        anchors = item.out_anchors()
+        if not anchors:
+            return
+        at = anchors[-1] if "diamond" in text else anchors[0]
+        p.save()
+        p.setRenderHint(QPainter.Antialiasing, True)
+        font = p.font()
+        font.setPixelSize(theme.font_px("font_small"))
+        p.setFont(font)
+        p.setPen(QPen(QColor(theme.mix_hex(TOKENS["text_hint"],
+                                           TOKENS["canvas_bg"], 0.75))))
+        p.drawText(QPointF(at.x() + 16.0, at.y() + 4.0), text)
+        p.restore()
 
     def drawBackground(self, p: QPainter, rect: QRectF) -> None:  # noqa: D102
         """點陣底，不是格線底（F7-8）。
