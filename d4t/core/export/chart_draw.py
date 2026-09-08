@@ -30,7 +30,7 @@ from .chart_frame import (
 from .uniformity_charts import (  # noqa: PLC2701 — 見檔頭：刻度只該有一份
     REGION_COLOURS, _axis_names, _empty, _esc, _fmt, _frame, _head,
     _is_dark, _mark_colour, _nice_ticks, _opacity, _span, _text_attrs,
-    _xlabels, _ylabels, fill_attrs, heat_hex, seq_hex,
+    _xlabels, _ylabels, draw_refs, fill_attrs, heat_hex, seq_hex,
 )
 
 __all__ = ["draw", "PRESETS", "preset_spec", "metric_columns"]
@@ -297,6 +297,14 @@ class _Plot(object):
         # 之後會從記號上壓過去（`_svg_profile` 也是這個順序）。
         _ticks(self.out, self.sx, self.sy, self.pad_l, self.pad_t,
                self.pw, self.ph, style)
+        # 規格線 —— **跟四張預設圖同一支**（`draw_refs`）。畫在記號之前：
+        # 它是背景上的一條參考，不是資料。
+        #
+        # ⚠ 只有**數值軸**畫得出來。Y 是類別（band）的時候「132 在哪裡」沒有
+        # 答案 —— 那時候一條線不畫，比畫在一個猜出來的位置好。
+        if self.sy.kind == "linear":
+            draw_refs(self.out, style, self.sy.lo, self.sy.hi, self.pad_l,
+                      self.pad_t, self.pw, self.ph)
 
     def x_at(self, row: Dict[str, Any]) -> Optional[float]:
         return self.sx.at(row.get(self.sp["x"]), self.pad_l,

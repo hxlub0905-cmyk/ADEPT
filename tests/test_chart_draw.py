@@ -389,6 +389,10 @@ _SPEC_FOR = {
 
 #: 那一格「改動」長什麼樣（預設 -> 另一個值）。
 _MOVE = {
+    # ⚠ **兩個值**：落在範圍外的線刻意不畫（`draw_refs`），而 `_SPEC_FOR`
+    # 裡有的記號 Y 是 `glv_mean`（110–115）、有的是 `glv_std`（1–3）。
+    # 一個值只蓋得到一半，而那一半會被讀成「這個記號沒讀這一格」。
+    "ref_lines": {"ref_lines": "112, 2"},
     "whiskers": {"whiskers": False},
     "map_values": {"map_values": True},
     "points": {"points": False},

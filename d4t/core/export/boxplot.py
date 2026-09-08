@@ -117,6 +117,18 @@ def _fill(style: Dict[str, Any], base: str, opacity: float) -> Tuple[str, str]:
     return ink, text
 
 
+def _refs(o: List[str], style: Dict[str, Any], lo: float, hi: float,
+          px: float, py: float, pw: float, ph: float) -> None:
+    """規格線 —— **借 `uniformity_charts.draw_refs`**，不在這裡再畫一次。
+
+    ⚠ 這裡的 SVG 用雙引號、那邊用單引號（兩套序列化，F88 §14 量過），但
+    **SVG 不在乎引號**，而「規格線長什麼樣」只有一個出處才不會漂。
+    """
+    from .uniformity_charts import draw_refs
+
+    draw_refs(o, dict(style or {}), lo, hi, px, py, pw, ph)
+
+
 def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
                       subtitle: str = "", width: int = 720,
                       height: int = 340,
@@ -214,6 +226,11 @@ def build_boxplot_svg(series: Sequence[Dict[str, Any]], title: str = "",
                     tick_ink, _fmt(t)))
     o.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s"/>'
              % (pad_l, pad_t, pad_l, pad_t + plot_h, _AXIS))
+
+    # ⚠ **規格線畫在盒子之前** —— 它是背景上的一條參考，不是資料；畫在
+    # 資料之上會從盒子上壓過去。走的是**跟另外四張圖同一支**（`draw_refs`），
+    # 不然「規格線長什麼樣」會在同一份報表裡有兩種答案。
+    _refs(o, st_all, lo, hi, pad_l, pad_t, plot_w, plot_h)
 
     slot = plot_w / float(len(boxes))
     bw = min(58.0, slot * 0.52)

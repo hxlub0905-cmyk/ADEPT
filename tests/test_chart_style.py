@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import pytest
 
+from d4t.core.pipeline import chart_style as cs  # noqa: E402
 from d4t.core.pipeline.chart_style import (
     DEFAULTS, PER_CHART_KEYS, ROWS, ChartStyleError, describe, format_style,
     parse_style, style_for,
@@ -167,3 +168,42 @@ def test_per_chart_keys_are_the_ones_that_differ_per_chart():
     assert set(PER_CHART_KEYS) == {"title", "xlabel", "ylabel",
                                    "xticks", "yticks"}
     assert "tick_size" not in PER_CHART_KEYS
+
+
+# --------------------------------------------------------------------------- #
+# F89-3：規格線／參考線
+# --------------------------------------------------------------------------- #
+def test_a_reference_line_can_be_a_bare_number_or_a_named_one():
+    assert cs.parse_refs("120") == [("", 120.0)]
+    assert cs.parse_refs("USL=132") == [("USL", 132.0)]
+
+
+def test_reference_lines_come_back_sorted_by_value():
+    """兩個人打同一組線要得到**逐字相同**的字串（round-trip 是 identity）。"""
+    got = cs.parse_refs("USL=132, 120, LSL=112.5")
+    assert [v for _n, v in got] == [112.5, 120.0, 132.0]
+    assert cs.format_refs(got) == "LSL=112.5, 120, USL=132"
+
+
+def test_the_reference_line_round_trip_is_identity():
+    text = cs.format_style({"ref_lines": "USL=132, LSL=112"})
+    assert text == '{"ref_lines":"LSL=112, USL=132"}'
+    assert cs.format_style(cs.parse_style(text)) == text
+
+
+def test_something_that_is_not_a_number_says_so_in_plain_words():
+    with pytest.raises(cs.ChartStyleError) as e:
+        cs.parse_refs("abc")
+    assert "USL=132" in str(e.value), "錯誤訊息要示範正確的寫法"
+
+
+def test_a_name_cannot_hide_a_separator():
+    with pytest.raises(cs.ChartStyleError):
+        cs.parse_refs([("a,b", 1.0)])
+
+
+def test_too_many_lines_is_refused_with_the_reason():
+    """五條以上的橫線會把圖蓋掉，而那時候該問的是「這張圖是不是問錯了問題」。"""
+    with pytest.raises(cs.ChartStyleError) as e:
+        cs.parse_refs("1,2,3,4,5,6")
+    assert str(cs.MAX_REFS) in str(e.value)

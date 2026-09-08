@@ -452,3 +452,55 @@ def test_the_heat_painted_on_the_image_is_always_true_to_scale():
     src = _inspect.getsource(get_step("output_uniformity").overlay_heat)
     assert "heat_tiles(" in src
     assert "heat_lattice(" not in src
+
+
+# --------------------------------------------------------------------------- #
+# 7. 規格線（F89-3）—— 「有沒有超規」是看圖的第一個問題
+# --------------------------------------------------------------------------- #
+_DASH = "stroke-dasharray='6 3'"
+
+
+@pytest.mark.parametrize("kind", [uc.CHART_BOX, uc.CHART_HIST,
+                                  uc.CHART_PROFILE])
+def test_every_chart_with_a_value_axis_draws_the_spec_limits(grid, kind):
+    """四張預設圖裡有值那一軸的三張都要畫得到 —— 一格只對其中一張有效，
+    是使用者會以為自己按錯的那種 bug（同 F87 的字級）。"""
+    s = uc.chart_series([grid])
+    lo = min(min(g["values"]) for g in s["groups"])
+    hi = max(max(g["values"]) for g in s["groups"])
+    mid = (lo + hi) / 2.0
+    style = uc.resolve_style('{"ref_lines":"USL=%g"}' % mid, kind)
+    svg = uc.build_chart_svg(s, kind, style)
+    _xml(svg)
+    assert _DASH in svg, kind
+    assert "USL" in svg, kind
+
+
+def test_the_heat_map_has_no_spec_limits_because_it_has_no_value_axis():
+    """那張圖的值是**顏色**。硬畫的話那條線會落在一條位置軸上，讀起來是
+    「規格在畫面的這個位置」。"""
+    assert uc.CHART_MAP not in uc.GLOBAL_APPLIES["ref_lines"]
+    assert not uc.applies("ref_lines", uc.CHART_MAP)
+
+
+def test_a_limit_outside_the_range_is_not_drawn_at_the_edge(grid):
+    """一條貼在圖框邊上的線讀起來是「規格剛好在這裡」，而真相是「規格在畫面
+    外」—— 那兩件事差很多。"""
+    s = uc.chart_series([grid])
+    style = uc.resolve_style('{"ref_lines":"9999"}', uc.CHART_BOX)
+    svg = uc.build_chart_svg(s, uc.CHART_BOX, style)
+    _xml(svg)
+    assert _DASH not in svg
+
+
+def test_the_spec_line_is_not_a_region_colour_or_the_trend_line(grid):
+    """它講的既不是「哪一群」也不是「資料的走向」，而是一條外面來的界線。"""
+    assert uc.REF_COLOUR not in uc.REGION_COLOURS
+    assert uc.REF_COLOUR != uc._TREND
+
+
+def test_the_box_plot_borrows_the_same_drawer(grid):
+    """兩套序列化，但**「規格線長什麼樣」只有一個出處**才不會漂。"""
+    from d4t.core.export import boxplot
+
+    assert boxplot._refs.__doc__ and "draw_refs" in boxplot._refs.__doc__
