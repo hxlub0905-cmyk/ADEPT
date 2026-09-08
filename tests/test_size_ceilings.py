@@ -146,7 +146,13 @@ FILE_CEILINGS = {
     # （`add_edge(dst_in=…)`）之後它就只是一個會讓人以為「有人在用它」的欄位。
     # 換上來的是五行說明：**為什麼那件事不在這一支做、以及它以前在哪裡**。
     # 解釋比程式碼貴，而那是對的價錢 —— 沒有它，下一個人會把它加回來。
-    "d4t/ui/studio.py": 7429,
+    #
+    # 2026-09-08（工具列裝不下的那個 regression）：7,429 → 7,444（+15）。
+    # U5／X3 各在工具列上加了一顆鈕，加起來 132 px，而那台 1366×768 的機器只
+    # 剩 76 px 的餘裕（`test_ui_small_screen` 抓到）。兩顆都搬走了：版面切換
+    # 進畫布的縮放列（它控制的就是那塊畫布）、抽樣併進那個會變的字本身。
+    # 加的行是**為什麼**（下一個人加鈕之前會讀到）。
+    "d4t/ui/studio.py": 7444,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     #
@@ -163,7 +169,10 @@ FILE_CEILINGS = {
     # 2026-09-08（U18/U19/U20）：2,705 → 2,887（+182）。三件都長在畫布上，
     # 而它們**本來就該長在這裡**：Tab／Esc／Delete 要知道選著什麼、第一次
     # 接線的提示要畫在那顆埠旁邊、區域線的顏色是線自己的事。
-    "d4t/ui/canvas.py": 2887,
+    #
+    # 2026-09-08：2,887 → 2,900（+13）。`zoom_buttons()` ＋ 那顆「看全貌」鈕
+    # 現在切換版面而不是開視窗的說明。
+    "d4t/ui/canvas.py": 2900,
 }
 
 #: 沒被列名的檔案共用的上限。
@@ -326,7 +335,9 @@ COUNT_CEILINGS = {
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[0],
     ),
     "studio_window_attributes": (
-        420,
+        418,
+        # 2026-09-08：420 → 418。`btn_layout` / `btn_sample` 兩顆工具列的鈕
+        # 搬走了（見 `d4t/ui/studio.py` 那一格）。
         # 2026-09-08（X3 收尾）：419 → 420。
         # 2026-09-08（U5 ＋ U8）：415 → 419。`_layout_mode` / `btn_layout` /
         # `params_row` / `gauge_pane` 進來，`_canvas_popout` / `_popout_view`

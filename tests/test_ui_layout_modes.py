@@ -83,13 +83,52 @@ def test_build_gives_the_canvas_the_whole_column(window, qapp):
 def test_the_button_says_where_it_will_take_you(window):
     """鈕上寫的是**按下去會去哪裡**，不是現在在哪裡。
 
-    寫現在在哪裡的話，使用者要先讀懂「這是狀態不是動作」才知道按了會怎樣，
-    而一顆工具列的鈕沒有那麼多解釋的空間。
+    寫現在在哪裡的話，使用者要先讀懂「這是狀態不是動作」才知道按了會怎樣。
+
+    ⚠ **那顆鈕住在畫布的縮放列上，不在工具列。** 第一版放在工具列，而
+    `test_ui_small_screen` 當場抓到：工具列在 1366×768 上要 1,285 px 而只有
+    1,229 px —— 尾巴幾顆會被收進 » 溢位選單，**在開發機上看不到**。
+    它現在跟 fit／1:1／tidy 排在一起，那本來就是「怎麼看」那一組；
+    而且控制項長在它控制的東西上（同 F7-22 那顆「斷開」的 ×）。
+    只有圖示的鈕話講在 tooltip 上。
+    """
+    btn = window.pipeline.zoom_buttons()[-1]
+    window.set_layout_mode("tune")
+    assert "Build" in btn.toolTip(), btn.toolTip()
+    window.set_layout_mode("build")
+    assert "Tune" in btn.toolTip(), btn.toolTip()
+    assert btn.accessibleName() == btn.toolTip(), \
+        "沒有文字的鈕對讀螢幕軟體是空的 —— tooltip 要當 accessible name"
+
+
+def test_that_button_toggles_rather_than_going_one_way(window, qapp):
+    """按了之後要有路回來。
+
+    單向切到 Build 的話，使用者按了那顆鈕就卡在那裡了 —— 而 Ctrl+B 是給記得
+    的人用的，不是唯一的路。
     """
     window.set_layout_mode("tune")
-    assert window.btn_layout.text() == "Build"
-    window.set_layout_mode("build")
-    assert window.btn_layout.text() == "Tune"
+    btn = window.pipeline.zoom_buttons()[-1]
+    btn.click()
+    qapp.processEvents()
+    assert window.layout_mode() == "build"
+    btn.click()
+    qapp.processEvents()
+    assert window.layout_mode() == "tune"
+
+
+def test_the_toolbar_did_not_grow_for_this(window):
+    """**這一條是那個 regression 的便利貼。**
+
+    U5／X3 一開始各在工具列上加了一顆鈕（Build/Tune、抽樣的「…」），加起來
+    132 px —— 而那台機器只剩 76 px 的餘裕。兩顆都搬走了：一顆進畫布的縮放列，
+    一顆併進那個會變的字本身。
+    """
+    from PySide6.QtWidgets import QToolButton
+    assert not hasattr(window, "btn_layout"), \
+        "版面切換又回到工具列上了 —— 那台機器沒有位子（test_ui_small_screen）"
+    assert isinstance(window.lbl_trial_n, QToolButton), \
+        "抽樣那個字本身就該是可以點的東西，不要旁邊再放一顆鈕"
 
 
 def test_toggling_goes_back_and_forth(window):
