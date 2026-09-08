@@ -73,12 +73,20 @@ SCOPE = ("d4t", "tools", "fab_probe")
 #: —— 前四支是接線層與遷移層（成長跟功能不成比例），`canvas.py` 則單純是
 #: 超過下面那個一般上限而且不該再漂。其他 138 支走 :data:`GENERAL_CEILING`。
 FILE_CEILINGS = {
-    # 自繪圖示、按鈕、控制項全部在一支。真正的解法是把那幾群圖示切出去
-    # （`CLAUDE.md` §4 已經寫著「切 widgets.py 那幾群自繪圖示最好拆、風險最低」），
-    # 而那件事的前置是黃金值三份全綠 —— 已經成立了。
-    # 2026-09-08（U1）：+1 —— `IconGrid` 那個小對話框的 `resize(420, 460)` 改
-    # 成 `fit_screen.fit(...)`，多一行 import。
-    "d4t/ui/widgets.py": 7140,
+    # **2026-09-08（U7）：7,140 → 123。那件事做完了。**
+    #
+    # 這一格的註解以前寫的是「真正的解法是把那幾群圖示切出去，而那件事的前置
+    # 是黃金值三份全綠 —— 已經成立了」。U7 就是那一刀：24 個不相干的類別拆成
+    # 八支（`buttons` / `icons` / `image_view` / `fields` / `param_form` /
+    # `chips` / `library` / `histogram` / `feature_text`），而 `widgets.py`
+    # 只剩一層轉出口 —— 四十幾個模組與上百條測試一個字都沒有改。
+    #
+    # ⚠ **這一格現在守的是「它不要再長回來」**，而那正是這把尺設計時就寫著的
+    # 那件事（反向測試那一段：「`studio.py` 真的拆掉 2,000 行之後，上限如果還
+    # 留在 6,942，它就可以在沒有人注意的情況下再長回來」）。123 行是那道門
+    # 本身；`test_ui_widgets.py::test_the_front_door_stayed_a_front_door`
+    # 從另一邊問同一句話（那支檔案裡不准再有 class / def）。
+    "d4t/ui/widgets.py": 123,
     # 接線層（建 widget、接訊號、轉呼叫）。`CLAUDE.md` §4：新的面板一律開新
     # 模組，不要塞進這裡。這一格就是那句話的執行機構。
     #

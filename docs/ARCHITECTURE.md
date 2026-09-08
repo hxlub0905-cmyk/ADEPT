@@ -336,8 +336,24 @@ d4t/
     │                         #     `tools/make_lot_from_gc.py`
     ├── welcome.py            #   首啟導覽 ＋ 範例 recipe 庫對話框（兩個入口目前收起來）
     ├── workers.py            #   載入／預覽（請求合併）／試跑／寫出 背景執行緒
-    ├── theme.py widgets.py branding.py region_words.py  #   主題 token／資料驅動元件／圖示字標／
-    │                         #   區域那三個埠的白話字
+    ├── theme.py branding.py region_words.py  #   主題 token／圖示字標／區域那三個埠的白話字
+    ├── widgets.py            #   **那道門**（F91 U7）：曾經是 7,140 行、24 個不相干
+    │                         #     的類別，現在只剩 123 行的轉出口 —— 四十幾個模組
+    │                         #     寫的 `from .widgets import X` 一個字都沒改，而每
+    │                         #     一塊搬去了它該在的地方（底下八支）。新程式碼請直
+    │                         #     接 import 那幾支；這裡不准再有 class / def
+    ├── buttons.py            #   最底層：`small_button`、`FilterChip`、停放不銷毀
+    │                         #     ⚠ 它只 import Qt 與 theme —— 加東西之前先問
+    │                         #     「它會不會需要 import 另一個 UI 模組」
+    ├── icons.py              #   **按鈕上**那些自繪的圖（膠囊上的在 glyphs.py）
+    ├── image_view.py         #   ImageView ＋ 記號的角色→顏色（MARK_ROLE_TOKENS）
+    ├── fields.py             #   參數表單上一列一列的編輯器（含各種專用格）
+    ├── param_form.py         #   ParamForm —— 把 `Step.describe()` 排成一張表
+    │                         #     （「加一張卡，UI 零修改」的執行機構）
+    ├── chips.py              #   設定區的膠囊：統計量、`chip_choice` 那一排
+    ├── library.py            #   三段式卡片庫
+    ├── histogram.py          #   分數分佈 ＋ 可拖曳的門檻線（秒回是它的立身條件）
+    ├── feature_text.py       #   特徵名怎麼變成人看得懂的字 ＋ VerdictChip
     ├── wiring_slot.py        #   設定區的一格接線：符號＋現在接的是什麼＋一顆「換」
     │                         #     （F68；挑了走的是跟畫布拉線同一條路）
     ├── glyphs.py             #   設定區膠囊上的那些小圖（F68 第二輪，六十幾張）
