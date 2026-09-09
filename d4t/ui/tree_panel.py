@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.pipeline.recipe import TreeLeaf, TreeStep
-from .decide_panel import (_feature_combo, _insert_at_cursor,
-                           fill_number_picker, number_tips)
+from .decide_panel import _feature_combo, _insert_at_cursor
+from .number_picker import fill_number_picker, number_tips
 from .tree_scene import (
     OPS, count_yes, display_tree, format_condition, parse_simple_condition,
     rows_reaching, suggest_condition,

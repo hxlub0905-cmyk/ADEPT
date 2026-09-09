@@ -111,15 +111,24 @@ def test_running_the_whole_batch_has_exactly_one_entry_point_per_window(window):
     畫面上的第二顆鈕。
     """
     main = [t for t, _k in _labels(window) if "Run all" in t]
-    assert main == ["Run all && write"], main
+    assert main == ["Run all"], main
 
+    # 2026-09-09：Results 上那顆不再是「跑整批」—— 跑與寫拆成兩個動作，
+    # 那裡是「Re-run」（改了 ADC 再判一次）與「Write outputs」（看過了才寫）。
     res = [t for t, _k in _labels(window.results) if "Run all" in t]
-    assert res == ["Run all && write"], res
+    assert res == [], res
+    res = [t for t, _k in _labels(window.results)
+           if t in ("Re-run", "Write outputs")]
+    assert res == ["Re-run", "Write outputs"], res
 
 
-def test_the_two_entry_points_call_the_same_thing_and_read_the_same(window):
-    """兩個入口的字**逐字相同** —— 同一個動作叫兩個名字是它變成兩顆鈕的第一步。"""
-    assert window.act_run_all.text() == window.results.btn_run_all.text()
+def test_running_and_writing_are_two_different_buttons(window):
+    """「跑」跟「寫」是兩個動作（2026-09-09，使用者：「跑完後可以檢查結果再按
+    一個鍵 output」）—— 所以工具列那一項**不寫**，寫在 Results 上另一顆。"""
+    assert window.act_run_all.text() == "Run all"
+    assert "write" not in window.act_run_all.text().lower()
+    assert window.results.btn_write.text() == "Write outputs"
+    assert window.results.btn_rerun.text() == "Re-run"
 
 
 def test_the_toolbar_kept_only_one_primary_action(window):

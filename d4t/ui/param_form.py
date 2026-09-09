@@ -648,6 +648,27 @@ class ParamForm(QWidget):
             for head in heads:
                 head.setVisible(alive.get(sec, True))
 
+    #: 「插入數字 ▾」每一項的 tooltip 與區域顏色從哪來（2026-09-09）。表單
+    #: 自己沒有 model，所以 Studio 建表單時裝一支 provider 進來 —— 回
+    #: ``(tips, regions)`` 兩張表（`number_picker.number_tips` /
+    #: `RecipeModel.feature_regions`）。沒裝就是沒有 tooltip、沒有顏色點，
+    #: 那一格照樣完全可用（測試、別的宿主）。
+    number_info_provider: Any = None
+
+    def _feature_tips(self) -> Dict[str, str]:
+        try:
+            got = self.number_info_provider() if self.number_info_provider else None
+        except Exception:          # noqa: BLE001 — 說明而已，不能擋畫面
+            return {}
+        return dict((got or ({}, {}))[0])
+
+    def _region_colors(self) -> Dict[str, int]:
+        try:
+            got = self.number_info_provider() if self.number_info_provider else None
+        except Exception:          # noqa: BLE001 — 上色而已，不能擋畫面
+            return {}
+        return dict((got or ({}, {}))[1])
+
     def set_dynamic_choices(self,
                             dynamic: Optional[Dict[str, Sequence[str]]]) -> None:
         """換一批執行期選單（F15-2），**不重建表單**。
@@ -771,22 +792,25 @@ class ParamForm(QWidget):
 
         edit = QLineEdit()
         edit.setText("" if value is None else str(value))
-        edit.setPlaceholderText("e.g. glv_max - glv_median" if kind == "expr"
-                                else "e.g. cd_median, cd_min")
+        edit.setPlaceholderText(
+            "e.g. glv_max - glv_median" if kind == "expr"
+            else "e.g. cd_median, cd_min" if kind == "feature_keys"
+            else "e.g. glv_worst_score")
         edit.textEdited.connect(lambda t, n=name: self._emit(n, str(t)))
         lay.addWidget(edit)
 
         items = list(self._dynamic.get("features", ()))
         combo = QComboBox()
-        combo.addItem("Insert a number…" if items
-                      else "No numbers upstream yet")
+        # 一張卡一組、組名點不到、每一項帶一句它是什麼 —— 跟判定面板那支
+        # **同一支**（`number_picker`，2026-09-09）。以前這裡是第三份各自寫的
+        # 平清單。lazy import：`number_picker` import 本模組的 `split_labelled`。
+        from .number_picker import fill_number_picker
+
+        fill_number_picker(combo, items, self._region_colors(),
+                           "Insert a number…" if items
+                           else "No numbers upstream yet",
+                           self._feature_tips())
         combo.setEnabled(bool(items))
-        for it in items:
-            fname, owner = split_labelled(it)
-            if not fname:
-                continue
-            combo.addItem("%s   —   %s" % (fname, owner) if owner else fname,
-                          fname)
         combo.setToolTip("Pick one of the numbers the cards above work out - "
                          "it is put in at the cursor.")
         combo.activated.connect(
@@ -818,6 +842,11 @@ class ParamForm(QWidget):
                 return
             new_text = ", ".join(have + [token])
             pos = len(new_text)
+        elif kind == "feature_key":
+            # 一格**一個**名字（`rank_by` / `size_feature`）：挑了就是換掉，
+            # 插在游標處會變成 `glv_medianglv_max` 那種永遠指不到的東西。
+            new_text = token
+            pos = len(new_text)
         else:
             pos = max(0, min(edit.cursorPosition(), len(text)))
             new_text = text[:pos] + token + text[pos:]
@@ -848,10 +877,13 @@ class ParamForm(QWidget):
             w.currentTextChanged.connect(lambda t, n=name: self._emit(n, str(t)))
             return w
 
-        if ptype in ("expr", "feature_keys"):
+        if ptype in ("expr", "feature_key", "feature_keys"):
             # 算式／一串數字名 ＋ 一支「插入數字 ▾」（F21-B）。**不是**可編輯
             # 的下拉：使用者要打的是一個式子（或一串名字），不是從清單裡挑一個
             # 值 —— 下拉只負責把名字送進去，省掉「記得拼對」這件事。
+            # ⚠ `feature_key`（單一個名字）2026-09-09 才進這一行：在這之前它
+            # 掉到最底下那個純文字框，於是 Output 卡的 `rank_by` 從來沒有過
+            # 下拉 —— 而 `output.py` 的 spec 上寫著「UI 會給這一格一支」。
             return self._make_expr_editor(name, value, kind=ptype)
 
         if ptype == "int":

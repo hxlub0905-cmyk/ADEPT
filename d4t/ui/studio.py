@@ -78,6 +78,7 @@ import json
 import math
 import os
 import sys
+import copy
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -114,7 +115,7 @@ from d4t.core.pipeline import sampling
 from d4t.core.pipeline.engine import (
     FEATURE_OWNER_KEY, feature_prefixes,
 )
-from d4t.core.pipeline.step import REGISTRY, SCALE_DEFECT
+from d4t.core.pipeline.step import REGISTRY, SCALE_DEFECT, SCALE_LOT
 from d4t.core.pipeline.recipe import (
     describe_migration, is_region_edge, version_skew,
 )
@@ -530,7 +531,13 @@ class StudioWindow(QMainWindow):
         #: 掛上的 GLAS 匯出有哪幾層（``[(id, layer 名), …]``；沒掛就是空的）。
         self._gds_layers: List[Any] = []
         self.trial_scores: List[float] = []
-        self.trial_results: List[Dict[str, Any]] = []   # M5：Gallery / 輸出的來源
+        self.trial_results: List[Dict[str, Any]] = []
+        #: 上一批的底稿：``rows``（原封不動）、``sig``（量測段簽章）、
+        #: ``partial``（被停掉的）、``limit``（跑了幾顆）—— Re-run 與
+        #: Write outputs 讀它（2026-09-09）。
+        self._last_run: Dict[str, Any] = {}
+        #: 使用者正在編判定樹 → 預覽跑到底（連判定），見 `_preview_whole_route`。
+        self._tree_focus: bool = False   # M5：Gallery / 輸出的來源
         #: 試跑抽哪幾顆（X3）。預設 `first` —— 老行為，一個位元都不變。
         self.sample_mode: str = sampling.DEFAULT_MODE
         #: 上一次抽樣的紀錄（含種子）。**空的表示還沒跑過**，不是「用了預設」。
@@ -909,10 +916,12 @@ class StudioWindow(QMainWindow):
         #
         # 名字跟 Results 視窗那顆**逐字相同** —— 同一個動作在兩個地方叫兩個
         # 名字，正是上面那兩顆鈕變成兩顆的第一步。
-        self.act_run_all = QAction("Run all && write", menu)
+        # 2026-09-09 起它**只跑，不寫**：寫是 Results 視窗上另一顆鈕
+        # （「Write outputs」）—— 使用者要先看過結果再決定要不要寫。
+        self.act_run_all = QAction("Run all", menu)
         self.act_run_all.setToolTip(
-            "Run every defect, not just the first N - then write whatever "
-            "the Output cards say")
+            "Run every defect, not just the first N. Nothing is written - "
+            "press “Write outputs” in Results when the numbers look right.")
         self.act_run_all.triggered.connect(self._on_full_clicked)
         menu.addAction(self.act_run_all)
         self.trial_menu = menu
@@ -1202,6 +1211,8 @@ class StudioWindow(QMainWindow):
         # 讀細節的地方是下方設定區與彈出視窗（那份維持類別預設 0.7）。
         self.pipeline.MIN_FIT_SCALE = 0.5
         self.param_form = ParamForm(self)
+        # 「插入數字 ▾」每一項的說明與顏色點（`number_picker`，2026-09-09）。
+        self.param_form.number_info_provider = self._number_info
         self.score_pane = self._build_score_pane()
         # 判定樹一步的編輯面板（F24 ③）—— 點畫布上的菱形時換到它。
         from .tree_panel import TreePanel
@@ -1253,7 +1264,8 @@ class StudioWindow(QMainWindow):
         self.results = ResultsWindow(self)
         self.histogram = self.results.histogram
         self.gallery = self.results.gallery
-        self.results.run_all_requested.connect(self.run_all)
+        self.results.rerun_requested.connect(self.rerun)
+        self.results.write_requested.connect(self.write_outputs)
         self.results.class_selected.connect(self._on_verdict_class)
 
         # 右欄：影像在上、儀表在下（F100 v3），一根直向 splitter，比例記得住。
@@ -1843,6 +1855,8 @@ class StudioWindow(QMainWindow):
         self.gallery.defect_activated.connect(self._on_defect_activated)
         # 表格上雙擊一列跟縮圖上雙擊一張是同一件事（R7）—— 同一支處理常式。
         self.results.table.defect_activated.connect(self._on_defect_activated)
+        # 單擊（或方向鍵）一顆 → 主畫面帶過去，但**不搶焦點**（2026-09-09）。
+        self.results.defect_selected.connect(self._on_defect_selected)
         self.gallery.selection_changed.connect(self._on_gallery_selection)
         # 回溯（PR-3）：點 score/bin/class → 算 trace 開面板；點面板上一項 →
         # 跳到產出它的卡（有區域就把那一塊亮起來）。
@@ -2173,8 +2187,9 @@ class StudioWindow(QMainWindow):
                       run_why or "More ways to run — including the whole dataset")
         self.act_run_all.setEnabled(can_run)
         self.act_run_all.setToolTip(
-            run_why or "Run all %d defects, not just the first %d - then "
-                       "write whatever the Output cards say"
+            run_why or "Run all %d defects, not just the first %d. Nothing "
+                       "is written - press “Write outputs” in Results when "
+                       "the numbers look right."
                        % (n_items, int(self.spin_trial_n.value())))
         self.spin_trial_n.setEnabled(can_run)
         self.lbl_trial_n.setEnabled(can_run)
@@ -3631,6 +3646,7 @@ class StudioWindow(QMainWindow):
             self._status("No such step: “%s”." % node_id, "error")
             return False
         self.selected_node = node_id
+        self._tree_focus = False       # 回到卡片：預覽又停在這張卡
         self._user_stream = None       # 換節點 → 影像流回到「這個節點的輸出」
         # 換卡片＝上一段連續調整結束（見 viewmodel 的 coalescing）。不切的話，
         # 「調 A 卡的 gamma → 換到 B 卡 → 再調回 A 卡的 gamma」會被併成一步。
@@ -4370,6 +4386,10 @@ class StudioWindow(QMainWindow):
         self.bottom_stack.setEnabled(False)
         for view in self._canvases():
             view.set_tree_selected(str(path))
+        # 編樹的時候預覽要跑到底（連判定），路徑才亮得起來（2026-09-09）。
+        if not getattr(self, "_tree_focus", False):
+            self._tree_focus = True
+            self._schedule_preview()
 
     # ==================================================================== #
     # 參數編輯
@@ -5005,6 +5025,8 @@ class StudioWindow(QMainWindow):
 
         recipe = self.model.to_recipe()
         upto = self.selected_node if self.selected_node in self.model.nodes else None
+        if self._preview_whole_route():
+            upto = None                  # Output 卡／判定樹：跑到底，連判定
         # 分流（F23 期2）：`kind` 是**資料的身分**（load 卡讀
         # `meta["_dataset_kind"]`），route 由 `run_defect` 逐顆自己解。
         # route_by 存在時 model.kind 是一個 route 鍵（"particle_route"），
@@ -5081,8 +5103,32 @@ class StudioWindow(QMainWindow):
         nid = self.selected_node
         if not nid or nid not in self.model.nodes:
             return True                  # 沒有選卡 = 看整條 route 的結果
+        if self._preview_whole_route():
+            # Output 卡／判定樹：它們不是逐顆的卡，沒有「自己的」影像可以講
+            # —— 誠實的畫面是整條 route 跑完的樣子（2026-09-09，使用者：
+            # 「目前在 ADC 跟 output 段影像預設是不顯示？」）。
+            return True
         tr = self._selected_trace(result)
         return bool(tr is not None and getattr(tr, "ok", False))
+
+    def _preview_whole_route(self) -> bool:
+        """預覽要跑到底、連判定一起，而不是停在選取的那張卡嗎。
+
+        兩種情況（2026-09-09）：選的是整批一次的卡（Output 段 —— 逐顆引擎
+        跳過它，`upto` 停在那裡什麼都沒有），或使用者正在編判定樹（那時候他
+        要看的正是「這一顆會走到哪片葉子」，而 `upto` 停在上一張卡的話判定
+        根本不跑）。
+        """
+        if getattr(self, "_tree_focus", False):
+            return True
+        nid = self.selected_node
+        node = self.model.nodes.get(nid) if nid else None
+        if node is None:
+            return False
+        try:
+            return get_step(node.step).scale == SCALE_LOT
+        except KeyError:
+            return False
 
     def _on_preview_ready(self, result: Any) -> None:
         self._last_result = result
@@ -6475,25 +6521,92 @@ class StudioWindow(QMainWindow):
         self.run_all()
 
     def run_all(self, sync: bool = False) -> bool:
-        """跑**整批**，而且讓 Output 段的卡真的寫出檔案（F16 Stage 5c）。
+        """跑**整批** —— 每一顆，不只前 N 顆。**不寫任何檔案。**
 
-        跟 :meth:`run_trial` 的差別**不只是 `limit`**（在此之前它們是同一支
-        函式、同一條路）。整批是「我要結果了」，試跑是「我在調參數」——
-        而後者每拖一下門檻就覆寫一次 KLARF 是不可逆的。
-
-        ⚠ **中途按停止的那一批不寫**（見 :meth:`_apply_trial_results`）：
-        那是部分結果。
+        ⚠ 2026-09-09 之前這一支跑完會順手讓 Output 卡寫出去（F16 Stage 5c
+        的「試跑不寫，只有整批才寫」）。使用者：「跑完後可以檢查結果再按一個
+        鍵 output」—— 所以「跑」跟「寫」現在是兩個動作：這裡只跑，寫是
+        :meth:`write_outputs`（Results 視窗上那顆「Write outputs」）。理由是
+        同一句：寫 KLARF 是不可逆的，而在這之前使用者連看一眼結果的機會都
+        沒有。
         """
         items = list(getattr(self.dataset, "items", []) or []) if self.dataset else []
         if not items:
             self._status("No dataset loaded yet — use “Open KLARF…” first.", "error")
             return False
-        # KLARF 的 `inplace` 會**動到原檔**，那是這個 app 唯一不可逆的動作。
+        return self.run_trial(len(items), workers=TRIAL_WORKERS,
+                              cache_dir=DEFAULT_CACHE_DIR, sync=sync)
+
+    def write_outputs(self, sync: bool = False) -> bool:
+        """把**現在這批結果**照 Output 卡寫出去（2026-09-09）。
+
+        三道關，每一道都要講話（推廣鐵則）：沒有結果不寫；被停掉的那一批是
+        **部分結果**，不寫（寫進 KLARF 是不可逆的錯）；KLARF ``inplace`` 先問
+        一次（`_confirm_irreversible_writes`，那是這個 app 唯一不可逆的動作）。
+        """
+        results = list(self.trial_results or [])
+        if not results:
+            self._status("Nothing to write yet — run a trial or “Run all” "
+                         "first.", "error")
+            return False
+        last = dict(getattr(self, "_last_run", None) or {})
+        if last.get("partial"):
+            self._status("That run was stopped part-way, so these are partial "
+                         "results — nothing was written. Run again to the end "
+                         "before writing.", "error")
+            return False
         if not self._confirm_irreversible_writes():
             return False
-        return self.run_trial(len(items), workers=TRIAL_WORKERS,
-                              cache_dir=DEFAULT_CACHE_DIR, sync=sync,
-                              write_outputs=True)
+        self._write_outputs_sync = bool(sync)
+        return self._write_outputs(results)
+
+    def rerun(self, sync: bool = False) -> bool:
+        """照**現在的 ADC 設定**把判定再跑一次（2026-09-09，使用者：「可以根據
+        ADC 的設定快速 Re-run（因為 feature 應該都算了？）」）。
+
+        兩條路，由 `batch.measurement_signature` 決定：量測那一段跟上一批一樣
+        → 拿上一批的 features 重判（`batch.rerun_decision`，秒級，影像一顆都
+        不碰）；不一樣 → 整批重跑（跟上一批同樣的顆數）。**不拿舊數字配新的
+        量測卡**：那是這個 repo 最怕的「跑得完、有數字、而且是錯的」。
+
+        重判的底稿是上一批**原封不動的那一份**（`_last_run["rows"]`），不是
+        畫面上那一份 —— 連按兩次 Re-run 之間，上一次判定失敗的顆才救得回來。
+        """
+        from d4t.core.pipeline.batch import measurement_signature, rerun_decision
+
+        last = dict(getattr(self, "_last_run", None) or {})
+        rows = copy.deepcopy(last.get("rows") or [])
+        if not rows:
+            self._status("Nothing to re-run yet — run a trial first.", "error")
+            return False
+        issues = self.model.validate()
+        problems = [i for i in issues if i.level == "error"]
+        if problems:
+            first = problems[0]
+            self._status("Cannot re-run — %s: %s" % (first.title, first.detail),
+                         "error")
+            return False
+        self._pending_warnings = [i for i in issues if i.level == "warning"]
+        recipe = self.model.to_recipe()
+        if measurement_signature(recipe) != str(last.get("sig") or ""):
+            self._status("A measuring card changed since the last run, so the "
+                         "numbers have to be measured again — running every "
+                         "defect of the last run.")
+            return self.run_trial(int(last.get("limit") or len(rows)),
+                                  workers=TRIAL_WORKERS,
+                                  cache_dir=DEFAULT_CACHE_DIR, sync=sync)
+        t0 = time.time()
+        try:
+            n = rerun_decision(recipe, rows)
+        except Exception as e:      # noqa: BLE001 — UI 邊界
+            self._status("Re-run failed: %s: %s" % (type(e).__name__, e), "error")
+            return False
+        elapsed = time.time() - t0
+        self._apply_trial_results(rows, elapsed)
+        self._status("Re-run: decided %d of %d defects again from the stored "
+                     "numbers in %.1f s — no image was recomputed."
+                     % (n, len(rows), elapsed))
+        return True
 
 
     # ---- Output 段：把結果寫出去（F16 Stage 5c）---------------------------
@@ -6659,6 +6772,17 @@ class StudioWindow(QMainWindow):
         results = list(results or [])
         self._progress_done()
         self.trial_results = results
+        # **這一批的底稿**（2026-09-09）：Re-run 從這裡重判、Write outputs 看
+        # 它是不是被停掉的部分結果。`sig` 是量測那一段的簽章 —— 量測卡改了
+        # 就不能拿這批數字重判。`limit` 讓「整批重跑」跑一樣多顆。
+        from d4t.core.pipeline.batch import measurement_signature
+
+        self._last_run = {
+            "rows": copy.deepcopy(results),
+            "sig": measurement_signature(self.model.to_recipe()),
+            "partial": bool(self.trial_worker.is_aborted()),
+            "limit": len(results),
+        }
         self._refresh_results_button()
         # 每張卡在這一批跑得怎樣，標在卡片上（F99 P1-5）。
         self.pipeline.set_run_status(run_status_from(results))
@@ -6724,21 +6848,19 @@ class StudioWindow(QMainWindow):
             msg = "%s  ·  Stopped, so nothing was written." % msg
             write = False
         elif not write:
-            # **試跑不寫，而那件事以前完全沒有說出來**（F86，2026-09-07，
-            # 使用者：「output 預覽有，但跑完沒 output（沒看到資料夾）」）。
-            #
-            # 「試跑不寫」是使用者自己定的（F16 Stage 5c）而且是對的 ——
-            # 每拖一下門檻就覆寫一次 KLARF 是不可逆的。錯的是**沒有回音**：
-            # 畫布上明明有一張 Output 卡、它的儀表列著會寫哪幾個檔，按下那顆
-            # 最大的鈕之後什麼都沒有發生，而狀態列只說「Run finished」。
-            # 那正是推廣鐵則擋的東西：看不懂發生了什麼事。
+            # **跑不寫，而那件事要說出來**（F86，2026-09-07，使用者：「output
+            # 預覽有，但跑完沒 output（沒看到資料夾）」）。2026-09-09 起
+            # **每一次跑都不寫** —— 寫是 Results 視窗上那顆「Write outputs」
+            # （使用者：「跑完後可以檢查結果再按一個鍵 output」）。錯的從來
+            # 不是「不寫」，是**沒有回音**：畫布上明明有一張 Output 卡，按下
+            # 那顆最大的鈕之後什麼都沒有發生，而狀態列只說「Run finished」。
             #
             # 所以只在**真的有 Output 卡**的時候多講一句，並且指名那個動作。
             n_out = self._enabled_output_cards()
             if n_out:
-                msg = ("%s  ·  Trial run - nothing written. Use “Run all && "
-                       "write” (the arrow beside Run trial) to run every "
-                       "defect and let the %d Output card%s write."
+                msg = ("%s  ·  Run only - nothing written yet. When the "
+                       "numbers look right, press “Write outputs” in Results "
+                       "to let the %d Output card%s write."
                        % (msg, n_out, "" if n_out == 1 else "s"))
         self._status(msg)
         if write and results:
@@ -6750,7 +6872,8 @@ class StudioWindow(QMainWindow):
         # 因為使用者剛剛看到的就是它。拖門檻線時 `_refresh_bin_summary` 會用
         # 那個門檻再餵一次。
         self._publish_run_snapshot(None)
-        self.results.set_run_all_enabled(bool(results))
+        self.results.set_run_all_enabled(bool(results),
+                                         self._enabled_output_cards())
         # ⚠ **狀態列只講工具列沒講的那一半**（R4，2026-08-24）。
         # 這裡以前把整句 `msg` 原封不動再貼一次，而它的前半段
         #（「24 defects (24 ok, 0 failed) in 0.1 s」）跟 30px 上面那一行
@@ -6889,6 +7012,18 @@ class StudioWindow(QMainWindow):
         self.gallery.set_thumbs(dict(mapping or {}))
 
     # ---- Gallery 的互動 ---------------------------------------------------
+    def _on_defect_selected(self, defect_id: str) -> None:
+        """Results 裡單擊（或方向鍵走到）某顆 → 主畫面跳過去，**不搶焦點**
+        （2026-09-09）。使用者正在 Results 視窗裡一顆一顆看，主視窗每次都跳到
+        前面的話，他每看一顆就要再點回去一次。已經在那一顆上就不動。"""
+        did = str(defect_id)
+        items = list(getattr(self.dataset, "items", []) or []) if self.dataset else []
+        for i, it in enumerate(items):
+            if str(getattr(it, "defect_id", "")) == did:
+                if i != int(self.defect_index):
+                    self.set_defect_index(i)
+                return
+
     def _on_defect_activated(self, defect_id: str) -> None:
         """Gallery 雙擊某顆 → 切回單顆預覽並跳過去。"""
         did = str(defect_id)
@@ -7231,6 +7366,12 @@ class StudioWindow(QMainWindow):
 
         return columns_for_source(self.model.nodes.values(), source_id)
 
+    def _number_info(self):
+        """設定區「插入數字 ▾」的 tooltip 與區域顏色（`ParamForm.number_info_provider`）。"""
+        from .number_picker import number_tips
+
+        return number_tips(self.model), self.model.feature_regions()
+
     def _dynamic_choices_for(self, node: Any) -> Dict[str, List[str]]:
         """這張卡的三格選單現在有哪些選項（`ParamSpec.choices_from` 的答案）。
 
@@ -7253,6 +7394,17 @@ class StudioWindow(QMainWindow):
         out["features"] = self.model.labelled_features(
             upto_node=str(getattr(node, "id", "") or "") or None,
             include_upto=False)
+        # **整批一次的卡（Output 段）看得到 working numbers**（2026-09-09，
+        # 使用者：「Output card 中也要能夠連動 working numbers」）。它們在每一顆
+        # 都判定完之後才跑（`batch-card-has-downstream` 那條 error 守著），
+        # 所以 `let` 的名字那時候真的在每一列的 features 裡。逐顆的卡**不行**
+        # —— 判定在它們之後才算，列出來就是一份跑起來每一顆都失敗的 recipe。
+        try:
+            if get_step(node.step).scale == SCALE_LOT:
+                out["features"] = list(out["features"]) + \
+                    list(self.model.decision_features())
+        except KeyError:
+            pass                      # 不認得的卡：清單照舊
         src = sources.get(str(node.params.get("source", "") or "").strip())
         if src is None:
             return out

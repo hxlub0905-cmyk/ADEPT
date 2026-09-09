@@ -1,16 +1,17 @@
 # 「試跑不寫，只有整批才寫」（常駐）：Studio 的整批入口。
 # 起於 F16 Stage 5c；2026-08-27 從 `test_ui_f16_run_all.py` 改名（F39 A 組）——
 # 那條規則是使用者定調的，而這一支是它唯一的守門人。
-"""在此之前 **「Run all defects」跟「Run trial」是同一支函式、同一條路**，
-差別只有 `limit`。而使用者定調了「**試跑不寫，只有整批才寫**」——
-那件事要成立，兩條路就得真的不一樣。
+"""**跑不寫，寫是另一個動作**（2026-09-09 改的契約）。
 
-這一份鎖住的是那個差別，以及它的三個邊角：
+在此之前是「試跑不寫，只有整批才寫」（F16 Stage 5c）—— 整批跑完會順手讓
+Output 卡寫出去。使用者 2026-09-09：「跑完後可以檢查結果再按一個鍵 output」
+—— 寫 KLARF 是不可逆的，而使用者連看一眼的機會都沒有。所以：
 
-1. **Run all 寫、Run trial 不寫**（而且旗標跟著那一次執行走，不是讀當下的 UI）；
-2. **中途按停止不寫**（部分結果寫進 KLARF 是不可逆的錯），**而且要講出來**；
-3. **`inplace` 才跳確認**（annotate / topn 寫的是新檔；每次都問的話那個確認
-   很快就變成閉著眼睛按掉的東西），而且**停用的卡不跳**。
+1. **Run trial 與 Run all 都不寫**；寫是 `write_outputs()`（Results 視窗上
+   那顆「Write outputs」），而且它寫的是**現在這批結果**；
+2. **被停掉的那一批不能寫**（部分結果寫進 KLARF 是不可逆的錯），**而且要講**；
+3. **`inplace` 才跳確認**，而且是在**寫的時候**問（annotate / topn 寫的是
+   新檔；每次都問的話那個確認很快就變成閉著眼睛按掉的東西），**停用的卡不跳**。
 
 Qt import 一律 lazy（見 `tests/test_ui_studio_m5.py` 的說明）。
 """
@@ -94,20 +95,24 @@ def _wire(win, out_path, step="output_report", **params):
 
 
 # --------------------------------------------------------------------------- #
-# 1. Run all 寫、Run trial 不寫
+# 1. 跑不寫，寫是另一顆鈕
 # --------------------------------------------------------------------------- #
-def test_a_trial_run_writes_nothing(window, tmp_path):
-    """試跑是**調參數的迴圈** —— 每拖一下門檻就覆寫一次檔案是不可逆的。"""
+def test_neither_kind_of_run_writes(window, tmp_path):
+    """跑是「我在看數字」，寫是「數字對了」—— 兩個動作。"""
     out = tmp_path / "trial"
     _wire(window, out, contents="table")
     assert window.run_trial(N, workers=1, sync=True) is True
     assert not out.exists(), "試跑不該寫出任何東西"
+    assert window.run_all(sync=True) is True
+    assert not out.exists(), "整批也不寫了（2026-09-09）—— 寫是另一顆鈕"
+    assert "Write outputs" in window.status_text(), window.status_text()
 
 
-def test_run_all_writes(window, tmp_path):
+def test_write_outputs_writes_the_current_results(window, tmp_path):
     out = tmp_path / "all"
     _wire(window, out, contents="table")
     assert window.run_all(sync=True) is True
+    assert window.write_outputs(sync=True) is True
     assert out.exists()
     lines = (out / "defects.csv").read_text(
         encoding="utf-8-sig").splitlines()
@@ -115,20 +120,10 @@ def test_run_all_writes(window, tmp_path):
     assert "Wrote" in window.status_text() and str(out) in window.status_text()
 
 
-def test_the_flag_follows_the_run_not_the_ui(window, tmp_path):
-    """旗標**跟著那一次執行走**：Run all 之後馬上再按 Run trial，
-    第二批不該因為第一批而寫出東西（反之亦然）。"""
-    first, second = tmp_path / "a", tmp_path / "b"
-    _wire(window, first, contents="table")
-    assert window.run_all(sync=True) is True
-    assert first.exists()
-
-    # 換一個路徑，改按試跑 —— 不該寫
-    out_node = [n for n in window.model.node_order
-                if window.model.nodes[n].step == "output_report"][0]
-    window.model.set_param(out_node, "folder", str(second))
-    assert window.run_trial(N, workers=1, sync=True) is True
-    assert not second.exists(), "試跑用到了上一次 Run all 留下來的旗標"
+def test_nothing_to_write_before_a_run_says_so(window, tmp_path):
+    _wire(window, tmp_path / "none", contents="table")
+    assert window.write_outputs(sync=True) is False
+    assert "run a trial" in window.status_text().lower(), window.status_text()
 
 
 def test_a_recipe_with_no_output_card_says_so(window, tmp_path):
@@ -139,26 +134,30 @@ def test_a_recipe_with_no_output_card_says_so(window, tmp_path):
     window.model.set_expr("glv_max")
     window.model.set_threshold(1.0)
     assert window.run_all(sync=True) is True
+    assert window.results.btn_write.isEnabled() is False, "沒有 Output 卡：那顆鈕灰掉"
+    assert "Output card" in window.results.btn_write.toolTip()
+    assert window.write_outputs(sync=True) is True
     assert "no Output card" in window.status_text(), window.status_text()
 
 
 # --------------------------------------------------------------------------- #
 # 2. 中途按停止 → 不寫，而且講出來
 # --------------------------------------------------------------------------- #
-def test_a_stopped_run_writes_nothing_and_says_so(window, tmp_path,
-                                                  monkeypatch):
+def test_a_stopped_run_cannot_be_written_and_says_so(window, tmp_path,
+                                                     monkeypatch):
     """被停掉的是**部分結果**。安靜地不寫跟安靜地寫一樣糟。"""
-    out = tmp_path / "stopped.csv"
-    _wire(window, out)
+    out = tmp_path / "stopped"
+    _wire(window, out, contents="table")
     # 讓 `_apply_trial_results` 以為這一批是被停掉的
     monkeypatch.setattr(window.trial_worker, "is_aborted", lambda: True)
     assert window.run_all(sync=True) is True
+    assert window.write_outputs(sync=True) is False
     assert not out.exists()
-    assert "nothing was written" in window.status_text(), window.status_text()
+    assert "partial" in window.status_text(), window.status_text()
 
 
 # --------------------------------------------------------------------------- #
-# 3. inplace 才跳確認
+# 3. inplace 才跳確認 —— 在寫的時候
 # --------------------------------------------------------------------------- #
 def _count_confirms(window, monkeypatch):
     """把確認對話框換成計數器（測試不開真的對話框）。"""
@@ -178,28 +177,31 @@ def test_annotate_does_not_ask(window, tmp_path, monkeypatch):
     seen = _count_confirms(window, monkeypatch)
     _wire(window, tmp_path / "a.001", step="output_klarf", mode="annotate")
     assert window.run_all(sync=True) is True
+    assert window.write_outputs(sync=True) is True
     assert seen == []
 
 
-def test_inplace_asks_first(window, tmp_path, monkeypatch):
+def test_inplace_asks_first_and_only_when_writing(window, tmp_path, monkeypatch):
     seen = _count_confirms(window, monkeypatch)
     _wire(window, tmp_path / "b.001", step="output_klarf", mode="inplace")
     assert window.run_all(sync=True) is True
+    assert seen == [], "跑的時候不問 —— 跑不寫"
+    assert window.write_outputs(sync=True) is True
     assert len(seen) == 1
     assert "cannot be undone" in seen[0]
     # M5 的「寫回前先預覽」承接：對話框上要有「會改幾列」
-    # （這一份 recipe 還沒跑過，所以那一句可能不在 —— 有的話要是真的數字）
     assert "In place" in seen[0]
 
 
-def test_cancelling_the_confirmation_runs_nothing(window, tmp_path,
-                                                  monkeypatch):
+def test_cancelling_the_confirmation_writes_nothing(window, tmp_path,
+                                                    monkeypatch):
     out = tmp_path / "c.001"
     monkeypatch.setattr(
         studio_mod.QMessageBox, "warning",
         staticmethod(lambda *a, **k: studio_mod.QMessageBox.Cancel))
     _wire(window, out, step="output_klarf", mode="inplace")
-    assert window.run_all(sync=True) is False
+    assert window.run_all(sync=True) is True
+    assert window.write_outputs(sync=True) is False
     assert not out.exists()
 
 
@@ -210,6 +212,7 @@ def test_a_disabled_inplace_card_does_not_ask(window, tmp_path, monkeypatch):
                            step="output_klarf", mode="inplace")
     window.model.set_enabled(out_node, False)
     assert window.run_all(sync=True) is True
+    assert window.write_outputs(sync=True) is True
     assert seen == []
 
 
@@ -220,44 +223,8 @@ def test_the_async_path_uses_a_background_thread(window, tmp_path, qapp):
     """出圖那張卡會一顆一顆重跑 pipeline —— 在 GUI 執行緒做會僵住。"""
     out = tmp_path / "async"
     _wire(window, out, contents="table")
-    assert window.run_all() is True          # 非同步
-    # 兩段背景工作：先跑批次（TrialWorker），再寫輸出（OutputWorker）。
-    # 兩個都要轉到 event loop 才會回來 —— 那正是這一條在驗的事。
+    assert window.run_all(sync=True) is True
+    assert window.write_outputs() is True          # 非同步
     assert _spin(qapp, lambda: out.exists(), 30.0), \
         "背景那條路沒有把檔案寫出來"
     assert not window.output_worker.is_running()
-
-
-# --------------------------------------------------------------------------- #
-# 5. 寫回前先預覽：那道關卡搬進了 output_klarf 的儀表
-# --------------------------------------------------------------------------- #
-def test_the_writeback_inspector_says_what_would_change(window, tmp_path):
-    """M5 那條規則是硬性的：**寫回前一定先預覽變更**。
-
-    Export 精靈的做法是把「寫出」鈕鎖住直到按過預覽。精靈拿掉之後那條規則不能
-    跟著消失 —— 而它其實不需要一顆鈕：乾跑（`plan_writeback`）一個位元組都不
-    寫，所以它可以是**這張卡的儀表**，而且比精靈**更早**出現。
-    """
-    from d4t.ui.inspectors import inspector_for
-
-    assert inspector_for("output_klarf") is not None
-    _, _, out_node = _wire(window, tmp_path / "e.001",
-                           step="output_klarf", mode="inplace")
-    assert window.run_trial(N, workers=1, sync=True) is True   # 先有一批結果
-    window.select_node(out_node)
-    text = window.inspector_summary.text()
-    assert "inplace" in text and "edits the original file" in text
-    assert "row(s) would change" in text, text
-
-
-def test_the_inspector_does_not_call_annotate_dangerous(window, tmp_path):
-    """`annotate` 寫的是新檔 —— 面板上那句話要跟 inplace **不一樣**。
-
-    三種都講成「危險」的話，使用者很快就不讀它了。
-    """
-    _, _, out_node = _wire(window, tmp_path / "f.001",
-                           step="output_klarf", mode="annotate")
-    assert window.run_trial(N, workers=1, sync=True) is True
-    window.select_node(out_node)
-    text = window.inspector_summary.text()
-    assert "writes a new file" in text and "edits the original" not in text

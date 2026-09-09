@@ -700,6 +700,10 @@ class ResultsTable(QTableView):
 
     #: 使用者要去看某一顆（跟 `GalleryPanel.defect_activated` 同一個約定）。
     defect_activated = Signal(str)
+    #: 目前那一列換了（單擊、方向鍵）＝「主畫面帶我去看這一顆」，不搶焦點
+    #: （2026-09-09，使用者：「點選 Results 內的 tiles 或 table 上的 did，
+    #: 主畫面要能夠帶到那顆 defect 的資訊並顯示」）。
+    defect_selected = Signal(str)
     #: 使用者點了判定欄（score / bin / class）＝「這一顆**為什麼**判成這樣」
     #: —— 回溯面板（PR-3）。值是 defect_id；面板開不開由宿主決定。
     trace_requested = Signal(str)
@@ -745,6 +749,7 @@ class ResultsTable(QTableView):
         head.setHighlightSections(False)
         self.doubleClicked.connect(self._on_double_click)
         self.clicked.connect(self._on_click)
+        self.selectionModel().currentRowChanged.connect(self._on_current_row)
 
     #: 標記的三個鍵（X2）。**R / N 是廠內講的那兩個字的字首**
     #: （real / nuisance），第三個是「我看過但說不準」—— 那不是 nuisance，
@@ -908,6 +913,15 @@ class ResultsTable(QTableView):
         if did:
             self.defect_activated.emit(did)
 
+    def _on_current_row(self, current, _previous) -> None:
+        """換了一列就講一聲 —— 單擊與方向鍵走的是同一條（`currentRowChanged`
+        兩種都發）；同一列再點一次不發，宿主不會被重複叫去跳同一顆。"""
+        if current is None or not current.isValid():
+            return
+        did = self._model.defect_id_at(current.row())
+        if did:
+            self.defect_selected.emit(did)
+
     def _on_click(self, index) -> None:
         """點徽章＝把明細攤開來看（跟懸停同一份字 —— 資料只有一份）。
         點判定欄（score / bin / class）＝問「為什麼」（PR-3 的回溯面板）。
@@ -984,6 +998,7 @@ class ResultsTablePane(QWidget):
         self.table = ResultsTable(self)
         #: 轉出去給宿主接的訊號（跟以前 `ResultsTable` 的約定一字不變）。
         self.defect_activated = self.table.defect_activated
+        self.defect_selected = self.table.defect_selected
         self.trace_requested = self.table.trace_requested
         self.bin_overrides_changed = self.table.bin_overrides_changed
         self.truth_marked = self.table.truth_marked

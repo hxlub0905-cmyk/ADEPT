@@ -280,6 +280,7 @@ class _GridView(QAbstractScrollArea):
 
     selection_changed = Signal(object)      # list[str]
     defect_activated = Signal(str)
+    defect_selected = Signal(str)           # 單擊一張（沒有修飾鍵）
     thumbs_requested = Signal(object)       # list[str]：可視範圍內還沒有縮圖的
 
     _EMPTY_TEXT = "(Thumbnails for every defect appear here after a trial run)"
@@ -711,6 +712,10 @@ class _GridView(QAbstractScrollArea):
         self.viewport().update()
         if self._selected != before:
             self.selection_changed.emit(list(self._selected))
+        if idx is not None and not (mods & (Qt.ShiftModifier | Qt.ControlModifier
+                                            | Qt.MetaModifier)):
+            # 一顆、沒按修飾鍵＝「去看這一顆」。多選那幾種手勢在挑一組，不跳。
+            self.defect_selected.emit(self._items[self._view[idx]]["defect_id"])
         e.accept()
 
     def mouseDoubleClickEvent(self, e) -> None:   # noqa: D102 - Qt hook
@@ -822,6 +827,8 @@ class GalleryPanel(QWidget):
 
     selection_changed = Signal(object)      # list[str]
     defect_activated = Signal(str)
+    #: 單擊一張＝「主畫面帶我去看這一顆」（2026-09-09）—— 跟雙擊差在不搶焦點。
+    defect_selected = Signal(str)
     thumbs_requested = Signal(object)       # list[str]
 
     _ORDER_DESC = "↓ High to low"
@@ -896,6 +903,7 @@ class GalleryPanel(QWidget):
         self.grid = _GridView(self)
         self.grid.selection_changed.connect(self.selection_changed)
         self.grid.defect_activated.connect(self.defect_activated)
+        self.grid.defect_selected.connect(self.defect_selected)
         self.grid.thumbs_requested.connect(self.thumbs_requested)
         outer.addWidget(self.grid, 1)
 

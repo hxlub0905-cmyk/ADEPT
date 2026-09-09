@@ -260,6 +260,40 @@ def rules_to_tree(spec: "DecideSpec") -> Any:
     return node
 
 
+def let_names_written(decide: Optional["DecideSpec"],
+                      upto: Optional[int] = None) -> List[str]:
+    """判定段的 ``let`` 會寫進 features 的**每一個名字**，照行序（2026-09-09）。
+
+    名字、有 ``fill`` 就多 ``<名字>_missing``、有 ``scale`` 就多
+    ``<名字>_raw``（`engine._eval_decision` / `batch.apply_lot_scaling` 真的
+    寫的那幾個）。``upto``＝只算前 n 行 —— 第 n 行 let 只看得到前 n−1 行。
+
+    **一個家**：`_decide_unknown`（判定段自己的 lint）與 `validate` 裡
+    Output 卡的 ``stale-feature-ref`` 都問它。以前前者把這條規則寫在自己的
+    迴圈裡、後者根本不知道 let 存在 —— 於是一張 Output 卡的 ``rank_by`` 指到
+    一個 working number 會被標成「nobody produces it」，而引擎那時候明明有它
+    （整批一次的卡在每一顆判定完之後才跑）。
+    """
+    out: List[str] = []
+    if decide is None:
+        return out
+    lets = list(decide.let)
+    if upto is not None:
+        lets = lets[:max(0, int(upto))]
+    for item in lets:
+        if item.is_blank:
+            continue
+        name = str(item.name).strip()
+        if not name:
+            continue
+        out.append(name)
+        if str(getattr(item, "fill", "") or ""):
+            out.append(name + "_missing")
+        if str(getattr(item, "scale", "") or ""):
+            out.append(name + "_raw")
+    return out
+
+
 def _tree_to_json(node: Any) -> Dict[str, Any]:
     if isinstance(node, TreeLeaf):
         return {"bin": int(node.bin), "label": node.label}
@@ -1078,12 +1112,8 @@ def _decide_unknown(decide: "DecideSpec", feats: Set[str],
         name = str(item.name).strip()
         check("working number '%s'" % (name or "#%d" % i), item.expr,
               fill=str(getattr(item, "fill", "") or ""), name=name)
-        if name:
-            seen.add(name)
-            if str(getattr(item, "fill", "") or ""):
-                seen.add(name + "_missing")
-            if str(getattr(item, "scale", "") or ""):
-                seen.add(name + "_raw")
+        # 第 i 行看得到前 i 行寫的（`let_names_written` 是唯一的家）。
+        seen |= set(let_names_written(decide, upto=i + 1))
 
     if decide.tree is not None:
         for when in _tree_whens(decide.tree):
@@ -3734,15 +3764,20 @@ def validate(recipe: Recipe, kind: Optional[str] = None,
             # `rank_by` 指到一個沒人算出來的數字時它照樣寫得出圖，只是順序
             # 安靜地退回檔案順序。這一條同時是改名的安全網：量測卡多接一條
             # 區域線會把它寫的每一個名字都改掉，而指著舊名字的地方不會跟著改。
+            # **整批一次的卡看得到 working numbers**（2026-09-09）：它們在每
+            # 一顆判定完之後才跑，`let` 的名字那時候真的在每一列的 features
+            # 裡。逐顆的卡不行 —— 判定在它們之後才算。
+            known = feats if step_cls.scale != SCALE_LOT else \
+                feats | set(let_names_written(recipe.decide))
             stale = [x for x in step_cls.optional_features_in(p)
-                     if x not in feats]
+                     if x not in known]
             if stale:
                 issues.append(Issue(
                     code="stale-feature-ref", level="warning", node_id=nid,
                     title=f"step '{nid}' points at a number nobody produces",
                     detail=f"route '{k}': it refers to {stale}, but nothing "
                            f"upstream produces {'them' if len(stale) > 1 else 'it'}"
-                           f" (available: {sorted(feats)}). This card still "
+                           f" (available: {sorted(known)}). This card still "
                            f"runs - it just quietly does without, so check "
                            f"the spelling, or whether a card upstream renamed "
                            f"its numbers (measuring two regions instead of "
@@ -3750,14 +3785,14 @@ def validate(recipe: Recipe, kind: Optional[str] = None,
                            f"number it writes)."))
 
             missing_feat = [x for x in step_cls.resolve_features_in(p)
-                            if x not in feats]
+                            if x not in known]
             if missing_feat:
                 issues.append(Issue(
                     code="unknown-feature-input", level="error", node_id=nid,
                     title=f"step '{nid}' uses a number nobody produces",
                     detail=f"route '{k}': it reads {missing_feat}, but no card "
                            f"before it in this route writes those out "
-                           f"(available here: {sorted(feats) or 'none'}). "
+                           f"(available here: {sorted(known) or 'none'}). "
                            f"Check the spelling, or move this card after the "
                            f"card that measures it."))
 

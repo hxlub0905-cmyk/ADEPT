@@ -161,7 +161,16 @@ FILE_CEILINGS = {
     # 2026-09-08（F100 v3）：7,582 → 7,592（+10）。右欄變成一支直向 splitter
     # （影像在上、儀表在下）而它的建立與 stretch 住在這裡；工作台那一列只剩
     # `stack`。幾何本身（開合、比例、記住尺寸）仍在 `ui/workbench.py`。
-    "d4t/ui/studio.py": 7592,
+    # 2026-09-09：7,592 → 7,611（+19）。整批一次的卡（Output 段）的「插入
+    # 數字 ▾」多列 working numbers（`_dynamic_choices_for` 那一段），與設定區
+    # 那支下拉的 tooltip／顏色 provider（`_number_info`）—— 都是接線。
+    # 2026-09-09（同日第二次）：7,611 → 7,750（+139）。跑與寫拆成兩個動作
+    # （`run_all` 不寫、`write_outputs` 另一顆鈕）、`rerun`（量測沒改就只重判，
+    # 邏輯在 `batch.rerun_decision` / `measurement_signature`）、Results 單擊
+    # 帶主畫面過去（`_on_defect_selected`）、Output 卡與判定樹的預覽跑到底
+    # （`_preview_whole_route`）。四件都是使用者 2026-09-09 點名的，內容各在
+    # core 或 Results 那幾支，這裡是接線與三句要講的話。
+    "d4t/ui/studio.py": 7750,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     #
@@ -169,7 +178,12 @@ FILE_CEILINGS = {
     # 「這份舊 recipe 開起來被升級了什麼」講成人話。它**比對前後**而不是讓
     # 19 道 `_migrate_*` 各自回報：那會是 19 個要維護的字串，而第 20 道一定
     # 會忘（`ALLOWED_ERRORS` 學到的同一課）。
-    "d4t/core/pipeline/recipe.py": 3830,
+    #
+    # 2026-09-09：3,830 → 3,865（+35）。`let_names_written` —— 判定段 `let`
+    # 會寫的名字（＋ `_missing` / `_raw`）**一個家**：`_decide_unknown` 以前把
+    # 這條規則寫在自己的迴圈裡，而 `validate` 對 Output 卡的 `rank_by` 根本
+    # 不知道 let 存在（指到 working number 被標成 nobody produces it）。
+    "d4t/core/pipeline/recipe.py": 3865,
     # 逐卡儀表板。這一支變長**通常是健康的**（加一張卡就多一個面板），所以
     # 這一格比其他四格更常需要調高 —— 那沒關係，重點是調高時有人看見。
     # 2026-09-08（F99 P0-2）：3,622 → 3,660。`header_boxes` —— 共用 header 左右
@@ -187,7 +201,10 @@ FILE_CEILINGS = {
     # （`_stop_anim` / `_forget_anim`，P0-1 那個 RuntimeError）、空白處右鍵與
     # 拖線到空白的兩個訊號（P1-1）、Region 卡標題帶區域名（P1-3）、每張卡的
     # 執行狀態（`run_status_from` / `run_text`，P1-5）。
-    "d4t/ui/canvas.py": 3058,
+    # 2026-09-09：3,058 → 3,070（+12）。`run_text` 從總耗時改成每秒幾顆
+    # （使用者：「X img/s 而不是 total time」）—— 多的是那句「為什麼加總的 ms
+    # 不是牆上時鐘」的說明。
+    "d4t/ui/canvas.py": 3070,
 }
 
 #: 沒被列名的檔案共用的上限。
@@ -315,7 +332,10 @@ COUNT_CEILINGS = {
     ),
     # god object 的兩個投影。261 → 268（六天）。
     "studio_window_methods": (
-        294,
+        298,
+        # 2026-09-09：294 → 298。`write_outputs`（跑與寫拆開）、`rerun`
+        # （邏輯在 `batch.rerun_decision`）、`_on_defect_selected`（Results
+        # 單擊帶過去）、`_preview_whole_route`（Output 卡／判定樹跑到底）。
         # 2026-09-08（F99）：287 → 294。六支全是轉呼叫：`_on_add_menu` /
         # `_on_link_dropped`（`card_menu`）、`copy_cards` / `paste_cards` /
         # `duplicate_cards`（`clipboard`）、`_open_windows`（`windows_menu`）。
@@ -353,7 +373,12 @@ COUNT_CEILINGS = {
         lambda: _class_shape("d4t/ui/studio.py", "StudioWindow")[0],
     ),
     "studio_window_attributes": (
-        430,
+        437,
+        # 2026-09-09（第二次）：431 → 437。`_last_run`（上一批的底稿：rows／
+        # 量測簽章／被停掉／幾顆，一個 dict 不是四個名字）、`_tree_focus`
+        # （編樹時預覽跑到底），以及下面那四支方法的名字。
+        # 2026-09-09：430 → 431。`_number_info` —— 設定區「插入數字 ▾」的
+        # tooltip／顏色 provider（內容在 `ui/number_picker.py`，這裡只是接線）。
         # 2026-09-08（F99／F100）：418 → 430。走的：`_layout_mode` / `_params_open`
         # / `_SPLIT_KEYS`（進 `WorkbenchLayout`）；來的：`layout_modes` /
         # `main_column` / `workbench` / `verdict_strip` / `verdict_note` /

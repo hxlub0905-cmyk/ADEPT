@@ -22,6 +22,50 @@
 
 ---
 
+## 跑與寫拆開、Re-run、Results 單擊帶主畫面、卡片上寫 img/s（2026-09-09 第三輪）
+
+使用者點名四件事，全部做了：
+
+1. **Output 卡也看得到 working numbers。** 清單只有一個來源
+   （`studio._dynamic_choices_for`），整批一次的卡（`scale == SCALE_LOT`）接上
+   `decision_features()`；逐顆的卡**不接**（判定在它們之後才算，列了就是
+   `x = x` 那個 bug）。順手抓到 **`feature_key`（單一個名字）從來沒有過下拉**
+   —— `param_form._make_editor` 那一行只認 `expr` / `feature_keys`，於是三張
+   Output 卡的 `rank_by` 一直是純文字框，而 `output.py` 的 spec 上寫著「UI 會
+   給這一格一支」。lint 那一半：`recipe.let_names_written` 是 let 會寫的名字
+   的**唯一的家**（`_decide_unknown` 改用它；`validate` 對整批卡的
+   `stale-feature-ref` 現在認得 let）。「插入數字 ▾」搬進 `ui/number_picker.py`
+   —— `param_form` 也要用，而它反過來 import `decide_panel` 是一個圈。
+2. **跑不寫，寫是另一顆鈕。** 使用者問「還是你覺得不適合」—— 適合：
+   `run_batch` 與 `run_batch_steps` 本來就是兩支（batch.py 的 docstring 講的
+   正是「寫做成旗標遲早有人忘記關」），Studio 只是把它們綁在一個鈕上。現在
+   `run_all` 只跑、`write_outputs` 寫（KLARF `inplace` 的確認搬到寫的時候問；
+   被停掉的部分結果拒寫並講出來）。Results 那顆「Run all & write」拆成
+   **Re-run** 與 **Write outputs**。Re-run 走 `batch.rerun_decision`：每一行
+   let 重算（含跟整批比的，錨拔掉重算）、上一次判定失敗的顆救回來
+   （`redecide(revive=True)`）、影像一顆不碰；`batch.measurement_signature`
+   決定能不能這樣走 —— 量測那一段改了就整批重跑，**不拿舊數字配新量測卡**。
+   底稿是 `_last_run["rows"]`（原封不動那一份），不是畫面上那份。
+   ⚠ `tests/test_ui_write_only_on_run_all.py` 的契約整份改寫（那條「試跑不寫，
+   只有整批才寫」是使用者 F16 定的，這次也是使用者改的）。
+3. **Results 單擊（或方向鍵）一顆 → 主畫面帶過去，不搶焦點**
+   （`defect_selected`，雙擊仍是 `defect_activated` 會叫主視窗到前面）。
+   「ADC 跟 output 段影像預設不顯示？」—— 是，而且是 F11「沒有線就沒有圖」
+   那條規矩的假陽性：Output 卡是整批一次的，逐顆引擎跳過它、沒有 trace，
+   `_selected_card_ran` 就把影像清掉。現在 `_preview_whole_route`：選的是
+   整批一次的卡、或正在編判定樹（`_tree_focus`）→ 預覽跑到底、連判定，
+   路徑才亮得起來。
+4. **卡片右上角從總耗時改成每秒幾顆**（`canvas.run_text`：``24 ok · 71 img/s``）。
+   加總的 ms 是所有 worker 的 CPU 時間，不是牆上時鐘 —— docstring 講了。
+
+尺：`test_rerun_decision.py`（五條，core）、`test_ui_rerun_and_jump.py`（七條）、
+`test_ui_number_picker.py`（三條）、`test_rename_fallout.py` 兩條；改契約的
+`test_ui_write_only_on_run_all.py`、`test_ui_button_labels.py`、
+`test_ui_results.py`、`test_ui_studio_m5.py`、`test_ui_f99_gestures.py`。
+`docs/USING-UNIFORMITY.md` §5 跟著改。
+
+---
+
 ## 判定樹上找得到 working numbers；「插入數字 ▾」一張卡一組（2026-09-09）
 
 使用者拿一份 recipe 來問「為何我沒法執行，working numbers 設的 attribute QAA
