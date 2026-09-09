@@ -428,6 +428,9 @@ d4t/
     ├── workbench.py          #   Build／Tune 的幾何（F100 v3）：畫布當導覽在上、
     │                         #     設定區吃滿中欄下半、右欄上影像下儀表；
     │                         #     `studio.py` 只接線。`params_open` ＝ 工作台攤開著嗎
+    ├── splitters.py          #   區域之間的細線：把手 5px 抓得到、中間 1px 看得見
+    │                         #     （F100 v3 收尾）—— QSS 做不到兩個方向都 1px，
+    │                         #     所以把手自己畫；`d4t/ui` 裡不准再直接 `QSplitter(`
     ├── card_menu.py          #   空白處右鍵、拖線到空白處的「加一張卡」選單（F99 P1-1）
     │                         #     —— 分組與相容性住這裡，畫布只發訊號
     ├── clipboard.py          #   Ctrl+C／V／D 的內容（F99 P1-8）：設定帶走、接線不帶

@@ -407,7 +407,10 @@ F44 的 `ui/region_words.py` 已經都是這樣做的 —— 這一段只是把�
 只多了接線。**F99／F100（2026-09-08）再四支**：`ui/workbench.py`（Build／Tune
 的幾何：畫布當導覽在上、設定區吃滿中欄下半、右欄上影像下儀表）、`ui/card_menu.py`（空白處右鍵與拖線
 到空白處的「加一張卡」選單）、`ui/clipboard.py`（Ctrl+C/V/D）、
-`ui/windows_menu.py`（Help 鈕的小箭頭列出開著的視窗）。
+`ui/windows_menu.py`（Help 鈕的小箭頭列出開著的視窗）。**2026-09-09 再一支**：
+`ui/splitters.py`（區域之間的細線 —— 把手 5px 抓得到、中間 1px 看得見；QSS 對
+splitter 把手算尺寸不分方向，四種寫法都做不到，所以把手自己畫；`d4t/ui` 裡
+不准再直接 `QSplitter(`，有測試數像素）。
 
 > ⚠ 這張清單上以前還有 **F30 的 `ui/output_band.py`**，而它 2026-08-28 被
 > **刪掉**了（F50）。規矩沒有變 —— 變的是那一塊該不該存在：那個框畫的是

@@ -76,7 +76,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QSplitter,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -91,6 +90,7 @@ from d4t.core.pipeline.cellrois import (
 )
 
 from . import fit_screen
+from .splitters import HairlineSplitter
 from .cell_canvas import (
     TOOL_ARRAY, TOOL_CLICK, TOOL_CURSOR, TOOL_DRAG, TOOL_PAINT, CellCanvas,
     region_color,
@@ -160,7 +160,7 @@ class TemplateDialog(QDialog):
         outer.setSpacing(8)
         outer.addWidget(self._build_source_row())
 
-        split = QSplitter(Qt.Horizontal, self)
+        split = HairlineSplitter(Qt.Horizontal, self)
         left = QWidget(self)
         left_lay = QVBoxLayout(left)
         left_lay.setContentsMargins(0, 0, 0, 0)

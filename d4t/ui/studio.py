@@ -99,7 +99,6 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QProgressBar,
     QSpinBox,
-    QSplitter,
     QStackedWidget,
     QStatusBar,
     QToolBar,
@@ -123,6 +122,7 @@ from d4t.core.pipeline import verdict_features
 from d4t.core.pipeline.verdict_trace import verdict_trace
 
 from . import autosave
+from .splitters import HairlineSplitter
 from . import card_menu
 from . import clipboard
 from . import windows_menu
@@ -1214,7 +1214,7 @@ class StudioWindow(QMainWindow):
         self.stack.addWidget(self.score_pane)     # index 1
         self.stack.addWidget(self.tree_pane)      # index 2
 
-        middle = QSplitter(Qt.Vertical, self)
+        middle = HairlineSplitter(Qt.Vertical, self)
         middle.addWidget(self.pipeline)
         # 下半在 `_build_preview_pane` 跑完之後才接得起來（儀表是在那裡建的）
         # —— 見 `_build_params_row`。
@@ -1257,13 +1257,13 @@ class StudioWindow(QMainWindow):
         self.results.class_selected.connect(self._on_verdict_class)
 
         # 右欄：影像在上、儀表在下（F100 v3），一根直向 splitter，比例記得住。
-        self.right_column = QSplitter(Qt.Vertical, self)
+        self.right_column = HairlineSplitter(Qt.Vertical, self)
         self.right_column.addWidget(self.preview_pane)
         self.right_column.addWidget(self.gauge_pane)
         self.right_column.setStretchFactor(0, 3)
         self.right_column.setStretchFactor(1, 2)
         self.right_column.setCollapsible(0, False)
-        root = QSplitter(Qt.Horizontal, self)
+        root = HairlineSplitter(Qt.Horizontal, self)
         root.addWidget(self.library)
         root.addWidget(self.main_column)
         root.addWidget(self.right_column)
@@ -1349,7 +1349,7 @@ class StudioWindow(QMainWindow):
         影像**不搬**：它是另一種迴圈（改參數 → 看圖），而且它要的是高度 ——
         把它擠進這一列只會讓兩件事都變小。
         """
-        row = QSplitter(Qt.Horizontal, self)
+        row = HairlineSplitter(Qt.Horizontal, self)
         row.addWidget(self.stack)
         # F100 v3：儀表搬到**右欄影像下面**（使用者：「最一開始的排版最好，儀表
         # 換到影像下方」）。設定區於是拿到整個中欄的寬度，儀表拿到右欄的寬度

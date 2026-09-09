@@ -149,17 +149,22 @@ def test_the_baseline_recipes_still_exist():
 # 3. 沒有基準的時候
 # --------------------------------------------------------------------------- #
 def test_a_missing_baseline_says_what_to_do_without_measuring_first(
-        tmp_path, capsys):
+        tmp_path, capsys, monkeypatch):
     """回 2、講出下一句話，而且**不先白白量 20 秒**。
 
     「不先量」是這一條真正在守的東西：`main()` 第一版把 `collect()` 放在檢查
     之前，於是一台還沒凍過基準的機器要等一次完整的量測，才被告知它做的那件事
-    從一開始就不會成立。這裡用時間證明它沒有量 —— 真的量了的話這條會超時。
+    從一開始就不會成立。
+
+    ⚠ 這裡以前用**時間**證明它沒有量（`elapsed < 2.0`）—— 而 2026-09-09 CI
+    的一台 runner 在 `argparse` ＋ `os.path.exists` 上就停了 3.8 秒（PR #41，
+    diff 一個字都沒碰 `bench.py`）。牆上時鐘證明不了「有沒有呼叫」；直接把
+    `collect` 換成會炸的，呼叫到就是紅。
     """
-    import time
-    t0 = time.perf_counter()
+    def _must_not_measure():
+        raise AssertionError("它在報告『找不到基準』之前先量了")
+
+    monkeypatch.setattr(bench, "collect", _must_not_measure)
     rc = bench.main(["--check", "--out", str(tmp_path / "nope.json")])
-    elapsed = time.perf_counter() - t0
     assert rc == 2
     assert "先跑一次" in capsys.readouterr().out
-    assert elapsed < 2.0, "它在報告『找不到基準』之前先量了 %.1f 秒" % elapsed
