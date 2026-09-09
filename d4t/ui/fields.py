@@ -372,7 +372,10 @@ class ProfilePanel(QWidget):
 
     #: 每一群的底色（依群號輪流）。用**顏色**而不是深淺：深淺會跟曲線下面的
     #: 灰階混在一起，而這裡要講的是「這幾根是同一種東西」。
-    GROUP_COLORS = ("#3574d6", "#c2871f", "#7a68a6", "#3f9d6b", "#d05a4c")
+    #: ⚠ 寫的是 **token 名**，畫的時候才取值（F99 P2-2）。以前這裡是五個
+    #: 寫死的 hex —— 它們是 accent／warning／seg_adc／success／danger 的
+    #: **複本**，而複本不跟主題走：暗色主題下這幾根柱子穿的還是亮色的衣服。
+    GROUP_COLORS = ("accent", "warning", "seg_adc", "success", "danger")
 
     #: 拖多少個取樣點以內算「點一下」而不是「拖了一段」。
     CLICK_SLOP = 1.5
@@ -721,7 +724,7 @@ class ProfilePanel(QWidget):
             p.setPen(Qt.NoPen)
             for band, g in zip(bands, groups):
                 on = (g == picked_group)
-                col = QColor(self.GROUP_COLORS[int(g) % len(self.GROUP_COLORS)])
+                col = QColor(TOKENS[self.GROUP_COLORS[int(g) % len(self.GROUP_COLORS)]])
                 # 沒被選中的那幾群要**很淡**：空隙那一群通常最寬，照一樣的濃度
                 # 畫會把整條色帶佔滿，而真正要看的「現在用哪一組」反而變成幾根
                 # 小點（render 出來確認過）。
@@ -774,7 +777,7 @@ class ProfilePanel(QWidget):
         cx = to_x((n - 1) / 2.0)
         p.drawLine(QPointF(cx, plot.top()), QPointF(cx, plot.bottom()))
         f = p.font()
-        f.setPointSizeF(max(6.0, f.pointSizeF() - 2.0))
+        f.setPixelSize(theme.font_px("font_tiny"))
         p.setFont(f)
         p.setPen(QColor(TOKENS["text_secondary"]))
         p.drawText(QRectF(cx + 3, plot.bottom() - 12, 64, 11),
@@ -792,7 +795,7 @@ class ProfilePanel(QWidget):
 
         p.setPen(QColor(TOKENS["text_secondary"]))
         f = p.font()
-        f.setPointSizeF(max(7.0, f.pointSizeF() - 1.0))
+        f.setPixelSize(theme.font_px("font_small"))
         p.setFont(f)
         strip = QRectF(rect.left() + 6, rect.top() + 2, rect.width() - 12, 14)
         p.drawText(strip, Qt.AlignVCenter | Qt.AlignLeft, self.summary())
@@ -852,7 +855,7 @@ class ProfilePanel(QWidget):
         if not text:
             return
         f = p.font()
-        f.setPointSizeF(max(7.0, f.pointSizeF() - 1.0))
+        f.setPixelSize(theme.font_px("font_small"))
         p.setFont(f)
         w = QFontMetricsF(f).horizontalAdvance(text) + 8.0
         # 讀數貼著自己量的那一段（不要放到面板角落 —— 兩條曲線各有一把尺，

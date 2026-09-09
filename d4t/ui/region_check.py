@@ -43,6 +43,7 @@ from d4t.core.pipeline.engine import run_defect
 
 from . import fit_screen
 from .gallery import make_thumb, thumb_placement
+from . import theme
 from .theme import TOKENS, region_hex
 from .widgets import _qimage_from_uint8, apply_button_cursors
 
@@ -263,7 +264,7 @@ class RegionThumb(QFrame):
 
         p.setPen(QColor(TOKENS["text_secondary"]))
         f = p.font()
-        f.setPointSizeF(max(7.0, f.pointSizeF() - 1.0))
+        f.setPixelSize(theme.font_px("font_small"))
         p.setFont(f)
         p.drawText(QRectF(4, s + 6, s, 14), Qt.AlignHCenter | Qt.AlignVCenter,
                    self.defect_id)

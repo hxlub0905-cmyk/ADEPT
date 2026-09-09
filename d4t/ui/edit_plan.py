@@ -30,7 +30,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, List
+from typing import Any, List, Dict
 
 from ..core.pipeline import get_step, list_steps
 from ..core.pipeline.recipe import is_region_edge
@@ -41,7 +41,7 @@ __all__ = [
     "IMAGE", "REGION", "REJECT", "ConnectPlan", "UnpointPlan",
     "line_kind", "is_region_param", "param_for_stream", "conflicting_edges",
     "region_conflicts", "plan_connect", "plan_unpoint", "producers_of",
-    "unmet_needs",
+    "unmet_needs", "copyable_params",
 ]
 
 #: 「這條線接不上」時 `plan_connect` 用的 kind。
@@ -406,3 +406,23 @@ def unmet_needs(model: Any, node_id: str) -> str:
                     if makers else "“%s”" % s)
     return (" — but it still needs the image stream %s, or point it at one "
             "of: %s." % (", ".join(bits), ", ".join(sorted(have)) or "(none)"))
+
+
+def copyable_params(step_key: str, params: Any) -> Dict[str, Any]:
+    """複製一張卡時帶走哪些格（F99 P1-8）：**設定帶走，接線不帶**。
+
+    吃影像流／區域的那幾格（``image_key(s)`` / ``region_key(s)``）的值是
+    **線**水合出來的（鐵則 10）——貼上的那張卡還沒有線，帶著 ``source="single"``
+    過去等於一張沒接線卻看起來接好了的卡，而那正是 F10 擋掉的東西。
+    其他每一格照抄：滑桿、膠囊、門檻，那才是使用者按 Ctrl+C 想留住的。
+    """
+    from ..core.pipeline import get_step
+    try:
+        cls = get_step(str(step_key))
+    except KeyError:
+        return {}
+    wired = {p.name for p in cls.params
+             if p.type in ("image_key", "image_keys",
+                           "region_key", "region_keys")}
+    return {str(k): v for k, v in dict(params or {}).items()
+            if str(k) not in wired}

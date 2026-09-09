@@ -279,3 +279,21 @@ def test_every_registered_panel_says_why_in_its_own_words(qapp):
     lazy = [c.__name__ for c in classes
             if c.empty_reason is insp_mod.Inspector.empty_reason]
     assert not lazy, "還在用預設空狀態句的面板：%s" % sorted(lazy)
+
+
+def test_the_shared_header_never_overlaps_itself(qapp):
+    """左右兩段各自畫進同一個矩形而沒有一方讓寬度 —— 面板窄到 200 px 時
+    「single · on_pattern」跟「n=81 px · 0.0% saturated」直接疊在一起
+    （F99 P0-2，2026-09-08 評審在預設版面上第一眼看到的 bug）。"""
+    from PySide6.QtCore import QRectF
+    head = QRectF(0, 0, 200, 14)
+    left, tail, right = insp_mod.header_boxes(head, 160.0, 40.0, 130.0)
+    assert right.width() <= 100, "右段最多拿一半"
+    assert left.right() <= right.left() - insp_mod.HEADER_GAP + 1e-6, \
+        "左段跟右段重疊：%s vs %s" % (left, right)
+    assert tail.left() >= left.right() - 1e-6
+    assert tail.right() <= right.left() + 1e-6
+    # 夠寬的時候三段都拿到自己要的寬度，一個 px 都不縮
+    left, tail, right = insp_mod.header_boxes(QRectF(0, 0, 600, 14),
+                                              160.0, 40.0, 130.0)
+    assert (left.width(), tail.width(), right.width()) == (160.0, 40.0, 130.0)

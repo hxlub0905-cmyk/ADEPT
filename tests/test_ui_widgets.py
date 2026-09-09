@@ -731,7 +731,8 @@ def test_library_badges_unmet_prerequisites_but_still_allows_adding(qapp):
     # 但都是使用者接出來的。所以例子換成 `subtract`：只給 `test` 的時候，
     # 它缺的是 `ref`。
     panel.set_available_streams(["test"])
-    assert panel.entry("subtract").badge_text() == "needs ref"
+    assert panel.entry("subtract").badge_text() == "needs a “ref” stream", \
+        "F99 P1-4：「needs ref」會被讀成「需要測試」那一類的話，名字要加引號說出它是一條流"
     assert panel.entry("denoise").badge_text() == ""      # 只讀 test，滿足了
 
     got = []

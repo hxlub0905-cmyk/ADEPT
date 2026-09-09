@@ -294,8 +294,13 @@ def test_an_edge_that_runs_backwards_stays_near_its_two_ends(window, qapp):
     from d4t.ui import canvas as canvas_mod
 
     order = window.model.node_order
-    wrap_at = canvas_mod.WRAP
-    assert len(order) > wrap_at, "前提：這份 recipe 要長到會換行"
+    # ⚠ 問畫布本人一列排幾張，不要拿 `canvas_mod.WRAP`（那是還沒 show 過的
+    # 退路）：一列幾張跟畫布多寬有關，而畫布多寬跟版面有關（F100 v2 之後
+    # 1600 寬的視窗上一列是三張，不是四張）。這條測試鎖的是**換行那條線的
+    # 形狀**，不是一列幾張。
+    wrap_at = window.pipeline.wrap()
+    assert 1 < wrap_at < len(order), (
+        "前提：這份 recipe 要長到會換行（一列 %d 張、共 %d 張）" % (wrap_at, len(order)))
     window.model.add_edge(order[wrap_at - 1], order[wrap_at])
     qapp.processEvents()
 

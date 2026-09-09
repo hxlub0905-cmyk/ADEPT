@@ -154,7 +154,8 @@ def test_the_two_modes_remember_different_ratios(window):
 
     共用一格的話切一次模式就把另一個覆蓋掉，而他每次切回來都要再調一次。
     """
-    keys = window._SPLIT_KEYS
+    from d4t.ui import workbench
+    keys = workbench.SPLIT_KEYS
     assert set(keys) == {"build", "tune"}
     assert keys["build"] != keys["tune"]
 
@@ -181,11 +182,19 @@ def test_picking_a_card_does_not_fight_the_user_in_build_mode(window, qapp):
 # U8：參數與儀表同欄同框
 # --------------------------------------------------------------------------- #
 def test_the_gauges_sit_next_to_the_parameters(window):
-    """**驗收條件**：改一個參數之後，數值變化與該參數在同一個視野內。"""
+    """**驗收條件**：改一個參數之後，數值變化與該參數在同一個視野內。
+
+    ⚠ F100 v3（2026-09-09）：儀表從「跟設定區同一根 splitter 的右格」搬到
+    **右欄影像下面** —— 設定區拿到整個中欄的寬、儀表拿到右欄的寬（直方圖要的
+    是寬度）。兩塊仍然是**下半那一列左右相鄰**，同一條視線；U8 的驗收條件
+    （下面那條真的量座標的）沒有變。
+    """
     row = window.params_row
     assert window.canvas_column.widget(1) is row
     assert row.widget(0) is window.stack
-    assert row.widget(1) is window.gauge_pane
+    right = window.right_column
+    assert right.widget(0) is window.preview_pane
+    assert right.widget(1) is window.gauge_pane
 
 
 def test_they_are_actually_side_by_side_on_screen(window, qapp):
@@ -210,13 +219,20 @@ def test_they_are_actually_side_by_side_on_screen(window, qapp):
 
 
 def test_the_image_stayed_in_its_own_column(window):
-    """影像**不搬**：它是另一種迴圈（改參數 → 看圖），而且它要的是高度。"""
-    kids = [window.root_splitter.widget(i)
-            for i in range(window.root_splitter.count())]
-    assert window.preview_pane in kids
-    assert window.gauge_pane not in kids
+    """影像有自己的一欄（全高），而且不裝儀表。
+
+    ⚠ F100 第一版（2026-09-08 早上）曾把影像塞進工作台當第三格；v2 同一天
+    改回右欄 —— 調參數那一刻影像是主角，擠在那一列裡只剩 330×250。
+    **問題沒有變**：影像不跟儀表擠在同一格，儀表挨著參數。
+    """
+    wb = window.workbench
+    cells = [wb.widget(i) for i in range(wb.count())]
+    assert cells == [window.stack]
     assert not window.preview_pane.isAncestorOf(window.gauge_pane), \
-        "儀表還留在影像那一欄裡"
+        "儀表要在影像**下面**（右欄的第二格），不是塞進影像那一格裡"
+    root = window.root_splitter
+    assert [root.widget(i) for i in range(root.count())] == [
+        window.library, window.main_column, window.right_column]
 
 
 def test_the_card_name_is_only_written_once(window, qapp):

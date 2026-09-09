@@ -127,7 +127,7 @@ class RouteBadgeItem(QGraphicsItem):
         # 標題：漏斗形的小記號 ＋ PRE-FILTER ＋ 欄名
         f = p.font()
         f.setBold(True)
-        f.setPointSizeF(max(6.5, f.pointSizeF() - 1.0))
+        f.setPixelSize(theme.font_px("font_small"))
         p.setFont(f)
         p.setPen(col)
         p.drawText(QRectF(10, 6, BADGE_W - 20, 14),

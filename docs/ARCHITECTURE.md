@@ -425,6 +425,14 @@ d4t/
     ├── focus_visible.py      #   焦點環只在鍵盤導覽時出現（F80）—— Qt 沒有
     │                         #     `:focus-visible`，這支把 QFocusEvent.reason()
     │                         #     翻成 `kbFocus` 屬性餵給 QSS
+    ├── workbench.py          #   Build／Tune 的幾何（F100 v3）：畫布當導覽在上、
+    │                         #     設定區吃滿中欄下半、右欄上影像下儀表；
+    │                         #     `studio.py` 只接線。`params_open` ＝ 工作台攤開著嗎
+    ├── card_menu.py          #   空白處右鍵、拖線到空白處的「加一張卡」選單（F99 P1-1）
+    │                         #     —— 分組與相容性住這裡，畫布只發訊號
+    ├── clipboard.py          #   Ctrl+C／V／D 的內容（F99 P1-8）：設定帶走、接線不帶
+    ├── windows_menu.py       #   Help 鈕的小箭頭列出開著的頂層視窗（F99 P2-6）——
+    │                         #     工具列在 1366 上裝不下第十三顆鈕
     └── assets/               #   `d4t.svg` 與兩份字標（pyproject 的 package-data 帶著它們走）
 ```
 

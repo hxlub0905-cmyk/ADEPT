@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from typing import Any, Dict, Optional
 
@@ -229,12 +230,28 @@ def restore_into(window: Any, data: Dict[str, Any]) -> bool:
     return True
 
 
+def _under_pytest() -> bool:
+    """現在是不是在跑測試（跟 `studio._running_under_pytest` 同一個判準，
+    但不從那裡 import —— `studio` import 這一支，反過來會繞圈）。"""
+    return bool(os.environ.get("PYTEST_CURRENT_TEST")) or "pytest" in sys.modules
+
+
 def offer_restore(window: Any) -> bool:
     """開窗時問那一句；答「要」就套進去。回傳有沒有真的套。
 
     答「不要」就**把草稿刪掉** —— 留著的話下次開窗會再問一次同一件事，而
     使用者已經回答過了。
     """
+    # ⚠ **測試裡不准碰使用者真正的那一份**（F99，2026-09-08）。`StudioWindow`
+    # 在跑測試時預設不**寫**草稿，但這一支照樣會**讀**——而且答「不要」會
+    # `clear()`。兩個後果都真的發生過：一支被中途殺掉的工具（`tools/i18n_todo.py`）
+    # 在 `~/.d4t/autosave.json` 留下一份草稿，之後**每一條**會開 Studio 的測試
+    # 都停在這個 modal 上（faulthandler 抓到的：`offer_restore` ← `showEvent`）；
+    # 而反過來，開發機上跑測試會把開發者自己的草稿問掉、甚至刪掉。
+    # 判準跟 `_load_sizes` 一樣：在 pytest 裡而且 `DIR` 還是預設（＝真的那一份）
+    # → 什麼都不碰。測試自己把 `DIR` 指到 tmp 的話照常運作。
+    if not DIR and _under_pytest():
+        return False
     data = load()
     question = describe(data)
     if not question:

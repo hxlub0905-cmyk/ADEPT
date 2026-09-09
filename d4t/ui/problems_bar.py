@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import strings
 from .theme import TOKENS
 
 __all__ = ["ProblemsBar", "counts_of", "summary_of", "issue_rows"]
@@ -75,7 +76,7 @@ def summary_of(issues: Sequence[Any]) -> str:
         word = {"error": "error", "warning": "warning", "info": "note"}[level]
         parts.append("%d %s%s" % (n, word, "" if n == 1 else "s"))
     if not parts:
-        return "Nothing is blocking a run."
+        return strings.tr("Nothing is blocking a run.")
     text = " · ".join(parts)
     # **error 才擋執行**，而那件事要寫出來 —— 一個使用者看著「1 warning」
     # 不知道自己現在到底能不能按 Run。
@@ -149,7 +150,7 @@ class ProblemsBar(QWidget):
         # Shapes，廠內那台會退字型或畫成豆腐框，而
         # `test_ui_f7_23_buttons` 會擋）。這顆鈕的字本來就說完了整件事，
         # 一個箭頭沒有多講任何東西。
-        self.btn_toggle.setText("Show the list")
+        self.btn_toggle.setText(strings.tr("Show the list"))
         self.btn_toggle.clicked.connect(self.toggle)
         hl.addWidget(self.btn_toggle)
         lay.addWidget(head)
@@ -175,8 +176,8 @@ class ProblemsBar(QWidget):
         # 沒有問題就**不畫記號**（不是一個打勾）：那一行字已經把話講完了，
         # 而多一個符號只是多一個要挑「這台機器有沒有這個字」的地方。
         self.mark.setText(LEVEL_MARK.get(worst, ""))
-        colour = {"error": TOKENS.get("danger_text", "#a83f33"),
-                  "warning": TOKENS.get("accent", "#2f6fb2")}.get(worst, "")
+        colour = {"error": TOKENS["danger_text"],
+                  "warning": TOKENS["accent"]}.get(worst, "")
         self.mark.setStyleSheet("color: %s" % colour if colour else "")
         self.btn_toggle.setEnabled(bool(self._rows))
         self.btn_toggle.setToolTip(
@@ -195,7 +196,7 @@ class ProblemsBar(QWidget):
                 # 顏色是**冗餘**的第二個訊號 —— 前面那個 ``✕`` 已經把意思講完
                 # 了（U13：紅綠對色覺缺陷者不可分辨，而這一列是「還能不能跑」
                 # 唯一的答案）。
-                item.setForeground(QColor(TOKENS.get("danger_text", "#a83f33")))
+                item.setForeground(QColor(TOKENS["danger_text"]))
         if not self._rows:
             self.set_open(False)
 
@@ -216,7 +217,8 @@ class ProblemsBar(QWidget):
         show = bool(on) and bool(self._rows)
         self._open = show
         self.list.setVisible(show)
-        self.btn_toggle.setText("Hide the list" if show else "Show the list")
+        self.btn_toggle.setText(strings.tr("Hide the list") if show
+                                else strings.tr("Show the list"))
 
     def toggle(self) -> None:
         self.set_open(not self.is_open())

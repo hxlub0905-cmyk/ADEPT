@@ -176,3 +176,23 @@ def test_it_does_not_write_while_the_tests_run_unless_asked(qapp, draft_dir):
         assert autosave.load() is None
     finally:
         win.close()
+
+
+def test_the_real_draft_is_never_read_or_asked_about_under_pytest(qapp, monkeypatch):
+    """`DIR` 是預設（＝ `~/.d4t/autosave.json`，使用者真正的那一份）而且在跑
+    測試 → `offer_restore` 什麼都不碰（F99）。
+
+    真的發生過：一支被中途殺掉的工具留下一份草稿，之後每一條會開 Studio 的
+    測試都停在「Bring back your unsaved pipeline?」那個 modal 上。反過來，
+    開發機上跑測試會把開發者自己的草稿問掉、甚至 `clear()` 掉。
+    """
+    from d4t.ui import autosave
+    monkeypatch.setattr(autosave, "DIR", "")
+    monkeypatch.setattr(autosave, "ASK_ON_START", True)
+
+    def boom(*_a, **_k):
+        raise AssertionError("碰了使用者真正的那一份")
+
+    monkeypatch.setattr(autosave, "load", boom)
+    monkeypatch.setattr(autosave, "clear", boom)
+    assert autosave.offer_restore(object()) is False

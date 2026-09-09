@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 
 from . import strings
 from . import theme
-from .chips import ChoiceChips, MetricChips, MetricPick, _ChoiceChip
+from .chips import ChoiceChips, MetricChips, MetricPick, _ChipFlow, _ChoiceChip
 from .fields import (
     CellRoisField, ChannelMapField, ChartSpecField, ChartStyleField,
     CurveField, MultiChoicePicker, TemplateField, _HintLabel, _ParamRow,
@@ -169,15 +169,14 @@ class ParamForm(QWidget):
         self._intent_title = QLabel("", self._intent_row)
         self._intent_title.setObjectName("paramTitle")
         irow.addWidget(self._intent_title)
-        btns = QHBoxLayout()
-        btns.setSpacing(6)
-        # 最後那一格彈簧**建一次就好**：膠囊靠左排（跟設定區每一排一樣），
-        # 沒有它的話 QHBoxLayout 會把多出來的寬度攤在膠囊之間 —— 三顆固定寬度
-        # 的東西被推得老遠，看起來不像同一排。
-        btns.addStretch(1)
+        # **會換行的一排**（F100 v2）。以前是 QHBoxLayout：三顆固定寬度的膠囊
+        # 把設定區的最小寬度撐到 376 px，而那正是 1366 上視窗裝不下的最後一根
+        # 稻草（設定區、儀表、影像三欄的最小寬度加起來 1,395）。`_ChipFlow`
+        # 的最小寬度是最寬的那一顆，塞不下就折到下一行 —— 跟 `metric_chips`
+        # 那一排同一個元件。
         self._intent_btns: Dict[str, "_ChoiceChip"] = {}
-        self._intent_btn_row = btns
-        irow.addLayout(btns)
+        self._intent_flow = _ChipFlow(self._intent_row)
+        irow.addWidget(self._intent_flow)
         self._intent_note = QLabel("", self._intent_row)
         self._intent_note.setObjectName("paramHint")
         self._intent_note.setWordWrap(True)
@@ -258,8 +257,7 @@ class ParamForm(QWidget):
         # （F68 第三輪 render 出來才看到；以前是 QPushButton 時同一個 bug，
         # 只是每次寬度都一樣所以完美重疊，看不出來）。
         for btn in self._intent_btns.values():
-            self._intent_btn_row.removeWidget(btn)
-            btn.setParent(None)
+            self._intent_flow.remove(btn)
             btn.deleteLater()
         self._intent_btns = {}
         self._intent_title.setText(title)
@@ -277,8 +275,7 @@ class ParamForm(QWidget):
                 # 沒有答案）。所以只接「按了」，勾不勾由 `current_id` 決定。
                 chip.toggled.connect(
                     lambda _v, _on, i=str(iid): self.intent_chosen.emit(i))
-                self._intent_btn_row.insertWidget(len(self._intent_btns),
-                                                  chip)   # 彈簧留在最後
+                self._intent_flow.add(chip)
                 self._intent_btns[str(iid)] = chip
         self._intent_note.setText(str(note or ""))
         self._intent_note.setVisible(bool(note))

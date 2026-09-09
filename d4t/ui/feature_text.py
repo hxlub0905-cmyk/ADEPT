@@ -366,6 +366,14 @@ class VerdictChip(QLabel):
         self.setText(text)
         self.setProperty("tone", tone)
         self.setToolTip(text)
+        self.setAccessibleName("Verdict: %s" % text)
+        # **這一格不准被擠到把名字截掉**（F99 P0-4）。`setMinimumWidth(112)`
+        # 的意思是「版面可以把我縮到 112」——於是「more than one box is off」
+        # 在窄的那一列被從左邊切成「:han one box is off」，而那是整份判定裡
+        # 最該一眼看到的一句。最小寬度跟著字走；擠不下的是旁邊那條路徑
+        # （它有 tooltip 與省略號），不是這一格。
+        self.setMinimumWidth(max(
+            112, self.fontMetrics().horizontalAdvance(text) + 2 * 12 + 2 * 2))
         self.setStyleSheet(
             "background:%s; color:%s; border:%dpx %s %s;"
             " border-radius:%s; padding:4px 12px; font-weight:700;"

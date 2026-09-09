@@ -242,3 +242,53 @@ def test_with_animations_off_everything_is_done_when_the_call_returns(window,
     view.reset_zoom()
     assert getattr(view, "_view_anim", None) is None
     assert _view_state(view) != before or before[0] == 1.0
+
+
+# --------------------------------------------------------------------------- #
+# 4. 動畫跑完之後再按一次，不准炸（F99 P0-1）
+# --------------------------------------------------------------------------- #
+def test_fit_twice_with_the_animation_finishing_in_between(window, qapp,
+                                                           animated):
+    """**`DeleteWhenStopped` 之後那個殼還握在 `_view_anim` 上。**
+
+    第一次 fit 起一段動畫，它自然跑完、C++ 物件被刪掉；第二次 fit 對那個殼
+    呼叫 `stop()` → `RuntimeError: Internal C++ object already deleted`。
+    2026-09-08 的外部評審在 offscreen 用「fit → 等 400 ms → 再 fit」百分之百
+    重現。這裡走同一條路，而且連按三次：第二次抓的是「跑完沒放掉」，第三次
+    抓的是「放掉之後又忘了放」。
+    """
+    view = window.pipeline
+    for _ in range(3):
+        view.reset_zoom()
+        _settle(qapp)
+        view.fit()                      # 不准 raise
+        _settle(qapp)
+    assert getattr(view, "_view_anim", None) is None, \
+        "動畫跑完之後 `_view_anim` 要放掉，不然下一次 stop() 打在死物件上"
+
+
+def test_tidy_twice_with_the_animation_finishing_in_between(window, qapp,
+                                                            animated):
+    """`_tween_nodes` 是同一個形狀、同一個 bug、同一個修法。"""
+    view = window.pipeline
+    for _ in range(3):
+        view.node_item(view.node_ids()[0]).setPos(QPointF(500.0, 400.0))
+        qapp.processEvents()
+        view.tidy()                     # 不准 raise
+        _settle(qapp)
+    assert getattr(view, "_node_anim", None) is None
+
+
+def test_fit_pressed_again_while_the_animation_is_still_running(window, qapp,
+                                                                animated):
+    """中途再按一次：`stop()` 打在活著的物件上、走 deleteLater，也不准炸。"""
+    view = window.pipeline
+    view.reset_zoom()
+    _settle(qapp)
+    view.fit()
+    qapp.processEvents()                # 動畫才剛起
+    view.reset_zoom()                   # 立刻再換一次視角
+    _settle(qapp)
+    view.fit()
+    _settle(qapp)
+    assert getattr(view, "_view_anim", None) is None

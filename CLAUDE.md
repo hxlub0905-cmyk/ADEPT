@@ -404,7 +404,10 @@ F44 的 `ui/region_words.py` 已經都是這樣做的 —— 這一段只是把�
 `ui/fit_screen.py`（視窗裝得進螢幕）、`ui/crashlog.py`（未預期錯誤的 log）、
 `ui/autosave.py`（草稿與救回）、`ui/problems_bar.py`（常駐的「為什麼還不能跑」）
 與 `ui/status_log.py`（狀態列說過的話）—— 六件事、七支模組，而 `studio.py`
-只多了接線。
+只多了接線。**F99／F100（2026-09-08）再四支**：`ui/workbench.py`（Build／Tune
+的幾何：畫布當導覽在上、設定區吃滿中欄下半、右欄上影像下儀表）、`ui/card_menu.py`（空白處右鍵與拖線
+到空白處的「加一張卡」選單）、`ui/clipboard.py`（Ctrl+C/V/D）、
+`ui/windows_menu.py`（Help 鈕的小箭頭列出開著的視窗）。
 
 > ⚠ 這張清單上以前還有 **F30 的 `ui/output_band.py`**，而它 2026-08-28 被
 > **刪掉**了（F50）。規矩沒有變 —— 變的是那一塊該不該存在：那個框畫的是

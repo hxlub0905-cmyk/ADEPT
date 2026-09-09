@@ -61,6 +61,7 @@ from . import fit_screen
 # 是一份**當時的複本** —— 換了 profile 而這裡停在舊值，症狀是「設定說
 # 關著、畫面上還在」。`tests/test_ui_scope_profiles.py` 擋著。
 from . import scope
+from . import strings
 from .scope import recipe_is_supported
 from .theme import SEG_LABELS, TOKENS, seg_hex
 from .widgets import apply_button_cursors
@@ -320,7 +321,7 @@ class WelcomeDialog(QDialog):
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Welcome to d4t")
+        self.setWindowTitle(strings.tr("Welcome to d4t"))
         self.setModal(False)          # 永遠不擋住主視窗（測試也才不會卡住）
         self.setMinimumWidth(620)
 
@@ -328,7 +329,7 @@ class WelcomeDialog(QDialog):
         root.setContentsMargins(18, 16, 18, 14)
         root.setSpacing(12)
 
-        title = QLabel("d4t — build your own defect decision pipeline from cards", self)
+        title = QLabel(strings.tr("d4t — build your own defect decision pipeline from cards"), self)
         title.setObjectName("paramTitle")
         root.addWidget(title)
 
@@ -346,7 +347,7 @@ class WelcomeDialog(QDialog):
         # ---- 三顆真的會做事的鈕 ------------------------------------------
         row = QHBoxLayout()
         row.setSpacing(8)
-        self.btn_demo = QPushButton("Try it with sample data", self)
+        self.btn_demo = QPushButton(strings.tr("Try it with sample data"), self)
         self.btn_demo.setObjectName("primary")
         self.btn_demo.setCursor(Qt.PointingHandCursor)
         self.btn_demo.setToolTip(
@@ -360,7 +361,7 @@ class WelcomeDialog(QDialog):
         # 裡有兩種根本沒有 KLARF，而這顆鈕是第一次開 d4t 的人看到的第一條路。
         # 它仍然直接開 KLARF 那個對話框（最常見的那一種），另外三條在關掉這個
         # 視窗之後的空白狀態上一列一個。
-        self.btn_open = QPushButton("Open my own data", self)
+        self.btn_open = QPushButton(strings.tr("Open my own data"), self)
         self.btn_open.setCursor(Qt.PointingHandCursor)
         self.btn_open.setToolTip(
             "Close this window and go straight to picking a KLARF - the most "
@@ -370,7 +371,7 @@ class WelcomeDialog(QDialog):
         self.btn_open.setMinimumHeight(34)
         self.btn_open.clicked.connect(self.click_open)
 
-        self.btn_library = QPushButton("Browse templates", self)
+        self.btn_library = QPushButton(strings.tr("Browse templates"), self)
         self.btn_library.setCursor(Qt.PointingHandCursor)
         self.btn_library.setToolTip("Open the template library — every entry is a complete, runnable pipeline")
         self.btn_library.setMinimumHeight(34)
@@ -403,7 +404,7 @@ class WelcomeDialog(QDialog):
         # ---- 底列：不再顯示 / 快速參考卡 / 關閉 ----------------------------
         bottom = QHBoxLayout()
         bottom.setSpacing(8)
-        self.chk_dont_show = QCheckBox("Do not show again", self)
+        self.chk_dont_show = QCheckBox(strings.tr("Do not show again"), self)
         self.chk_dont_show.setToolTip(
             "This window will not open on start-up any more; Help on the toolbar "
             "always brings it back")
@@ -413,7 +414,7 @@ class WelcomeDialog(QDialog):
         bottom.addStretch(1)
 
         self.quickref_path = quick_reference_pdf()
-        self.btn_quickref = QPushButton("Quick reference card", self)
+        self.btn_quickref = QPushButton(strings.tr("Quick reference card"), self)
         self.btn_quickref.setProperty("variant", "ghost")
         self.btn_quickref.setCursor(Qt.PointingHandCursor)
         self.btn_quickref.setStyleSheet(
@@ -432,7 +433,7 @@ class WelcomeDialog(QDialog):
         self.btn_quickref.clicked.connect(self.open_quick_reference)
         bottom.addWidget(self.btn_quickref)
 
-        self.btn_close = QPushButton("Explore on my own", self)
+        self.btn_close = QPushButton(strings.tr("Explore on my own"), self)
         self.btn_close.setCursor(Qt.PointingHandCursor)
         self.btn_close.setToolTip("Close the tour and go straight to Studio")
         self.btn_close.clicked.connect(self.close)
@@ -502,7 +503,7 @@ class RecipeLibraryDialog(QDialog):
     def __init__(self, directory: Any = None,
                  parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Template library")
+        self.setWindowTitle(strings.tr("Template library"))
         self.setModal(False)
         self.setMinimumSize(720, 420)
         fit_screen.relax_minimum(self)
@@ -545,13 +546,13 @@ class RecipeLibraryDialog(QDialog):
         self.path_label = QLabel("", self)
         self.path_label.setObjectName("paramHint")
         bottom.addWidget(self.path_label, 1)
-        self.btn_load = QPushButton("Load", self)
+        self.btn_load = QPushButton(strings.tr("Load"), self)
         self.btn_load.setObjectName("primary")
         self.btn_load.setCursor(Qt.PointingHandCursor)
         self.btn_load.setToolTip("Load this recipe into the Studio pipeline panel")
         self.btn_load.clicked.connect(self.load_selected)
         bottom.addWidget(self.btn_load)
-        self.btn_close = QPushButton("Close", self)
+        self.btn_close = QPushButton(strings.tr("Close"), self)
         self.btn_close.setCursor(Qt.PointingHandCursor)
         self.btn_close.clicked.connect(self.close)
         bottom.addWidget(self.btn_close)

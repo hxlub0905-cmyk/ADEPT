@@ -222,7 +222,10 @@ def test_an_empty_value_is_not_printed_at_all(window, lot):
     window.model.set_param(n, "p_low", 1.2)
     window._refresh_pipeline()
     parts = window.pipeline.card(n).summary_parts()
-    assert "p_low=1.2" in parts
+    # F99 P1-4：畫在卡片上的那一份用 `ParamSpec.label`（``Low percentile``），
+    # 字串版（`info["summary"]`）維持鍵名 —— 兩份各有自己的讀者。
+    assert "Low percentile=1.2" in parts, parts
+    assert "p_low=1.2" in window.pipeline.card(n).info["summary"]
     assert not [p for p in parts if p.endswith("=")], parts
 
 
