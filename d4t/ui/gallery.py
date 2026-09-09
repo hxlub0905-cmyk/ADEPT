@@ -830,6 +830,12 @@ class GalleryPanel(QWidget):
     #: 單擊一張＝「主畫面帶我去看這一顆」（2026-09-09）—— 跟雙擊差在不搶焦點。
     defect_selected = Signal(str)
     thumbs_requested = Signal(object)       # list[str]
+    #: 使用者換了排序（下拉或 ↓↑ 鈕）：``(欄名或 None, 降冪?)``。程式呼叫
+    #: `set_sort` **不發** —— Results 視窗拿它把表格排成一樣，反過來也是，
+    #: 發的話兩邊會互相回彈。
+    sort_changed = Signal(object, bool)
+    #: 篩選條件變了（含清掉）。Results 視窗拿它讓表格跟著。
+    filter_changed = Signal()
 
     _ORDER_DESC = "↓ High to low"
     _ORDER_ASC = "↑ Low to high"
@@ -987,6 +993,7 @@ class GalleryPanel(QWidget):
         """設定篩選條件（見 :func:`make_filter` 支援的寫法）。"""
         self.grid.set_filter(spec)
         self._refresh_header()
+        self.filter_changed.emit()
 
     def filter_by_score_range(self, lo: Optional[float],
                               hi: Optional[float]) -> None:
@@ -1094,9 +1101,11 @@ class GalleryPanel(QWidget):
         key = None if idx <= 0 else self.sort_combo.currentText()
         self.grid.set_sort(key, self.grid.sort_descending())
         self._refresh_header()
+        self.sort_changed.emit(key, self.grid.sort_descending())
 
     def _toggle_order(self) -> None:
         self.set_sort(self.grid.sort_key(), not self.grid.sort_descending())
+        self.sort_changed.emit(self.grid.sort_key(), self.grid.sort_descending())
 
     def _on_zoom_changed(self, _idx: int) -> None:
         px = self.zoom_combo.currentData()

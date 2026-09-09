@@ -22,6 +22,33 @@
 
 ---
 
+## Results 表：四欄一樣的 min、跟 Tiles 一樣的排序與篩選（2026-09-09 第四輪）
+
+使用者：「results 內 table 會有重名的 column，例如中間會有 4 欄一樣的 min
+4 欄一樣的 max，同時希望它跟 Tiles 一樣支援排序跟篩選」。
+
+* **重名的欄**：下層表頭只看 metric（`feature_tree.stat_label`），而
+  `glv_stats` 開 each box 之後同一個統計量有 typical / outlier / outlier_box /
+  worst 四欄。現在名字裡真的有的兩段接上去（``Min · typical``、
+  ``Δ · Median``；`VARIANT_WORDS` 一張表），沒有那兩段的一個字不變（既有測試
+  `"Median"` 照過）。兩張卡只差 `output_prefix` 的那種（``N_glv_min`` /
+  ``M_glv_min``）另一條路：`header_spans` 把前綴當成區域那樣在上層表頭成段
+  （淡灰，區域才有顏色）；`group_row_wanted` 是「要不要上層」的唯一判準。
+* **排序**：表頭點一下本來就會排（`setSortingEnabled`），缺的是跟縮圖**同一
+  個**排序 —— 現在縮圖的下拉換了表格照那欄排、表頭點了下拉跟著
+  （`ResultsWindow._on_gallery_sort` / `_on_table_sort`，`_syncing` 擋回彈；
+  `GalleryPanel.sort_changed` 只在使用者手勢時發）。
+* **篩選**：`ResultsTableModel.set_filter` 吃跟 Gallery 一字不差的
+  `make_filter` spec（`_all_rows` 留著，換條件不重餵；排序連篩掉的一起排）。
+  宿主改走 `ResultsWindow.set_filter` 一次餵兩邊（判定段點一類、直方圖點一根
+  bar），任一邊按掉 chip 另一邊也清。
+
+尺：`test_ui_results_layers.py` 三條（四個變體四種字、cmp 講比的是哪個
+統計量、前綴成段而平鋪仍單層）、`test_ui_results_table.py` 三條、
+`test_ui_results_sync.py`（新，兩條：一個條件到兩邊、排序來回）。
+
+---
+
 ## 跑與寫拆開、Re-run、Results 單擊帶主畫面、卡片上寫 img/s（2026-09-09 第三輪）
 
 使用者點名四件事，全部做了：

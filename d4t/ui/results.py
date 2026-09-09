@@ -157,6 +157,16 @@ class ResultsWindow(QMainWindow):
         self.table.trace_requested.connect(self.trace_requested)
         self.table.bin_overrides_changed.connect(self._on_bin_overrides_changed)
         self.table.truth_marked.connect(self.truth_marked)
+        # **兩種看法、同一個排序與篩選**（2026-09-09，使用者：「希望它跟
+        # Tiles 一樣支援排序跟篩選」）。縮圖的下拉換了 → 表格照那一欄排；
+        # 表頭點了 → 縮圖的下拉跟著。篩選由宿主走 `set_filter` 一次餵兩邊，
+        # 任何一邊按掉 chip 另一邊也清。`_syncing` 擋互相回彈。
+        self._syncing = False
+        self.gallery.sort_changed.connect(self._on_gallery_sort)
+        self.table.table.horizontalHeader().sortIndicatorChanged.connect(
+            self._on_table_sort)
+        self.gallery.filter_changed.connect(self._on_gallery_filter)
+        self.table.filter_cleared.connect(self.clear_filter)
         self.view_stack = QStackedWidget(self)
         self.view_stack.addWidget(self.gallery)
         self.view_stack.addWidget(self.table)
@@ -438,6 +448,59 @@ class ResultsWindow(QMainWindow):
             "%d defect(s) marked by hand. This is a note on screen only - "
             "CSV, KLARF and the run database still get the engine's bin, "
             "and a new run clears the marks." % int(n))
+
+    # ---- 篩選與排序：兩邊一起 ---------------------------------------------
+    def set_filter(self, spec: Any) -> None:
+        """只看哪幾顆（`gallery.make_filter` 的寫法）—— 縮圖與表格一起。"""
+        if self._syncing:
+            return
+        self._syncing = True
+        try:
+            self.gallery.set_filter(spec)
+            self.table.set_filter(spec)
+        finally:
+            self._syncing = False
+
+    def clear_filter(self) -> None:
+        self.set_filter(None)
+
+    def _on_gallery_filter(self) -> None:
+        # 縮圖那邊按掉 chip（`clear_filter` → `set_filter(None)`）→ 表格也清。
+        # 條件本身由宿主經 `set_filter` 餵，這裡只追「清掉」那一半。
+        if self._syncing:
+            return
+        if not self.gallery.filter_text():
+            self.table.set_filter(None)
+
+    def _on_gallery_sort(self, key: Any, descending: bool) -> None:
+        if self._syncing:
+            return
+        cols = self.table.columns()
+        name = str(key or "")
+        if name not in cols:
+            return
+        self._syncing = True
+        try:
+            self.table.table.sortByColumn(
+                cols.index(name),
+                Qt.DescendingOrder if descending else Qt.AscendingOrder)
+        finally:
+            self._syncing = False
+
+    def _on_table_sort(self, column: int, order: Any) -> None:
+        if self._syncing:
+            return
+        cols = self.table.columns()
+        if not (0 <= int(column) < len(cols)):
+            return
+        name = cols[int(column)]
+        if name not in self.gallery.sort_keys():
+            return                        # 徽章／class／truth 那幾欄縮圖排不了
+        self._syncing = True
+        try:
+            self.gallery.set_sort(name, order == Qt.DescendingOrder)
+        finally:
+            self._syncing = False
 
     def set_summary(self, text: str) -> None:
         """工具列左側的一句話（「跑了幾顆、成功幾顆、花多久」）。"""

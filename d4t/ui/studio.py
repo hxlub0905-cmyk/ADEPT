@@ -2876,15 +2876,16 @@ class StudioWindow(QMainWindow):
         """
         want = str(key or "")
         if not want:
-            self.gallery.set_filter(None)
+            self.results.set_filter(None)
             return
         row = next((r for r in self.results.verdict.rows()
                     if str(r.get("key")) == want), None)
         if row is None:
-            self.gallery.set_filter(None)
+            self.results.set_filter(None)
             return
         name = str(row.get("name") or "").strip() or "these"
-        self.gallery.set_filter({"mode": "ids", "ids": list(row.get("ids") or ()),
+        # 縮圖與表格一起篩（2026-09-09）—— 兩種看法看的是同一批。
+        self.results.set_filter({"mode": "ids", "ids": list(row.get("ids") or ()),
                                  "label": "%s only" % name})
 
     def _uses_a_threshold(self) -> bool:
@@ -6938,7 +6939,7 @@ class StudioWindow(QMainWindow):
         ])
         # 新的一批 = 分數分佈變了：舊的分數篩選一定要清掉，不然使用者會看到
         # 一個對不上新直方圖的區間（而且 chip 還掛在那裡）。
-        self.gallery.clear_filter()
+        self.results.clear_filter()
         self._score_filter = None
 
     def _class_names(self, results: Sequence[Dict[str, Any]]) -> Dict[str, str]:
@@ -7133,12 +7134,13 @@ class StudioWindow(QMainWindow):
         """
         rng = (float(lo), float(hi))
         if self._score_filter == rng and self.gallery.filter_text():
-            self.gallery.clear_filter()
+            self.results.clear_filter()
             self._score_filter = None
             self._status("Score filter cleared (showing all %d)"
                          % self.gallery.displayed_count())
             return
-        self.gallery.filter_by_score_range(rng[0], rng[1])
+        self.results.set_filter({"mode": "score_range",
+                                 "lo": rng[0], "hi": rng[1]})
         self._score_filter = rng
         self.show_gallery()
         self._status("Filtered to score %.3g–%.3g (%d defects)"

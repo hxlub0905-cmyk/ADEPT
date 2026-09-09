@@ -374,3 +374,57 @@ def test_visible_columns_dims_are_pure_too():
     # 搜尋命中 > 維度限縮
     assert visible_columns(cols, verdict, False, "mg", spec_of, dims) == \
         ["!warn", "defect_id", "epi_glv_median", "mg_glv_median"]
+
+
+# --------------------------------------------------------------------------- #
+# 表頭不准有四欄一樣的字（2026-09-09）
+# --------------------------------------------------------------------------- #
+def test_variants_of_one_statistic_get_four_different_labels(qapp):
+    """使用者：「中間會有 4 欄一樣的 min 4 欄一樣的 max」—— `glv_stats` 開
+    each box 之後同一個統計量有 typical / outlier / outlier_box / worst 四欄，
+    表頭以前只看 metric。原始欄名仍在懸停第一行。"""
+    from d4t.ui.feature_tree import stat_label
+    specs = tuple(
+        _spec(name, "m1", "GLV", base="glv_min", metric="glv_min",
+              family="glv", variant=var)
+        for name, var in (("N_glv_min_typical", "typical"),
+                          ("N_glv_min_outlier", "outlier"),
+                          ("N_glv_min_outlier_box", "outlier_box"),
+                          ("N_glv_min_worst", "worst")))
+    labels = [stat_label(b) for b in specs]
+    assert len(set(labels)) == 4, labels
+    assert all(lb.startswith("Min") for lb in labels), labels
+    # 沒有變體、沒有比的統計量 → 一個字都不變
+    plain = _spec("glv_median", "m1", "GLV", base="glv_median",
+                  metric="glv_median", family="glv")
+    assert stat_label(plain) == "Median"
+
+
+def test_compared_columns_say_which_statistic_they_compare(qapp):
+    from d4t.ui.feature_tree import stat_label
+    a = _spec("cmp_delta_median", "m1", "GLV", base="cmp_delta_median",
+              metric="delta", family="cmp", stat="glv_median")
+    b = _spec("cmp_delta_max", "m1", "GLV", base="cmp_delta_max",
+              metric="delta", family="cmp", stat="glv_max")
+    assert stat_label(a) != stat_label(b)
+    assert "Median" in stat_label(a) and "Max" in stat_label(b)
+
+
+def test_a_user_prefix_gets_its_own_header_band_like_a_region(qapp):
+    """兩張 GLV 卡各填 `output_prefix` N / M：欄名只差前綴，下層表頭一模一樣。
+    上層表頭要像區域那樣把前綴寫出來（沒有區域、沒有前綴的表仍然單層）。"""
+    from d4t.ui.results_table import group_row_wanted
+    rows = [{"defect_id": "1", "ok": True, "bin": 0, "score": 0.1,
+             "features": {"N_glv_min": 1.0, "M_glv_min": 2.0}, "traces": []}]
+    specs = (
+        _spec("N_glv_min", "m1", "GLV", base="glv_min", metric="glv_min",
+              family="glv", own="N"),
+        _spec("M_glv_min", "m2", "GLV", base="glv_min", metric="glv_min",
+              family="glv", own="M"),
+    )
+    tree = column_tree(rows, ("N_glv_min", "M_glv_min"), specs, ())
+    spans = header_spans(tree["columns"], tree["spec_of"])
+    assert [(s["region"], s["count"], s["node_id"]) for s in spans] == \
+        [("N", 1, "m1"), ("M", 1, "m2")]
+    assert group_row_wanted(tree["spec_of"])
+    assert not group_row_wanted({b.spec.name: b for b in SPECS}), "平鋪仍單層"
