@@ -79,8 +79,8 @@ Phase 2），使用者定調**先把引擎做對，再回頭做產品化**（見
 **出貨的 recipe 在 [`recipes/`](recipes/)**（2026-08-26），走 `Open recipe…`
 不走範本庫，而且**每一份都有測試真的跑一次**
 （`tests/test_shipped_recipes.py`）—— 舊的 `examples/` 就是因為沒人測而爛掉的。
-加一份新的就在那支測試裡加一段。**目前只有一份**：RSEM 逐框挑最異常的那一格
-（F73）。EBI↔API characterization 與 patch 的 dSNR 分布（F36）2026-09-02 由
+加一份新的就在那支測試裡加一段。**目前兩份**：RSEM 逐框挑最異常的那一格
+（F73）與一張影像的均勻度（F85）。EBI↔API characterization 與 patch 的 dSNR 分布（F36）2026-09-02 由
 使用者指定刪掉 —— 卡片（`pair_source` / `output_char` / GLV 的 compare）
 一個都沒有動，走的是那條路的人自己拉線。
 

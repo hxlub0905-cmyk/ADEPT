@@ -18,8 +18,8 @@
 - **範例 recipe 全部拿掉**（`examples/` 已移除），Studio 上的「用範例資料試一次」
   與「Templates…」兩個入口跟著收起來（`ui/scope.py` 的 `SHOW_SAMPLE_ENTRIES`）。
   ⚠ **這一條有一半回來了**：2026-08-26 起 `recipes/` 底下有出貨的 recipe
-  （目前三份：EBI↔API characterization、patch 的 dSNR 分布、RSEM 逐框挑最異常
-  的那一格），走 `Open recipe…`
+  （目前兩份：RSEM 逐框挑最異常的那一格、一張影像的均勻度；EBI↔API
+  characterization 與 patch 的 dSNR 分布 2026-09-02 由使用者指定刪掉），走 `Open recipe…`
   那條路。它跟舊的 `examples/` 差在**有測試守著**
   （`tests/test_shipped_recipes.py`）—— 舊的那批就是因為沒人測而爛掉的。
   範本庫那個入口仍然關著。
@@ -48,7 +48,7 @@
 
 ### Phase 1 收在哪裡（2026-08-16）
 
-「數字可信」現在有三層守著，加第 18 張卡的人不必記得來補任何一層：
+「數字可信」現在有三層守著，加下一張卡的人不必記得來補任何一層：
 
 1. **黃金值**（`tools/freeze_golden.py --check`）—— 三組 22 顆 defect 的完整
    feature 表凍住。任何重構的驗收都是「跟改動前逐項相同」。
