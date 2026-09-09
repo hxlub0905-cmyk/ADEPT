@@ -138,7 +138,7 @@ bd45db6478fdf58b021de5a75a1d0a7ee82d7986 d4t/ui/status_log.py
 82e570d6cfcedb4c3b39be51c6d5e8b277cc2ffc d4t/ui/strings.py
 415004c1bb3a665a51eee9995da6bc80d3ac6f34 d4t/ui/studio.py
 fbdca3619508686b4ec0ffb17537b8507027a553 d4t/ui/template_dialog.py
-e0afdc1d3a150d0d6cd088c0a1c6412cef96611d d4t/ui/theme.py
+9d7e6d33b8582c616251d7089eeab9d69cf15fe3 d4t/ui/theme.py
 0a0e3ab39bcb5cfcbbe8b66b1c00e92707411c69 d4t/ui/threshold_view.py
 bbdccfae9846829b6542ae266580de5fedd11e2f d4t/ui/tree_panel.py
 e8f50a7c05f20b0bc6915ef4f3b68afdc97cbf87 d4t/ui/tree_scene.py
@@ -173,7 +173,7 @@ cd9b6800b5941de35efed2464b7c0a0db05e4a49 docs/plans/F79-grid-tells-the-truth.md
 3fdf5c58d00f59984d59c705c9d1516967c66766 docs/plans/F80-focus-visible-and-motion.md
 66963820c4b69d360394697ecd9d3ab2a8f2a46d docs/plans/F81-flat-for-real.md
 5f93bd942e201992944b1ba7359ffde449b14bbb docs/plans/F82-drag-magnet.md
-1bc98efdad3df2f96222d52b884c8bd675511453 docs/plans/F99-ui-review-fixes.md
+3877ca556bfc0ac4a2fbadb6a1b9485c2826cc9b docs/plans/F99-ui-review-fixes.md
 81236a2c24b1a65f3021e5f578777644484fa874 fab_probe/README.md
 de08d63cbd4c1415acb2e0737c5b99db6ff57d54 fab_probe/probe_klarf.py
 368cc8e63736446813cc47ccc1fcc49b11abeec6 fab_probe/probe_stats.py

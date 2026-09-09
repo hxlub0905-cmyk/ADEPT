@@ -1153,8 +1153,9 @@ QScrollArea > QWidget > QWidget { background: transparent; }
 
 /* -- splitter ---------------------------------------------------------- */
 QSplitter { background: $bg_page; }
-/* 區域之間的細線就是握把（F100 v2）：看得見的是中間 1px 的 $divider，
-   抓得到的是 5px —— 以前握把只有 1px，既看不見也抓不到。 */
+/* The thin line between regions is the splitter handle (F100 v2): the
+   visible part is the 1px $divider in the middle, the grabbable part is
+   5px. Before this the handle was 1px, neither visible nor grabbable. */
 QSplitter::handle { background: $divider; }
 QSplitter::handle:hover { background: $border_hover; }
 QSplitter::handle:horizontal { width: 5px; margin: 0 2px; }
