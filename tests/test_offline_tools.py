@@ -1053,6 +1053,24 @@ def _write(path, text):
 # ---------------------------------------------------------------- 單檔純文字包
 
 @needs_git
+def test_the_bundle_header_names_the_build_and_the_cli_agrees(tmp_path):
+    """檔頭那行 ``BUILD <sha12> <date>`` 的 sha 是清單的 blob SHA，而
+    ``python -m d4t --version`` 印同一個數 —— 公司機沒有 git，這是它唯一
+    答得出「我跑的是哪一版」的方式。"""
+    import re
+    import d4t
+
+    text = make_text_bundle.build("b.py", REPO)
+    m = re.search(r"^# BUILD ([0-9a-f]{12}|unknown) (\d{4}-\d{2}-\d{2})$", text, re.M)
+    assert m, "bundle 檔頭沒有 BUILD 那一行"
+    assert m.group(1) != "unknown", "整個 repo 打包時清單一定在 items 裡"
+    assert m.group(1) == d4t.build_id()
+    assert all(ord(c) < 128 for c in text.split(make_text_bundle.SENTINEL)[0])
+    rc, out = _run(["-m", "d4t", "--version"], cwd=str(REPO))
+    assert rc == 0, out
+    assert m.group(1) in out and d4t.__version__ in out, out
+
+
 def test_the_text_bundle_round_trips_byte_for_byte(tmp_path):
     """整個 repo 打成一個純文字檔、解開、逐位元組比對。
 
@@ -1115,6 +1133,7 @@ def test_a_tampered_bundle_refuses_to_land_anything(tmp_path):
     body = b"print('hi')\n"
     sha = make_text_bundle.blob_sha(body)
     header = make_text_bundle.EXTRACTOR % {
+        "build": "000000000000 2026-01-01",
         "name": "b.py", "sentinel": make_text_bundle.SENTINEL,
         "part": 1, "n_parts": 1, "total": 1}
     good = "\n".join([header, make_text_bundle.SENTINEL, "#ENC text",

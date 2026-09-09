@@ -583,6 +583,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         prog="d4t",
         description="d4t — 把想法變算法的 ADC 工具",
     )
+    # `--version` 印版本 + build id（= tools/FILELIST.txt 的 SHA，跟 bundle 檔頭
+    # 同一個數）。回報問題時附這一行，就知道那台機器跑的是哪一包。
+    from d4t import version_line
+    ap.add_argument("--version", action="version", version=version_line())
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("gui", help="開啟 Studio 視覺化介面").set_defaults(func=_cmd_gui)
