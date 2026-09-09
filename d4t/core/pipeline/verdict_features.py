@@ -18,6 +18,7 @@
 這裡全部是**純函式、顯示層 metadata**：不碰數字、不碰匯出、不進快取簽章。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from dataclasses import dataclass, replace
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Type
@@ -61,10 +62,10 @@ def _route_steps(recipe: Recipe, kind: str,
             continue
         try:
             p = step_cls.validate_params(dict(node.params))
-        except Exception:  # noqa: BLE001 — 顯示層：壞參數用預設值繼續
+        except Exception:  # 顯示層：壞參數用預設值繼續
             try:
                 p = step_cls.validate_params(None)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 p = dict(node.params)
         yield nid, step_cls, p
 
@@ -123,7 +124,7 @@ def diagnostic_columns(recipe: Recipe, kind: str,
     try:
         prefixes = feature_prefixes([nid for nid, _, _ in steps],
                                     recipe, registry)
-    except Exception:  # noqa: BLE001 — 顯示層，退回節點 id
+    except Exception:  # 顯示層，退回節點 id
         prefixes = {}
     out: List[str] = []
     seen = set()
@@ -211,7 +212,8 @@ def _regions_in_wiring_order(recipe: Recipe,
         try:
             if not is_region_edge(edge, nodes, registry):
                 continue
-        except Exception:              # noqa: BLE001 — 顯示層，壞了就跳過這條
+        except Exception:  # 顯示層，壞了就跳過這條
+            swallowed("verdict_features._regions_in_wiring_order")
             continue
         # 區域線的 ``src_out`` 就是**那個區域的名字**（單數 —— 一條線一個
         # 區域；「一張卡吃好幾個區域」是好幾條線，不是一格逗號清單）。
@@ -251,7 +253,7 @@ def bound_specs(recipe: Recipe, kind: str,
     try:
         prefixes = feature_prefixes([nid for nid, _, _ in steps],
                                     recipe, registry)
-    except Exception:  # noqa: BLE001 — 顯示層，退回節點 id
+    except Exception:  # 顯示層，退回節點 id
         prefixes = {}
     # ---- 先問「每個名字有哪幾張卡宣告」（執行順序）------------------------
     #
@@ -277,7 +279,7 @@ def bound_specs(recipe: Recipe, kind: str,
     for nid, step_cls, p in steps:
         try:
             specs = list(step_cls.resolve_feature_specs(p))
-        except Exception:  # noqa: BLE001 — 顯示層
+        except Exception:  # 顯示層
             specs = []
         declared.append((nid, step_cls, specs))
         for s in specs:

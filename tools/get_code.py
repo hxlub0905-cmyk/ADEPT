@@ -85,7 +85,7 @@ _OPENER = None
 def fetch(ref: str, path: str, cafile: str = "") -> bytes:
     url = RAW % (REPO, ref, path)
     opener = _OPENER or build_opener(cafile)
-    with opener.open(url, timeout=TIMEOUT) as r:      # noqa: S310 — 固定 https
+    with opener.open(url, timeout=TIMEOUT) as r:
         return r.read()
 
 
@@ -115,7 +115,7 @@ def system_proxy_for(url: str) -> str:
         out = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=25)
-    except Exception:                                 # noqa: BLE001 — 診斷用
+    except Exception:  # 診斷用
         return ""
     got = out.stdout.decode("utf-8", "replace").strip().splitlines()
     got = got[-1].strip() if got else ""
@@ -143,13 +143,13 @@ def pac_url() -> str:
             return str(winreg.QueryValueEx(key, "AutoConfigURL")[0] or "")
         finally:
             winreg.CloseKey(key)
-    except Exception:                                 # noqa: BLE001 — 診斷用
+    except Exception:  # 診斷用
         return ""
 
 
 def blob_sha(data: bytes) -> str:
     """git 算 blob SHA 的方式：``"blob <len>\\0" + 內容``。"""
-    h = hashlib.sha1()                                # noqa: S324 — git 的格式
+    h = hashlib.sha1()
     h.update(b"blob %d\0" % len(data))
     h.update(data)
     return h.hexdigest()
@@ -299,7 +299,7 @@ def main(argv=None) -> int:
     for sha, path in want:
         try:
             data = fetch(a.ref, path, a.cafile)
-        except Exception as e:                        # noqa: BLE001
+        except Exception as e:
             bad.append((path, "抓不到：%s" % e))
             continue
         got = blob_sha(data)

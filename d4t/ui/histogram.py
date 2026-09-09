@@ -350,7 +350,7 @@ class HistogramWidget(QWidget):
         p.end()
 
     # -- interaction -------------------------------------------------------
-    def mousePressEvent(self, e) -> None:   # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         if e.button() != Qt.LeftButton or not self.has_data():
             return
         if not self._interactive:
@@ -371,7 +371,7 @@ class HistogramWidget(QWidget):
         self._set_from_mouse(pos.x())
         e.accept()
 
-    def mouseMoveEvent(self, e) -> None:    # noqa: D102 - Qt hook
+    def mouseMoveEvent(self, e) -> None:  # Qt hook
         if not self._interactive:
             return
         pos = QPointF(e.position())
@@ -383,7 +383,7 @@ class HistogramWidget(QWidget):
             return
         self._update_hover(pos)
 
-    def mouseReleaseEvent(self, e) -> None:  # noqa: D102 - Qt hook
+    def mouseReleaseEvent(self, e) -> None:  # Qt hook
         if not self._dragging:
             return
         self._dragging = False
@@ -404,7 +404,7 @@ class HistogramWidget(QWidget):
         if self._threshold is not None:
             self.threshold_changed.emit(float(self._threshold))
 
-    def leaveEvent(self, _e) -> None:       # noqa: D102 - Qt hook
+    def leaveEvent(self, _e) -> None:  # Qt hook
         if self._hover_bin != -1:
             self._hover_bin = -1
             self.setToolTip("")

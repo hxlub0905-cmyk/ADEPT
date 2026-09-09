@@ -8,6 +8,7 @@
 下游卡（snr_map / glv_stats…）都吃得下 float32。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from typing import Any, Dict, List
 
@@ -133,8 +134,8 @@ class SubtractStep(Step):
             # 記錄永遠不准弄壞跑（同 `Context._record_change` 的形狀）。
             try:
                 self._note_diagnostics(ctx, out, p)
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                swallowed("arith.run")
         ctx.set_image(p["out"], out)
         return ctx
 

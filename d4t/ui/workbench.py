@@ -1,7 +1,7 @@
 # 版面模式：畫布在上、工作台在下 — authored 2026-09-08 (F100).
 """``WorkbenchLayout`` —— Build / Tune 兩種版面的**狀態與幾何**，不建 widget。
 
-主視窗的版面（F100 v3，`docs/plans/F100-workbench-layout.md` §8）::
+主視窗的版面（F100 v3，`docs/history/plans/F100-workbench-layout.md` §8）::
 
     ┌─庫─┬──────── 畫布（導覽，一排卡的高度）────────┬── 預覽影像 ─────────┐
     │rail│                                           │  Verdict · score    │
@@ -30,6 +30,7 @@
 show 才套（跟 U5 之前一樣）。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from typing import Callable, List, Optional, Sequence
 
@@ -156,8 +157,8 @@ class WorkbenchLayout:
             if was == "build" and self.library is not None:
                 try:
                     self.library.toggle_group(None)
-                except Exception:        # noqa: BLE001 — 版面不准擋在卡片庫上
-                    pass
+                except Exception:  # 版面不准擋在卡片庫上
+                    swallowed("workbench.apply")
         return use
 
     def set_open(self, on: bool) -> bool:

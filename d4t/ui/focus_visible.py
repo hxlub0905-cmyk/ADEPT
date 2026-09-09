@@ -84,7 +84,7 @@ def _apply(widget, visible: bool) -> None:
 class FocusVisibleFilter(QObject):
     """把 ``QFocusEvent.reason()`` 翻譯成 ``kbFocus`` 屬性。"""
 
-    def eventFilter(self, obj, event) -> bool:    # noqa: D102 - Qt hook
+    def eventFilter(self, obj, event) -> bool:  # Qt hook
         etype = event.type()
         if etype == QEvent.FocusIn:
             reason = event.reason()

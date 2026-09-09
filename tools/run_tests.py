@@ -37,7 +37,7 @@
 Python，兩邊都能跑。
 
 ⚠ **這支不取代 CI。** CI **也是**逐檔跑的（2026-08-24 起分兩批：核心一次
-``pytest -q --ignore-glob="*test_ui_*"``，UI 一個檔案一個行程），理由與數字
+``python -m pytest -q --ignore-glob="*test_ui_*"``，UI 一個檔案一個行程），理由與數字
 見 ``.github/workflows/ci.yml`` 的註解。這支是給**開發迴圈**用的：同一個
 做法、加上逐檔計時與「最慢的幾個」，而且失敗全部收集到最後一起印。
 

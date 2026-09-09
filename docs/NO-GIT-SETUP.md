@@ -170,7 +170,7 @@ GitHub 產生的 zip **不含 `.git` 資料夾**，所以裡面 190 幾個檔案
   ```
 
   抓下來的內容跟 GitHub 上**逐位元組相同**（實測比對過），而且那一份自己
-  跑得起來（`pytest -q` 只會 skip 掉兩支需要 git 的清單檢查）。
+  跑得起來（`python -m pytest -q` 只會 skip 掉兩支需要 git 的清單檢查）。
 
   它會對每個檔案驗 **git blob SHA**。這不是龜毛 —— 被擋的 proxy 常常回一頁
   登入頁或警告 HTML，而且是 **HTTP 200**。那種東西寫進 `.py` 之後，症狀會變成
@@ -306,7 +306,7 @@ KLARF variant D 的），它裡面的 Lot／Wafer／機台／device／**recipe �
 而且有一支測試守著（`tests/test_no_real_fab_data.py`）：
 
 ```
-pytest -q tests/test_no_real_fab_data.py
+python -m pytest -q tests/test_no_real_fab_data.py
 ```
 
 加新 fixture 時那支測試會擋下沒遮蔽的值。**遮蔽是等長替換，測試只看結構不看值，
@@ -353,7 +353,7 @@ python -m d4t steps
 
 ```
 set QT_QPA_PLATFORM=offscreen
-pytest -q
+python -m pytest -q
 ```
 
 ## 4. 產一份合成資料試玩（不需要真實 KLARF）

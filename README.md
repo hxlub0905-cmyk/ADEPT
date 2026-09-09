@@ -33,7 +33,7 @@ d4t 的第一原則是：
 | | |
 |---|---|
 | **輸入** | 四種 source，各有各的入口：`ebi_patch`（KLARF ＋ 多頁 patch TIFF）、`rsem`（KLARF ＋ 每顆一個影像檔）、`tiff_stack`（多頁 TIFF，無 KLARF）、`folder`（單張影像資料夾，無 KLARF） |
-| **組裝** | 18 張步驟卡片（卡片庫現行可見 17 張 —— `align` 收在 `ui/scope.py` 的 `HIDDEN_STEPS`）；節點畫布拉線接卡，recipe 即 DAG |
+| **組裝** | 19 張步驟卡片（卡片庫現行可見 18 張 —— `align` 收在 `ui/scope.py` 的 `HIDDEN_STEPS`）；節點畫布拉線接卡，recipe 即 DAG |
 | **量測** | GLV 統計與區域對比（含 SNR）、逐框比較找出最異常的那一格（`worst_*`，框即 ROI 自己）、CD 次像素邊緣定位（同一趟給 LWR／LER）、對焦品質指標 |
 | **輸出** | 三張 Output 卡（跑完先看 Results，按 `Write outputs` 才寫、只跑一次）：**報表資料夾**（`Write report` —— 勾選決定裡面有什麼：`report.html`／`defects.csv`／`report.xlsx`／`spread.html` box plot／`images/*.jpg`／`recipe.json`，6000 顆量級一次出得完）、**寫回 KLARF**（class／bin／DSIZE，或 Top-N 新檔）、**點對點比較報表**（`Write comparison`，一顆一列兩張圖）|
 | **介面** | PySide6 桌面編輯器（Studio）＋ CLI（可排程、可腳本化）。Results 視窗：縮圖與表格同一份排序／篩選、點一顆主畫面跟著跳、`Re-run` 改了判定樹只重判（秒級）、`Write outputs` 看過了才寫 |
@@ -79,8 +79,10 @@ Phase 1（讓數字可信）已於 2026-08-16 收斂，現階段依
 **先把引擎做對，再回頭做產品化**，因此以下這件事**目前刻意不支援**，
 不是遺漏：
 
-- **Studio 的「用範例資料試一次」與「Templates…」入口收起來**（範本庫還是空的）。
-  出貨的 recipe 走 [`recipes/`](recipes/) ＋ `Open recipe…` 那條路，不走範本庫。
+- ~~**Studio 的「用範例資料試一次」與「Templates…」入口收起來**~~ —— 兩個都
+  回來了（2026-09-08／09-09）。出貨的 recipe 在 [`recipes/`](recipes/)，
+  `Templates…` 與 `Open recipe…` 都到得了；「用範例資料試一次」載的是
+  `ebi-die-to-die.json`。
 
 開關集中在 `d4t/ui/scope.py`，這也是「暫時不給看」的唯一去處。
 
@@ -129,13 +131,13 @@ python -m d4t export  <run_id> --db /tmp/runs.db --mode annotate \
 
 ```bash
 pip install pytest
-QT_QPA_PLATFORM=offscreen pytest -q tests --ignore-glob="*test_ui_*"   # 核心，約 25 秒
+QT_QPA_PLATFORM=offscreen python -m pytest -q tests --ignore-glob="*test_ui_*"   # 核心，約 25 秒
 ```
 
 UI 測試**逐檔各起一個行程**（整套塞進同一個行程會因 Qt 記憶體累積而慢到跑不完）：
 
 ```bash
-for f in tests/test_ui_*.py; do QT_QPA_PLATFORM=offscreen pytest -q "$f"; done
+for f in tests/test_ui_*.py; do QT_QPA_PLATFORM=offscreen python -m pytest -q "$f"; done
 ```
 
 每次改動之後（於具備 git 的機器）：

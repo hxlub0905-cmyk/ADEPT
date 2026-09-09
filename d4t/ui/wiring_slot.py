@@ -96,7 +96,7 @@ class PortDot(QWidget):
         self.setFixedSize(16, 16)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-    def paintEvent(self, e) -> None:            # noqa: D102 - Qt hook
+    def paintEvent(self, e) -> None:  # Qt hook
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
         col = QColor(group_hex("region") if self._kind == REGION
@@ -181,7 +181,7 @@ class WiringSlot(QWidget):
     #: 窄到這個寬度以下，說明那一句收起來（值與按鈕留著）。
     NOTE_MIN_W = 330
 
-    def resizeEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def resizeEvent(self, e) -> None:  # Qt hook
         super().resizeEvent(e)
         self.note.setVisible(bool(self.note.text()) and e.size().width() >= self.NOTE_MIN_W)
 

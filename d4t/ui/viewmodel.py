@@ -7,6 +7,7 @@
 - 直方圖/門檻工具函數：`histogram()`、`rebin()` —— 拖門檻線秒回的純計算部分。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import math
 from contextlib import contextmanager
@@ -125,7 +126,7 @@ def is_a_constant_expression(text: Any) -> bool:
         return True
     try:
         return not parse_expression(body).variables
-    except Exception:          # noqa: BLE001 — 壞表達式是使用者的東西，留著
+    except Exception:  # 壞表達式是使用者的東西，留著
         return False
 
 
@@ -552,7 +553,7 @@ class RecipeModel:
             step_cls = get_step(node.step)
             gone = [n for n in step_cls.resolve_features(before)
                     if n not in set(step_cls.resolve_features(after))]
-        except Exception:                  # noqa: BLE001 — 顯示用，壞了就不講
+        except Exception:  # 顯示用，壞了就不講
             return []
         out: List[str] = []
         for name in gone:
@@ -967,7 +968,7 @@ class RecipeModel:
 
         try:
             recipe = self.to_recipe()
-        except Exception:              # noqa: BLE001 — 顯示層，壞了就不畫線
+        except Exception:  # 顯示層，壞了就不畫線
             return {}
         return {b.spec.name: b.node_id
                 for b in bound_specs(recipe, self.kind)}
@@ -983,7 +984,7 @@ class RecipeModel:
 
         try:
             return list(bound_specs(self.to_recipe(), self.kind))
-        except Exception:              # noqa: BLE001 — 顯示層，壞了就沒有說明
+        except Exception:  # 顯示層，壞了就沒有說明
             return []
 
     def feature_regions(self) -> Dict[str, int]:
@@ -1002,7 +1003,7 @@ class RecipeModel:
 
         try:
             recipe = self.to_recipe()
-        except Exception:              # noqa: BLE001 — 顯示層，壞了就不上色
+        except Exception:  # 顯示層，壞了就不上色
             return {}
         return {b.spec.name: int(getattr(b.spec, "region_index", -1))
                 for b in bound_specs(recipe, self.kind)
@@ -1043,7 +1044,7 @@ class RecipeModel:
             return []
         try:
             recipe = self.to_recipe()
-        except Exception:              # noqa: BLE001 — 顯示層，壞了就不列
+        except Exception:  # 顯示層，壞了就不列
             return []
         out: List[str] = []
         for b in bound_specs(recipe, self.kind):
@@ -1104,7 +1105,8 @@ class RecipeModel:
             try:
                 step_cls = get_step(node.step)
                 ws = step_cls.resolve_writes_for_kind(node.params, self.kind)
-            except Exception:              # noqa: BLE001 — 顯示用，壞了就跳過
+            except Exception:  # 顯示用，壞了就跳過
+                swallowed("viewmodel.stream_producer")
                 continue
             if want in [str(w) for w in ws]:
                 found = nid
@@ -1341,7 +1343,8 @@ class RecipeModel:
                 continue
             try:
                 specs = get_step(node.step).region_input_specs()
-            except Exception:                  # noqa: BLE001 — 認不得的卡不管
+            except Exception:  # 認不得的卡不管
+                swallowed("viewmodel._hydrate_regions")
                 continue
             if any(sp.name == pname for sp in specs):
                 want.setdefault((nid, pname), "")
@@ -1377,7 +1380,7 @@ class RecipeModel:
             step_cls = get_step(node.step)
             out = [str(r) for r in step_cls.resolve_regions_out(node.params) if r]
             passed = [str(r) for r in step_cls.resolve_regions_in(node.params) if r]
-        except Exception:                  # noqa: BLE001 — 顯示用，壞了就空著
+        except Exception:  # 顯示用，壞了就空著
             return []
         return out + [r for r in passed if r not in out]
 

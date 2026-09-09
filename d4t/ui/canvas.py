@@ -30,6 +30,7 @@ recipe JSON 的結構沒有 ``pos`` 欄位，為了在畫布上存座標而改�
 而不是「拉起來之後整條 pipeline 壞掉、跑的時候才報錯」。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -714,7 +715,7 @@ class _NodeItem(QGraphicsItem):
             return set()
         try:
             kind = src.out_kind(int(getattr(view, "_link_port", 0)))
-        except Exception:                  # noqa: BLE001 — 畫圖用，壞了就不亮
+        except Exception:  # 畫圖用，壞了就不亮
             return set()
         return {str(sp.get("name") or "") for sp in self.in_specs()
                 if str(sp.get("kind") or "image") == str(kind)}
@@ -1226,7 +1227,7 @@ class _NodeItem(QGraphicsItem):
             self._hover = bool(hovered)
             self.update()
 
-    def mousePressEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         hit = (self.out_port_at(e.pos())
                if e.button() == Qt.LeftButton else None)
         if hit is not None:
@@ -1238,11 +1239,11 @@ class _NodeItem(QGraphicsItem):
         self._dragging = e.button() == Qt.LeftButton
         super().mousePressEvent(e)
 
-    def mouseReleaseEvent(self, e) -> None:    # noqa: D102 - Qt hook
+    def mouseReleaseEvent(self, e) -> None:  # Qt hook
         self._dragging = False
         super().mouseReleaseEvent(e)
 
-    def mouseDoubleClickEvent(self, e) -> None:  # noqa: D102 - Qt hook
+    def mouseDoubleClickEvent(self, e) -> None:  # Qt hook
         """雙擊 = 打開這張卡的設定（F7-22，n8n 的動作）。
 
         參數面板平常是收起來的，畫布因此吃得到整欄。單擊仍然只是選取
@@ -1252,7 +1253,7 @@ class _NodeItem(QGraphicsItem):
         self.canvas.node_activated.emit(self.node_id)
         e.accept()
 
-    def itemChange(self, change, value):        # noqa: D102 - Qt hook
+    def itemChange(self, change, value):  # Qt hook
         if change == QGraphicsItem.ItemPositionChange and self._dragging:
             return self._snapped(value)
         if change == QGraphicsItem.ItemPositionHasChanged:
@@ -1328,7 +1329,7 @@ class _NodeItem(QGraphicsItem):
         elif chosen is act_remove:
             self.canvas.remove_requested.emit(self.node_id)
 
-    def contextMenuEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def contextMenuEvent(self, e) -> None:  # Qt hook
         self.show_context_menu(e.screenPos())
         e.accept()
 
@@ -1422,7 +1423,7 @@ class _EdgeItem(QGraphicsItem):
         d = pos - self.cut_center()
         return (d.x() * d.x() + d.y() * d.y()) <= self.CUT_GRAB ** 2
 
-    def hoverEnterEvent(self, e) -> None:       # noqa: D102 - Qt hook
+    def hoverEnterEvent(self, e) -> None:  # Qt hook
         self._hover = True
         # 提到節點之上（節點是 0）。滑鼠已經在這條線上了，這時候它就是使用者
         # 正在瞄的東西 —— 而它平常畫在卡片底下，中點只要被任何一張卡蓋到，
@@ -1432,13 +1433,13 @@ class _EdgeItem(QGraphicsItem):
         self.update()
         super().hoverEnterEvent(e)
 
-    def hoverLeaveEvent(self, e) -> None:       # noqa: D102 - Qt hook
+    def hoverLeaveEvent(self, e) -> None:  # Qt hook
         self._hover = False
         self.setZValue(_Z_EDGE)
         self.update()
         super().hoverLeaveEvent(e)
 
-    def mousePressEvent(self, e) -> None:       # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         if (self._hover
                 and e.button() == Qt.LeftButton and self.cut_hit(e.pos())):
             self.canvas.edge_removed.emit(self.src.node_id, self.dst.node_id,
@@ -1818,7 +1819,7 @@ class PipelineCanvas(QGraphicsView):
         if label is not None:
             label.setText("%d%%" % self.zoom_percent())
 
-    def resizeEvent(self, e) -> None:          # noqa: D102 - Qt hook
+    def resizeEvent(self, e) -> None:  # Qt hook
         super().resizeEvent(e)
         self._place_zoom_bar()
         self._place_header()
@@ -1988,8 +1989,8 @@ class PipelineCanvas(QGraphicsView):
         for it in getattr(self, "_tree_items", []) or []:
             try:
                 self._scene.removeItem(it)
-            except Exception:              # noqa: BLE001 — clear() 先銷毀過就算了
-                pass
+            except Exception:  # clear() 先銷毀過就算了
+                swallowed("canvas._rebuild_decision")
         self._tree_items = []
         info = getattr(self, "_decision_info", None)
         if not info:
@@ -2059,8 +2060,8 @@ class PipelineCanvas(QGraphicsView):
         for it in getattr(self, "_prefilter_items", []) or []:
             try:
                 self._scene.removeItem(it)
-            except Exception:          # noqa: BLE001 — clear() 先銷毀過就算了
-                pass
+            except Exception:  # clear() 先銷毀過就算了
+                swallowed("canvas._rebuild_prefilter")
         self._prefilter_items = []
         info = getattr(self, "_prefilter_info", None)
         if not info:
@@ -2160,13 +2161,13 @@ class PipelineCanvas(QGraphicsView):
         for it in getattr(self, "_ghost_items", []) or []:
             try:
                 self._scene.removeItem(it)
-            except Exception:              # noqa: BLE001 — clear() 先銷毀就算了
-                pass
+            except Exception:  # clear() 先銷毀就算了
+                swallowed("canvas.clear_tree_ghosts")
         for card in getattr(self, "_ghost_cards", []) or []:
             try:
                 card.set_hovered(False)
-            except Exception:              # noqa: BLE001
-                pass
+            except Exception:
+                swallowed("canvas.clear_tree_ghosts")
         self._ghost_items, self._ghost_cards = [], []
 
     def reveal_cards(self, node_ids: Sequence[str]) -> int:
@@ -2430,7 +2431,7 @@ class PipelineCanvas(QGraphicsView):
             return
         try:
             alive = shiboken6.isValid(anim)
-        except Exception:               # noqa: BLE001 — 殼本身壞了就當沒有
+        except Exception:  # 殼本身壞了就當沒有
             alive = False
         if alive:
             anim.stop()
@@ -2499,24 +2500,24 @@ class PipelineCanvas(QGraphicsView):
                 self.tidy()
             self.fit()
 
-    def showEvent(self, e) -> None:            # noqa: D102 - Qt hook
+    def showEvent(self, e) -> None:  # Qt hook
         super().showEvent(e)
         self._consume_pending_fit()
 
     # ---- 從卡片庫拖進來（F7-22）-------------------------------------------
-    def dragEnterEvent(self, e) -> None:            # noqa: D102 - Qt hook
+    def dragEnterEvent(self, e) -> None:  # Qt hook
         if e.mimeData().hasFormat(CARD_MIME):
             e.acceptProposedAction()
         else:
             super().dragEnterEvent(e)
 
-    def dragMoveEvent(self, e) -> None:             # noqa: D102 - Qt hook
+    def dragMoveEvent(self, e) -> None:  # Qt hook
         if e.mimeData().hasFormat(CARD_MIME):
             e.acceptProposedAction()
         else:
             super().dragMoveEvent(e)
 
-    def dropEvent(self, e) -> None:                 # noqa: D102 - Qt hook
+    def dropEvent(self, e) -> None:  # Qt hook
         if not e.mimeData().hasFormat(CARD_MIME):
             return super().dropEvent(e)
         key = bytes(e.mimeData().data(CARD_MIME)).decode("utf-8")
@@ -2747,7 +2748,7 @@ class PipelineCanvas(QGraphicsView):
                 top.set_hovered(True)
                 self.show_card_ghosts(top)
 
-    def leaveEvent(self, e) -> None:           # noqa: D102
+    def leaveEvent(self, e) -> None:
         if self._hover_node is not None:
             self._hover_node.set_hovered(False)
             self._hover_node = None
@@ -2759,7 +2760,7 @@ class PipelineCanvas(QGraphicsView):
         # ``QMouseEvent.pos()`` 在 Qt6 是 deprecated（CI 的警告）。
         return e.position().toPoint() if hasattr(e, "position") else e.pos()
 
-    def mousePressEvent(self, e) -> None:      # noqa: D102
+    def mousePressEvent(self, e) -> None:
         # 右鍵按住拖曳 = 平移畫布（使用者要求）。原地放開仍然要出得來
         # 節點的右鍵選單 —— 那條路移到 mouseReleaseEvent。
         if e.button() == Qt.RightButton:
@@ -2769,7 +2770,7 @@ class PipelineCanvas(QGraphicsView):
             return
         super().mousePressEvent(e)
 
-    def mouseMoveEvent(self, e) -> None:       # noqa: D102
+    def mouseMoveEvent(self, e) -> None:
         if self._pan_last is not None and (e.buttons() & Qt.RightButton):
             pos = self._view_pos(e)
             d = pos - self._pan_last
@@ -2804,7 +2805,7 @@ class PipelineCanvas(QGraphicsView):
             return
         super().mouseMoveEvent(e)
 
-    def mouseReleaseEvent(self, e) -> None:    # noqa: D102
+    def mouseReleaseEvent(self, e) -> None:
         if e.button() == Qt.RightButton and self._pan_last is not None:
             moved, self._pan_moved = self._pan_moved, False
             self._pan_last = None
@@ -2831,12 +2832,12 @@ class PipelineCanvas(QGraphicsView):
             return
         super().mouseReleaseEvent(e)
 
-    def contextMenuEvent(self, e) -> None:     # noqa: D102
+    def contextMenuEvent(self, e) -> None:
         # 右鍵被平移接管。不吞掉的話，Linux 在**按下的瞬間**就彈選單，
         # 平移永遠拖不起來；選單改在「原地放開」時開（見 mouseReleaseEvent）。
         e.accept()
 
-    def keyPressEvent(self, e) -> None:        # noqa: D102
+    def keyPressEvent(self, e) -> None:
         if e.key() in (Qt.Key_Delete, Qt.Key_Backspace):
             self.delete_selected()
             e.accept()
@@ -2999,11 +3000,11 @@ class PipelineCanvas(QGraphicsView):
 
         self._tween_view(_now)
 
-    def wheelEvent(self, e) -> None:           # noqa: D102
+    def wheelEvent(self, e) -> None:
         self.zoom_by(1.15 if e.angleDelta().y() > 0 else 1 / 1.15)
         e.accept()
 
-    def drawForeground(self, p: QPainter, rect: QRectF) -> None:  # noqa: D102
+    def drawForeground(self, p: QPainter, rect: QRectF) -> None:
         """第一次接線的提示（U19）—— 畫在輸出埠旁邊，有線之後自己消失。
 
         為什麼畫在畫布上而不是弄一塊面板：新手卡住的是**那顆埠**，而一塊講
@@ -3039,7 +3040,7 @@ class PipelineCanvas(QGraphicsView):
         p.drawText(QPointF(at.x() + 16.0, at.y() + 4.0), text)
         p.restore()
 
-    def drawBackground(self, p: QPainter, rect: QRectF) -> None:  # noqa: D102
+    def drawBackground(self, p: QPainter, rect: QRectF) -> None:
         """點陣底，不是格線底（F7-8）。
 
         格線會在整張畫布上鋪滿橫豎線，跟連線同一種筆觸，於是「哪條是資料流、

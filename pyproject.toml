@@ -20,7 +20,9 @@ dependencies = ["numpy>=1.24", "opencv-python>=4.8", "tifffile>=2023.7", "openpy
 [project.optional-dependencies]
 # ruff 釘死版本，理由同 `.github/workflows/ci.yml` 的 lint job：
 # 浮動版本 = 某天 CI 自己紅了，而沒有人改過任何一行。
-dev = ["pytest>=7", "ruff==0.15.8"]
+# pyright 同理釘住：它每一版都會多認得幾種錯，浮動版本＝某天 CI 自己紅。
+# 上限與為什麼只掃 core 在 `tools/typecheck.py`。
+dev = ["pytest>=8.2", "ruff==0.15.8", "pyright==1.1.408"]
 # Studio（PySide6）**刻意不在 dependencies 裡**：CLI 那條路
 # （`python -m d4t run`）不需要 Qt，而公司機上有「只要跑批次」的情境。
 # 但這件事以前是隱性的 —— `pip install .` 裝出來的東西 CLI 跑得動、
@@ -71,7 +73,10 @@ include = ["d4t/**/*.py", "tools/**/*.py", "fab_probe/**/*.py", "conftest.py"]
 # 所以「字元數」在這個 repo 量不到「看起來多寬」。要開之前先想清楚量的是什麼。
 # **刻意沒有 UP（pyupgrade）**：它會把 `Dict[str, int]` 改寫成 `dict[str, int]`
 # 那一族，5,062 條 —— 一個橫跨黃金值程式碼的巨大 diff，換來的只有寫法新舊。
-select = ["E4", "E7", "E9", "F", "W", "B"]
+# RUF100（沒作用的 `noqa`）：2026-09-09 清掉 421 條 —— 那些標的是 BLE001 /
+# D102 / N802 這種**根本沒開**的規則，等於一張沒人讀的便利貼。開著它，
+# 下一張貼上去的時候 ruff 會當場說「這條規則沒開」。
+select = ["E4", "E7", "E9", "F", "W", "B", "RUF100"]
 # E702（一行兩個分號隔開的敘述）：48 條，全部在陣列數學裡成對出現
 # （`near_sp[1:, :] |= …; near_sp[:-1, :] |= …`）。那個排版讓「這兩件事是一對」
 # 看得出來，拆開反而更難讀 —— 而且那些檔案正是黃金值踩著的地方。
@@ -86,3 +91,14 @@ ignore = ["E702"]
 # Qt 的 model API 簽章就是 `def rowCount(self, parent=QModelIndex())` ——
 # 那是 PySide6 要求的形狀，不是 B008 想抓的「可變預設值」。
 extend-immutable-calls = ["PySide6.QtCore.QModelIndex"]
+
+# --------------------------------------------------------------------------- #
+# pyright —— 型別檢查（2026-09-09 加，只掃 core）
+# --------------------------------------------------------------------------- #
+# 上限、為什麼不是零、為什麼只掃 core：全部在 `tools/typecheck.py` 的檔頭，
+# 這裡只放 pyright 自己要讀的設定。`basic` 不是 `strict`：這個 repo 的型別
+# 註記是一路補上來的，strict 會把「沒寫型別」也算成錯，那不是要抓的東西。
+[tool.pyright]
+include = ["d4t/core"]
+pythonVersion = "3.9"
+typeCheckingMode = "basic"

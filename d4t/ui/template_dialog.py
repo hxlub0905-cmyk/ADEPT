@@ -1102,7 +1102,7 @@ class TemplateDialog(QDialog):
             return
         try:
             img = load_gray(path)
-        except Exception as e:             # noqa: BLE001 — UI 邊界
+        except Exception as e:  # UI 邊界
             self._fail("%s: %s" % (type(e).__name__, e))
             return
         self.load_image(img, path)

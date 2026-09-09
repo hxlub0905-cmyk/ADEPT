@@ -23,6 +23,7 @@ PEAR 那個對話框的價值有一半在排列方式 —— **「刻度上的�
    標題不該被這個對話框安靜地清掉。它們原封不動搬回輸出（`_extra`）。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -286,10 +287,10 @@ class BoolChips(QWidget):
             self.chips.setMinimumWidth(wide + 8)
 
     # -- 長得像 QCheckBox（對話框其餘部分因此不必分兩種寫法）----------------
-    def isChecked(self) -> bool:      # noqa: N802 - Qt 的命名
+    def isChecked(self) -> bool:  # Qt 的命名
         return self.chips.text() == self._on_word
 
-    def setChecked(self, on: bool) -> None:   # noqa: N802 - Qt 的命名
+    def setChecked(self, on: bool) -> None:  # Qt 的命名
         # ⚠ **要自己發訊號。** `ChoiceChips.set_text` 是程式設值那一條路，
         # 它刻意不發 `changed`（不然載入一份 recipe 會被當成使用者改了）。
         # 而 `QCheckBox.setChecked` **會**發 `toggled` —— 這一支要長得像
@@ -599,7 +600,7 @@ class ChartSettingsDialog(QDialog):
         """
         try:
             mark = str(cspec.parse_spec(self._spec)["mark"])
-        except Exception:              # noqa: BLE001 — 顯示用，不能擋畫面
+        except Exception:  # 顯示用，不能擋畫面
             mark = cspec.MARK_POINT
         for key in list(self.globals):
             # ⚠ 走 `uc.applies` 而不是自己讀 `GLOBAL_APPLIES` —— `CHART_CUSTOM`
@@ -653,7 +654,8 @@ class ChartSettingsDialog(QDialog):
             return
         try:
             style = self.value()
-        except Exception:                  # noqa: BLE001 — 見 docstring
+        except Exception:  # 見 docstring
+            swallowed("chart_settings.refresh_preview")
             return
         metric = str(self._series.get("metric") or "")
         for kind, view in self.views.items():
@@ -664,7 +666,8 @@ class ChartSettingsDialog(QDialog):
                 view.set_data(self._series,
                               chart_style_for(style, kind, self._axis, metric),
                               frame=self._frame, spec=self._spec)
-            except Exception:              # noqa: BLE001 — 鐵則 7 的 UI 版
+            except Exception:  # 鐵則 7 的 UI 版
+                swallowed("chart_settings.refresh_preview")
                 continue
 
     # -- 版型 ---------------------------------------------------------------
@@ -732,7 +735,7 @@ class ChartSettingsDialog(QDialog):
         """這一格改得到畫面上哪幾張圖（`uc.applies` 是唯一的判準）。"""
         try:
             mark = str(cspec.parse_spec(self._spec)["mark"])
-        except Exception:              # noqa: BLE001 — 顯示用，不能擋畫面
+        except Exception:  # 顯示用，不能擋畫面
             mark = cspec.MARK_POINT
         return [k for k in self._kinds if uc.applies(key, k, mark)]
 

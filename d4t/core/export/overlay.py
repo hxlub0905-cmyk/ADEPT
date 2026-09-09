@@ -22,6 +22,7 @@ Gallery、CLI 的批次出圖、報表的插圖都能共用同一支渲染函式
 ``render_overlay`` → :func:`write_png`，要畫哪幾顆由 UI/CLI 決定。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import os
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -494,7 +495,8 @@ def worst_note_for_overlay(ctx: Any) -> Tuple[list, int, Optional[Dict[str, Any]
             continue
         try:
             rects = list(ctx.roi_norm_rects(region))
-        except Exception:       # noqa: BLE001 — note 指著一個已經不在的區域
+        except Exception:  # note 指著一個已經不在的區域
+            swallowed("overlay.worst_note_for_overlay")
             continue
         if not rects:
             continue

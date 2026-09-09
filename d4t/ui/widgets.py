@@ -61,7 +61,7 @@ from .feature_text import (   # noqa: F401
     VARIANT_GLOSS, VerdictChip, _card_says, _escape, _fmt_number,
     _with_variant, feature_gloss, feature_html, feature_unit,
 )
-from .histogram import (      # noqa: F401
+from .histogram import (
     HistogramWidget,
 )
 from .fields import (         # noqa: F401

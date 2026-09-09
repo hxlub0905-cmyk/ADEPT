@@ -33,7 +33,7 @@ RAW = "https://github.com/hxlub0905-cmyk/d4t/blob/main/%s"
 
 def blob_sha(data: bytes) -> str:
     """git 算 blob SHA 的方式：``"blob <長度>\\0" + 內容``。"""
-    h = hashlib.sha1()                                # noqa: S324 — git 的格式
+    h = hashlib.sha1()
     h.update(b"blob %d\0" % len(data))
     h.update(data)
     return h.hexdigest()

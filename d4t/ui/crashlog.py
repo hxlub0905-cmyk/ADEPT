@@ -2,7 +2,9 @@
 """**打包成離線 exe 之後沒有 console —— 出事＝程式直接不見，而你什麼都拿不到。**
 
 現況（2026-09-08 量的）：整個 ``d4t/`` 沒有任何一處用 ``logging``，也沒有
-``sys.excepthook``。開發時這件事看不出來，因為錯誤會印在終端機上；而
+``sys.excepthook``。（2026-09-09 起 ``logging`` 有了 —— ``d4t/core/log.py``，
+接**被接住然後吃掉**的例外；這一份接的是**沒被接住**的。兩份寫進同一個
+資料夾。）開發時這件事看不出來，因為錯誤會印在終端機上；而
 `docs/NO-GIT-SETUP.md` 那台機器是**解壓縮就跑**，那裡沒有終端機。
 
 於是使用者能講的話只有「它突然關掉了」，而那句話裡沒有任何可以查的東西。
@@ -103,7 +105,7 @@ def _prune() -> None:
     for stale in recent_logs(limit=10 ** 6)[MAX_FILES:]:
         try:
             os.remove(stale)
-        except OSError:                    # noqa: PERF203 — 刪不掉就算了
+        except OSError:  # 刪不掉就算了
             pass
 
 
@@ -135,7 +137,7 @@ def _tell_the_user(exc: Any, path: str) -> None:
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtWidgets import QApplication, QMessageBox
-    except Exception:                      # noqa: BLE001 — 沒有 Qt 就只有 log
+    except Exception:  # 沒有 Qt 就只有 log
         return
     if QApplication.instance() is None:
         return
@@ -171,12 +173,12 @@ def _hook(exc_type: Any, exc: Any, tb: Any) -> None:
     # 開發時仍然要看得到 —— 這一份是**補**一條路，不是取代終端機那一條。
     try:
         sys.__excepthook__(exc_type, exc, tb)
-    except Exception:                      # noqa: BLE001 — 沒有 stderr 的環境
+    except Exception:  # 沒有 stderr 的環境
         pass
     if SHOW_DIALOG:
         try:
             _tell_the_user(exc, path)
-        except Exception:                  # noqa: BLE001 — 最後一道網不准自己炸
+        except Exception:  # 最後一道網不准自己炸
             pass
 
 

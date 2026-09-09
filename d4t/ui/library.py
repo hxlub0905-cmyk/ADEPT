@@ -164,7 +164,7 @@ class GroupIcon(QWidget):
         self.color = str(color)
         self.update()
 
-    def paintEvent(self, _e) -> None:      # noqa: D102 - Qt hook
+    def paintEvent(self, _e) -> None:  # Qt hook
         p = QPainter(self)
         draw_group_icon(p, self.group, self.color, float(self._SIZE))
         p.end()
@@ -259,15 +259,15 @@ class _LibraryItem(QFrame):
         """
         return self.badge.text() if self.missing else ""
 
-    def enterEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def enterEvent(self, e) -> None:  # Qt hook
         self.add_button.setVisible(True)
         super().enterEvent(e)
 
-    def leaveEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def leaveEvent(self, e) -> None:  # Qt hook
         self.add_button.setVisible(False)
         super().leaveEvent(e)
 
-    def mouseDoubleClickEvent(self, e) -> None:   # noqa: D102 - Qt hook
+    def mouseDoubleClickEvent(self, e) -> None:  # Qt hook
         if e.button() == Qt.LeftButton:
             # 這一下不是要拖 —— 而第二次按下不會再進 `mousePressEvent`
             # （Qt 送的是 DblClick），所以按下那一點得在這裡自己收掉，
@@ -279,12 +279,12 @@ class _LibraryItem(QFrame):
     #
     # 「Add」是**工具決定位置**（接在選著的那張後面）；拖是**使用者決定位置**。
     # 兩個都留著：n8n 兩種都有，而且第一次用的人多半先看到按鈕。
-    def mousePressEvent(self, e) -> None:         # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         if e.button() == Qt.LeftButton:
             self._press_at = e.pos()
         super().mousePressEvent(e)
 
-    def mouseReleaseEvent(self, e) -> None:       # noqa: D102 - Qt hook
+    def mouseReleaseEvent(self, e) -> None:  # Qt hook
         """放開＝那一下結束了，按下的位置跟著作廢。
 
         ⚠ 這支以前不存在，而 `_press_at` 因此**跨得過一次點擊**：快速點兩下
@@ -295,7 +295,7 @@ class _LibraryItem(QFrame):
         self._press_at = None
         super().mouseReleaseEvent(e)
 
-    def mouseMoveEvent(self, e) -> None:          # noqa: D102 - Qt hook
+    def mouseMoveEvent(self, e) -> None:  # Qt hook
         start = getattr(self, "_press_at", None)
         if start is None or not (e.buttons() & Qt.LeftButton):
             return super().mouseMoveEvent(e)
@@ -394,7 +394,7 @@ class StageButton(QFrame):
         self.icon.set_color(colour)
         self._style_count()          # 藥丸的兩個顏色也是算出來的（F13-3）
 
-    def mousePressEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         if e.button() == Qt.LeftButton:
             self.clicked.emit(self.group)
         super().mousePressEvent(e)

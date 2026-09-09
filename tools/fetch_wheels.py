@@ -292,7 +292,7 @@ def _soften_stdout() -> None:
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(errors="replace")      # Python 3.7+
-        except Exception:                             # noqa: BLE001 — 沒有就算了
+        except Exception:  # 沒有就算了
             pass
 
 

@@ -21,6 +21,7 @@
 「畫面上的圖跟報表裡的圖不一樣，而兩張都畫得出來」是這個 repo 最貴的那種 bug。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -57,7 +58,7 @@ def chart_style_for(look: str, kind: str, axis: str = uc.AXIS_X,
     """
     try:
         return uc.resolve_style(look, kind, axis, metric)
-    except Exception:                     # noqa: BLE001 — 顯示用，不能擋畫面
+    except Exception:  # 顯示用，不能擋畫面
         return {}
 
 
@@ -113,10 +114,10 @@ class ChartView(QWidget):
         policy.setHeightForWidth(self.ASPECT is not None)
         self.setSizePolicy(policy)
 
-    def hasHeightForWidth(self) -> bool:      # noqa: D102, N802
+    def hasHeightForWidth(self) -> bool:
         return self.ASPECT is not None
 
-    def heightForWidth(self, width: int) -> int:      # noqa: D102, N802
+    def heightForWidth(self, width: int) -> int:
         if self.ASPECT is None:
             return -1
         return max(self.MIN_H, int(round(float(width) / self.ASPECT)))
@@ -141,7 +142,7 @@ class ChartView(QWidget):
                                   height=max(self.MIN_H, self.height()),
                                   frame=self._frame, spec=self._spec)
 
-    def paintEvent(self, event) -> None:      # noqa: D102, N802
+    def paintEvent(self, event) -> None:
         p = QPainter(self)
         try:
             p.setRenderHint(QPainter.Antialiasing, True)
@@ -158,7 +159,7 @@ class ChartView(QWidget):
                 return
             try:
                 from PySide6.QtSvg import QSvgRenderer
-            except ImportError:               # noqa: BLE001 — 不准擋畫面
+            except ImportError:  # 不准擋畫面
                 p.setPen(QColor(TOKENS["text_secondary"]))
                 p.drawText(QRectF(self.rect()),
                            int(Qt.AlignCenter | Qt.TextWordWrap),
@@ -167,7 +168,8 @@ class ChartView(QWidget):
             try:
                 r = QSvgRenderer(bytearray(self.svg(), "utf-8"))
                 r.render(p, fit_into(r.viewBoxF().size(), QRectF(self.rect())))
-            except Exception:                 # noqa: BLE001 — 鐵則 7 的 UI 版
+            except Exception:  # 鐵則 7 的 UI 版
+                swallowed("uniformity_window.paintEvent")
                 return
         finally:
             p.end()

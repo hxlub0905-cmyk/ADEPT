@@ -33,6 +33,7 @@ Excel 報表同一份邏輯，不另寫一份會漂的）。這一份只做三�
 橫條的家，`CLAUDE.md` §4「一塊新面板一個新模組」的直接套用。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import json
 import time
@@ -200,7 +201,7 @@ class BaselineStore:
             try:
                 from .welcome import app_settings
                 self._settings = app_settings()
-            except Exception:              # noqa: BLE001 — 設定讀不到不准擋路
+            except Exception:  # 設定讀不到不准擋路
                 self._settings = False     # 記住失敗，不要每次都重試
         return self._settings or None
 
@@ -213,8 +214,8 @@ class BaselineStore:
         try:
             st.setValue(self._key, raw)
             st.sync()
-        except Exception:                  # noqa: BLE001 — 存不進去不准擋路
-            pass
+        except Exception:  # 存不進去不准擋路
+            swallowed("baseline.save")
 
     def load(self) -> Optional[Dict[str, Any]]:
         raw = self._memory
@@ -222,8 +223,8 @@ class BaselineStore:
         if st is not None:
             try:
                 raw = str(st.value(self._key, "") or "") or raw
-            except Exception:              # noqa: BLE001
-                pass
+            except Exception:
+                swallowed("baseline.load")
         if not raw:
             return None
         try:

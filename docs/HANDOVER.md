@@ -240,5 +240,5 @@ RSEM 沒有機台給的參考圖，Golden Cell 疊一張出來後命名為 `ref`
 - **每次 session 結束請更新 `SESSION_LOG.md`**（沿用 GLAS/MMH 的慣例）。
   那份是逐次的決策紀錄，比 commit message 詳細。
 - 這個 repo 的測試全部用合成資料、~30 秒跑完，所以**改任何東西都應該先跑一次全套**：
-  `QT_QPA_PLATFORM=offscreen pytest -q`（Windows 不用設環境變數）。
+  `QT_QPA_PLATFORM=offscreen python -m pytest -q`（Windows 不用設環境變數）。
 - 新增卡片的完整範例在 `CLAUDE.md` §5。新算法 = 新 class + decorator，UI 與引擎零修改。

@@ -16,6 +16,7 @@
   ``meta["_dataset_kind"]``（Load 卡讀這兩個 key）。
 """
 from __future__ import annotations
+from d4t.core.log import get as _get_log, swallowed
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -29,6 +30,9 @@ import numpy as np
 #: 是為了**不動序列化** —— `store/results.py` 的資料表、CSV 的欄位、KLARF 寫回
 #: 全部吃的是扁平的 ``features`` dict。
 FEATURE_OWNER_KEY = "feature_owner"
+
+
+_log = _get_log("pipeline")
 
 
 class ContextError(RuntimeError):
@@ -99,7 +103,8 @@ class Context:
                 "was_clipped_low": _clipped(before, low=True),
                 "was_clipped_high": _clipped(before, low=False),
             }
-        except Exception:               # noqa: BLE001 — 記錄失敗不准影響執行
+        except Exception:  # 記錄失敗不准影響執行
+            swallowed("context._record_change")
             return
         self.meta.setdefault("stream_change", {})[str(key)] = rec
 
@@ -266,6 +271,7 @@ class Context:
 
     def warn(self, msg: str) -> None:
         self.meta.setdefault("warnings", []).append(str(msg))
+        _log.info("warn: %s", msg)
 
     def summary(self) -> Dict[str, Any]:
         """輕量摘要（不含像素資料），供 trace / debug 輸出。"""
@@ -394,6 +400,7 @@ class BatchContext:
 
     def warn(self, msg: str) -> None:
         self.warnings.append(str(msg))
+        _log.info("batch warn: %s", msg)
 
     @property
     def ok_rows(self) -> List[Dict[str, Any]]:

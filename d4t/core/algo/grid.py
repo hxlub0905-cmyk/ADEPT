@@ -49,6 +49,7 @@ patch 上是決定性的差別。
 它會變成第二個恆為 0 的 ``cd_x_nm``。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import math
 from dataclasses import dataclass, field
@@ -1029,7 +1030,8 @@ def calibrate_axis(images: Sequence[Any], axis: str,
             s = find_stripes(img, axis=axis, select=select, kinds=kinds,
                              sensitivity=sensitivity, smooth=smooth,
                              min_gap=min_gap)
-        except Exception:                    # noqa: BLE001 — 單張爆不殺整批
+        except Exception:  # 單張爆不殺整批
+            swallowed("grid.calibrate_axis")
             continue
         if s.confidence < float(min_confidence):
             # 沒有結構的 patch 量不出 pitch —— 但它量得出**一個假的**：雜訊

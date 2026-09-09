@@ -1,5 +1,5 @@
 # F100：畫布橫躺在上面、工作台在下面 — authored 2026-09-08.
-"""`docs/plans/F100-workbench-layout.md` 的驗收。
+"""`docs/history/plans/F100-workbench-layout.md` 的驗收。
 
 兩層：`WorkbenchLayout` 本身（純幾何，拿真的 QSplitter 但不開 Studio，
 快）；以及**在 1366×768 上真的開一次 Studio、載 recipe、選一張卡、量幾何**
@@ -21,7 +21,7 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "tools"))
 
 RECIPE = REPO / "recipes" / "rsem-worst-box.json"
-#: 廠內機台旁那台 PC 的螢幕（`docs/plans/F100-workbench-layout.md` §1）。
+#: 廠內機台旁那台 PC 的螢幕（`docs/history/plans/F100-workbench-layout.md` §1）。
 SMALL = (1366, 768)
 
 

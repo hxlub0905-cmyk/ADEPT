@@ -545,7 +545,7 @@ class ResultsWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
-    def closeEvent(self, event) -> None:      # noqa: D102 - Qt hook
+    def closeEvent(self, event) -> None:  # Qt hook
         # 關掉不丟結果：下次再跑（或按主視窗的 Gallery 入口）就會回來。
         super().closeEvent(event)
 

@@ -139,7 +139,7 @@ def _focus_set(focus: Any) -> frozenset:
         return frozenset() if i < 0 else frozenset((i,))
     try:
         return frozenset(int(v) for v in focus if int(v) >= 0)
-    except (TypeError, ValueError):      # noqa: BLE001 — 顯示用，不能擋畫面
+    except (TypeError, ValueError):  # 顯示用，不能擋畫面
         return frozenset()
 
 

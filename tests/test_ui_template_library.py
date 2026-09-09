@@ -68,33 +68,41 @@ def test_the_library_points_at_the_shipped_recipes():
 def test_the_two_entries_are_two_flags_now():
     """**它們的死法不一樣，所以它們不是同一個決定。**
 
-    範本庫：庫是空的 → `recipes/` 填回來就活了。
+    範本庫：庫是空的 → `recipes/` 填回來就活了（2026-09-08）。
     範例資料：`run_demo` 產得出資料，但 `load_template` 指著一份不存在的
     ``ebi_patch`` recipe —— 那不是「庫空了」，是這條路本來就少一半。
+    **2026-09-09 補上了**（`recipes/ebi-die-to-die.json`），兩個都開著。
     """
     assert scope.SHOW_TEMPLATE_LIBRARY is True
-    assert scope.SHOW_SAMPLE_DATA is False
+    assert scope.SHOW_SAMPLE_DATA is True
     assert not hasattr(scope, "SHOW_SAMPLE_ENTRIES"), (
         "舊的那個旗標還在 —— 兩個名字描述同一件事，遲早有一個先過期")
 
 
-def test_the_sample_data_path_is_still_genuinely_broken():
-    """**反向測試**：`SHOW_SAMPLE_DATA` 關著要有一個還成立的理由。
+def test_the_sample_data_flag_matches_whether_the_recipe_exists():
+    """旗標與事實要一致，**兩個方向都問**。
 
-    修好了卻沒把旗標打開的話，這一條會紅 —— 那正是要問的那句話
-    （`CLAUDE.md`：任何「例外清單」都要有那支反向的測試）。
+    關著：要有一個還成立的理由（那份 recipe 真的不在）—— 修好了卻沒打開，
+    這一條會紅（`CLAUDE.md`：任何「例外清單」都要有那支反向的測試）。
+    開著：那份 recipe 要在、而且 route 要是 `run_demo` 產的那種（``ebi_patch``）
+    —— 不然按下去又是一批資料配一張空白畫布。
     """
-    if scope.SHOW_SAMPLE_DATA:
-        return                      # 打開了 → 下面那件事應該已經修好
-    assert not studio_mod.TEMPLATE_RECIPE.is_file(), (
-        "「用範例資料試一次」的那份 recipe 現在存在了，而旗標還關著 —— "
-        "把 scope.SHOW_SAMPLE_DATA 打開，或說明為什麼還不行")
+    from d4t.core.pipeline import Recipe
+
+    if not scope.SHOW_SAMPLE_DATA:
+        assert not studio_mod.TEMPLATE_RECIPE.is_file(), (
+            "「用範例資料試一次」的那份 recipe 現在存在了，而旗標還關著 —— "
+            "把 scope.SHOW_SAMPLE_DATA 打開，或說明為什麼還不行")
+        return
+    assert studio_mod.TEMPLATE_RECIPE.is_file(), (
+        "旗標開著，但 %s 不在 —— 按下去會撞牆" % studio_mod.TEMPLATE_RECIPE)
+    assert "ebi_patch" in Recipe.load(studio_mod.TEMPLATE_RECIPE).routes
 
 
 # --------------------------------------------------------------------------- #
 # 畫面上真的看得到
 # --------------------------------------------------------------------------- #
-def test_the_toolbar_button_is_back_and_the_sample_one_is_not(qapp, window):
+def test_both_entries_are_back_on_the_screen(qapp, window):
     """**要真的 show 過再問。**
 
     `QToolBar.addWidget` 把 widget 包進一個 QWidgetAction，而 Qt 在工具列
@@ -105,24 +113,28 @@ def test_the_toolbar_button_is_back_and_the_sample_one_is_not(qapp, window):
     window.show()
     qapp.processEvents()
     assert window.btn_examples.isVisible() is True
-    assert window.btn_empty_sample.isVisible() is False
+    assert window.btn_empty_sample.isHidden() is False, \
+        "「用範例資料試一次」2026-09-09 回來了（recipes/ebi-die-to-die.json）"
 
 
 def test_the_welcome_dialog_agrees_with_the_toolbar(qapp):
-    """導覽是第一次用的人看到的第一個畫面 —— 上面不能有按了撞牆的鈕。"""
+    """導覽是第一次用的人看到的第一個畫面 —— 上面不能有按了撞牆的鈕，
+    而現在兩顆都通了（2026-09-09），兩顆都要看得到。"""
     dlg = welcome_mod.WelcomeDialog()
     try:
         dlg.show()
         qapp.processEvents()
-        assert dlg.btn_library.isVisible() is True
-        assert dlg.btn_demo.isVisible() is False
+        assert dlg.btn_library.isVisible() is scope.SHOW_TEMPLATE_LIBRARY
+        assert dlg.btn_demo.isVisible() is scope.SHOW_SAMPLE_DATA
     finally:
         dlg.close()
 
 
-def test_nothing_on_screen_points_at_a_button_that_is_not_there(window):
-    """空白狀態那句話必須跟旁邊真的看得到的鈕一致。"""
-    assert "sample data" not in window.empty_state_hint.text().lower()
+def test_the_empty_state_only_mentions_a_button_that_is_there(window):
+    """空白狀態那句話必須跟旁邊真的看得到的鈕一致 —— 兩個方向都問：
+    鈕在，話要提；鈕不在，話不准提。"""
+    mentioned = "sample data" in window.empty_state_hint.text().lower()
+    assert mentioned is bool(scope.SHOW_SAMPLE_DATA)
 
 
 def test_every_listed_template_says_what_it_does(window):

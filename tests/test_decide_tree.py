@@ -250,7 +250,7 @@ def _two_level_model():
     ⚠ `RecipeModel` 是 **Qt-free** 的（`docs/ARCHITECTURE.md` 講的那一條：
     「viewmodel.py：RecipeModel，Qt-free、可 headless 測」）—— 所以這幾條
     測試留在核心那一輪，不必也**不該**放進 `test_ui_*`。第一版寫了
-    `pytest.importorskip("PySide6")`，那反而會把 Qt 拉進一個本來乾淨的行程。
+    `pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)`，那反而會把 Qt 拉進一個本來乾淨的行程。
     """
     from d4t.ui.viewmodel import RecipeModel
 
@@ -401,7 +401,7 @@ def test_the_ui_re_exports_the_same_objects_not_a_copy():
     而 `is` 這個比較就是「真的是同一支」的證明（抄一份出來的話這裡會是 False，
     而兩邊的測試仍然全綠）。
     """
-    pytest.importorskip("PySide6")
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
     import os
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication

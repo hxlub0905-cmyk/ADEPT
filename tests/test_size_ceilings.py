@@ -170,7 +170,11 @@ FILE_CEILINGS = {
     # 帶主畫面過去（`_on_defect_selected`）、Output 卡與判定樹的預覽跑到底
     # （`_preview_whole_route`）。四件都是使用者 2026-09-09 點名的，內容各在
     # core 或 Results 那幾支，這裡是接線與三句要講的話。
-    "d4t/ui/studio.py": 7750,
+    # 2026-09-09（logger）：7,747 → 7,753。`d4t/core/log.py` 落地：每一個
+    # `except Exception:` 後面直接 pass/continue/return 的地方多一行
+    # `swallowed("studio.<函式>")`，加一行 import。**這一格從此不再往上**
+    # （見下面 `HARD_CAPS`）。
+    "d4t/ui/studio.py": 7753,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     #
@@ -183,7 +187,8 @@ FILE_CEILINGS = {
     # 會寫的名字（＋ `_missing` / `_raw`）**一個家**：`_decide_unknown` 以前把
     # 這條規則寫在自己的迴圈裡，而 `validate` 對 Output 卡的 `rank_by` 根本
     # 不知道 let 存在（指到 working number 被標成 nobody produces it）。
-    "d4t/core/pipeline/recipe.py": 3865,
+    # 2026-09-09（logger）：3,865 → 3,870。同上：五處 `except Exception:` 留痕。
+    "d4t/core/pipeline/recipe.py": 3870,
     # 逐卡儀表板。這一支變長**通常是健康的**（加一張卡就多一個面板），所以
     # 這一格比其他四格更常需要調高 —— 那沒關係，重點是調高時有人看見。
     # 2026-09-08（F99 P0-2）：3,622 → 3,660。`header_boxes` —— 共用 header 左右
@@ -205,6 +210,11 @@ FILE_CEILINGS = {
     # （使用者：「X img/s 而不是 total time」）—— 多的是那句「為什麼加總的 ms
     # 不是牆上時鐘」的說明。
     "d4t/ui/canvas.py": 3070,
+    # `CLAUDE.md` **每個 session 都會被讀進去**。2026-09-09 之前它是 647 行，
+    # 一半是「某年某月使用者說了什麼」的故事 —— 規則留下、故事搬進
+    # `docs/history/CLAUDE-2026-09-09.md`，瘦到 319 行。這一格擋它長回去：
+    # 要加一條規矩可以，要加一段故事去 SESSION_LOG／history。
+    "CLAUDE.md": 323,
 }
 
 #: 沒被列名的檔案共用的上限。
@@ -413,6 +423,25 @@ COUNT_CEILINGS = {
 }
 
 
+#: **只准往下的那幾格。** 2026-09-09 在 `git log -p` 上量到的：`studio.py` 那一格
+#: 從 09-08 到 09-09 兩天被調高 **17 次**（6,942 → 7,750），`StudioWindow`
+#: 的方法數 261 → 298。「調高要簽名」的機制是對的，但每一次簽的都是同一個
+#: 理由（「這幾支都是接線」），尺就量不到東西了 —— 它變成一本流水帳。
+#:
+#: 所以這三格從今天起**不再往上**：要往 `studio.py` 加東西，先從它手上拿走
+#: 等量的東西（`CLAUDE.md` §4「一塊新的面板／畫布元件＝一個新模組」）。
+#: 這張表不是另一個上限 —— 它是「上面那張表裡這幾格的上限本身不准動」。
+#: 要改這張表的數字，commit 訊息裡要寫的不是「為什麼多了 40 行」，而是
+#: 「為什麼這條規矩今天要廢」。
+#: 數字凍在 2026-09-09 `d4t/core/log.py` 那一刀落地之後（每個被吃掉的例外
+#: 多一行 `swallowed(...)`，那是整個 repo 一起做的機械改動，不是 Studio 長了）。
+HARD_CAPS = {
+    "d4t/ui/studio.py": 7753,
+    "studio_window_methods": 298,
+    "studio_window_attributes": 437,
+}
+
+
 def _slack(ceiling: int) -> int:
     """反向測試的門檻：掉到 ``上限 - slack`` 以下就要求把上限降下來。
 
@@ -495,6 +524,28 @@ def test_a_shrunk_count_lowers_its_ceiling(name):
         "  這一格量的是：%s\n"
         "  把 COUNT_CEILINGS 那一格改成 %d，把成果鎖住。"
         % (name, actual, ceiling, why, actual))
+
+
+# --------------------------------------------------------------------------- #
+# 只准往下：god object 的三格上限本身不准調高
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("name", sorted(HARD_CAPS))
+def test_the_god_object_ceilings_only_go_down(name):
+    """`FILE_CEILINGS` / `COUNT_CEILINGS` 裡 `studio.py` 那三格，上限不准高過
+    `HARD_CAPS`。兩天 17 次調高之後，「簽名」已經不是煞車 —— 這一條才是。"""
+    if name in FILE_CEILINGS:
+        ceiling = FILE_CEILINGS[name]
+    else:
+        ceiling = COUNT_CEILINGS[name][0]
+    assert ceiling <= HARD_CAPS[name], (
+        "%s 的上限被調高到 %d，超過 HARD_CAPS 的 %d。這一格不再往上：要往 "
+        "studio.py 加東西，先從它手上搬走等量的東西（開新模組），再回來。"
+        % (name, ceiling, HARD_CAPS[name]))
+
+
+def test_the_hard_caps_name_real_ceilings():
+    for name in HARD_CAPS:
+        assert name in FILE_CEILINGS or name in COUNT_CEILINGS, name
 
 
 # --------------------------------------------------------------------------- #

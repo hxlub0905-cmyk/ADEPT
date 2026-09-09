@@ -113,7 +113,7 @@ def test_wiring_a_second_region_says_what_stopped_existing():
 
     ⚠ **把 `set_param` 裡的 `rename_fallout` 那一行拿掉，這支測試會紅。**
     """
-    pytest.importorskip("PySide6")
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
     m, glv, _out = _wired_model()
 
     before = get_step("glv_stats").resolve_features(m.nodes[glv].params)
@@ -132,14 +132,14 @@ def test_wiring_a_second_region_says_what_stopped_existing():
 
 def test_a_change_that_renames_nothing_says_nothing():
     """調一個不影響名字的參數不該講話 —— 每次都講的提醒會被學會忽略。"""
-    pytest.importorskip("PySide6")
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
     m, glv, _out = _wired_model()
     assert m.set_param(glv, "min_pixels", 10) == []
 
 
 def test_unticking_a_statistic_is_a_rename_too():
     """在設定區少勾一個統計量，那個數字就從此不存在 —— 跟拉線同一件事。"""
-    pytest.importorskip("PySide6")
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
     m, glv, _out = _wired_model()
     says = m.set_param(glv, "metrics", "glv_mad")
     assert says and "glv_median" in " ".join(says)

@@ -438,6 +438,24 @@ def test_doctor_survives_ascii_console():
     assert "[OK]" in out                # 自動退回純 ASCII 標記
 
 
+def test_doctor_says_the_cli_still_works_when_qt_cannot_open_a_window():
+    """**Qt 開不了視窗是 △ 不是 ✗**（2026-09-09）。
+
+    以前這一項是必要的，於是結論寫「d4t 目前還不能跑」，而同一行的修正建議
+    自己承認命令列跑得動 —— 一句話說兩件相反的事。用一個不存在的 Qt platform
+    逼子行程開不了視窗：離開碼要是 0、結論要把「命令列可以」與「Studio 不行」
+    分成兩句講，而且指令裡的路徑分隔符要是**這台機器**的。
+    """
+    rc, out = _run([DOCTOR, "--skip-smoke"],
+                   env_extra={"QT_QPA_PLATFORM": "d4t-no-such-platform"})
+    assert rc == 0, out
+    assert "Traceback" not in out
+    assert "Studio" in out and "命令列" in out, out
+    last = out.strip().splitlines()[-1]
+    assert last.startswith("結論") and "還不能跑" not in last, last
+    assert "python tools%sdoctor.py" % os.sep in out or "doctor.py" not in out, out
+
+
 def test_explain_venv_failure_suggests_no_venv():
     tips = install_offline.explain_venv_failure(
         "Error: Command '['...', '-m', 'ensurepip', ...]' returned non-zero exit status 1.",
@@ -477,7 +495,10 @@ def _stdlib_names(force_probe=False):
 
     out = set(sys.builtin_module_names)           # zlib / binascii 常在這裡
     stdlib = sysconfig.get_paths().get("stdlib") or ""
-    for base in (stdlib, os.path.join(stdlib, "lib-dynload")):
+    # Windows 把 C 寫的標準模組（unicodedata / _lzma …）放在 `DLLs\`，
+    # 不在 `Lib\` 也沒有 `lib-dynload`（2026-09-09 家用機踩到）。
+    for base in (stdlib, os.path.join(stdlib, "lib-dynload"),
+                 os.path.join(os.path.dirname(stdlib), "DLLs")):
         if not os.path.isdir(base):
             continue
         for entry in os.listdir(base):
@@ -1035,6 +1056,24 @@ def _write(path, text):
 # ---------------------------------------------------------------- 單檔純文字包
 
 @needs_git
+def test_the_bundle_header_names_the_build_and_the_cli_agrees(tmp_path):
+    """檔頭那行 ``BUILD <sha12> <date>`` 的 sha 是清單的 blob SHA，而
+    ``python -m d4t --version`` 印同一個數 —— 公司機沒有 git，這是它唯一
+    答得出「我跑的是哪一版」的方式。"""
+    import re
+    import d4t
+
+    text = make_text_bundle.build("b.py", REPO)
+    m = re.search(r"^# BUILD ([0-9a-f]{12}|unknown) (\d{4}-\d{2}-\d{2})$", text, re.M)
+    assert m, "bundle 檔頭沒有 BUILD 那一行"
+    assert m.group(1) != "unknown", "整個 repo 打包時清單一定在 items 裡"
+    assert m.group(1) == d4t.build_id()
+    assert all(ord(c) < 128 for c in text.split(make_text_bundle.SENTINEL)[0])
+    rc, out = _run(["-m", "d4t", "--version"], cwd=str(REPO))
+    assert rc == 0, out
+    assert m.group(1) in out and d4t.__version__ in out, out
+
+
 def test_the_text_bundle_round_trips_byte_for_byte(tmp_path):
     """整個 repo 打成一個純文字檔、解開、逐位元組比對。
 
@@ -1097,6 +1136,7 @@ def test_a_tampered_bundle_refuses_to_land_anything(tmp_path):
     body = b"print('hi')\n"
     sha = make_text_bundle.blob_sha(body)
     header = make_text_bundle.EXTRACTOR % {
+        "build": "000000000000 2026-01-01",
         "name": "b.py", "sentinel": make_text_bundle.SENTINEL,
         "part": 1, "n_parts": 1, "total": 1}
     good = "\n".join([header, make_text_bundle.SENTINEL, "#ENC text",

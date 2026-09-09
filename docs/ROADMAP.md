@@ -16,13 +16,13 @@
 兩個直接後果，看到它們不要以為是漏掉的：
 
 - **範例 recipe 全部拿掉**（`examples/` 已移除），Studio 上的「用範例資料試一次」
-  與「Templates…」兩個入口跟著收起來（`ui/scope.py` 的 `SHOW_SAMPLE_ENTRIES`）。
-  ⚠ **這一條有一半回來了**：2026-08-26 起 `recipes/` 底下有出貨的 recipe
-  （目前三份：EBI↔API characterization、patch 的 dSNR 分布、RSEM 逐框挑最異常
-  的那一格），走 `Open recipe…`
+  與「Templates…」兩個入口跟著收起來（`ui/scope.py`）。
+  ⚠ **這一條整條回來了**：2026-08-26 起 `recipes/` 底下有出貨的 recipe
+  （目前三份：RSEM 逐框挑最異常的那一格、一張影像的均勻度、EBI die-to-die；
+  EBI↔API characterization 與 patch 的 dSNR 分布 2026-09-02 由使用者指定刪掉），
+  `Templates…` 2026-09-08、「用範例資料試一次」2026-09-09 打開，也走 `Open recipe…`
   那條路。它跟舊的 `examples/` 差在**有測試守著**
   （`tests/test_shipped_recipes.py`）—— 舊的那批就是因為沒人測而爛掉的。
-  範本庫那個入口仍然關著。
 - ~~**存檔 recipe 的功能拿掉了**（2026-08-16）~~ →
   **2026-08-26 做回來了**（F34）。`Recipe.save()`、工具列的「Save recipe…」、
   `Ctrl+S`（存回原檔）與 `Ctrl+Shift+S`（另存）都在，標題列的星號是「還沒存」
@@ -48,7 +48,7 @@
 
 ### Phase 1 收在哪裡（2026-08-16）
 
-「數字可信」現在有三層守著，加第 18 張卡的人不必記得來補任何一層：
+「數字可信」現在有三層守著，加下一張卡的人不必記得來補任何一層：
 
 1. **黃金值**（`tools/freeze_golden.py --check`）—— 三組 22 顆 defect 的完整
    feature 表凍住。任何重構的驗收都是「跟改動前逐項相同」。
@@ -519,7 +519,7 @@ engine 與功能收斂之後才有意義。
 | ground truth **標注介面** | 讀答案卷與即時準確率已經在（Phase 1），缺的是**在 Studio 裡標**：現在還是要人另外準備一份 JSON／CSV |
 | ~~整批的分布畫得出來~~ | ✅ **2026-08-26（F36）**：一片葉子一個盒子，手寫 SVG（零新相依 —— 公司機是用複製檔案更新的）。`Numbers to plot` 留空 = 判定問過的那幾個（`decide_tree.features_used`）。⚠ **F38 起它不是自己一張卡**，是 `Write report` 上的一個勾（寫出 `spread.html`）|
 | ~~存檔 recipe 做回來~~ | ✅ **2026-08-26（F34）**。`app_version` 那條相容策略本來就在（`version_skew`），這一輪只是把寫檔那一半接回來 |
-| 範例 recipe 庫 | 使用者的原話是「等 APP 完成再給範例」。`recipes/` 已經有出貨的 recipe（2026-08-26），缺的是**庫的入口**（`SHOW_SAMPLE_ENTRIES`）|
+| ~~範例 recipe 庫~~ | ✅ **2026-09-09**。使用者的原話是「等 APP 完成再給範例」。`recipes/` 2026-08-26 起有出貨的 recipe，`Templates…` 2026-09-08 打開，「用範例資料試一次」2026-09-09 隨 `ebi-die-to-die.json` 打開 |
 | 結果表的**純度那一欄** | 只在有 `ground_truth.json` 時才有值，而廠內多半沒有（F27 §5 留下來的最後一條，封存時搬到這裡）。它跟上面那一列是同一件事的兩半：沒有答案卷，準確率／純度都講不出來 |
 | 使用者手冊 | 目前所有文件都是寫給開發者的。目標使用者是不寫 code 的製程／設備工程師 |
 | 快速參考卡 PDF | M6 欠著的 |

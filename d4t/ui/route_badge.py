@@ -178,7 +178,7 @@ class RouteBadgeItem(QGraphicsItem):
             p.drawText(QRectF(10, y, BADGE_W - 20, _ROW_H),
                        Qt.AlignLeft | Qt.AlignVCenter, tail)
 
-    def mousePressEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         if e.button() == Qt.LeftButton and self._canvas is not None:
             self._canvas.prefilter_clicked.emit()
             e.accept()

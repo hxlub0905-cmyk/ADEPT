@@ -83,6 +83,11 @@ EXTRACTOR = '''#!/usr/bin/env python3
 #   SyntaxError: Non-UTF-8 code starting with '\\\\xe5' ... no encoding declared
 # An all-ASCII file cannot be damaged that way, whatever encoding is chosen.
 # The payload below is base64 for the same reason.
+#
+# BUILD %(build)s
+# (the build id is the blob SHA of tools/FILELIST.txt, so it names the exact
+#  set of file contents inside; `python -m d4t --version` prints the same id
+#  once unpacked, which is how you tell which build a machine is running.)
 """The whole d4t repo lives inside this one file, as plain ASCII text.
 
 Why this shape: company policy blocks the .zip category outright, and the
@@ -185,7 +190,7 @@ def main(argv=None) -> int:
         import lzma
         try:
             raw = lzma.decompress(base64.b64decode("".join(b64)))
-        except Exception as exc:                     # noqa: BLE001
+        except Exception as exc:
             print("FAILED: cannot decode the data section: %%s" %% exc)
             print("        This file was truncated or altered while being")
             print("        copied. Copy it again, and do NOT open it in an")
@@ -195,7 +200,7 @@ def main(argv=None) -> int:
 
     try:
         items = list(entries(data, per_file))
-    except Exception as exc:                         # noqa: BLE001
+    except Exception as exc:
         print("FAILED: cannot decode the data section: %%s" %% exc)
         print("        This file was truncated or altered while being copied.")
         print("        Copy it again, and do NOT open it in an editor and")
@@ -294,7 +299,7 @@ def repo_root() -> str:
 
 
 def blob_sha(data: bytes) -> str:
-    h = hashlib.sha1()                                # noqa: S324 — git 的格式
+    h = hashlib.sha1()
     h.update(b"blob %d\0" % len(data))
     h.update(data)
     return h.hexdigest()
@@ -410,6 +415,23 @@ def _data_lines_per_file(items: List[Tuple[str, bytes]]) -> List[str]:
     return out
 
 
+def build_id(items: List[Tuple[str, bytes]]) -> str:
+    """這一包的身分：``tools/FILELIST.txt`` 的 blob SHA 前 12 碼，加上打包日期。
+
+    為什麼不是 git hash：包是在 commit **之前**產的（``git add -A && release.py
+    && git add -A``），所以它裝不下包含它自己的那個 commit 的 hash；而清單的
+    SHA 由**檔案內容**決定，兩台機器算出來一樣，跟 git 在不在無關。
+    清單不在 items 裡（測試餵任意檔案）就寫 ``unknown``。日期是資訊，不進比對。
+    """
+    import datetime
+    sha = "unknown"
+    for path, data in items:
+        if path == make_filelist.MANIFEST:
+            sha = make_filelist.blob_sha(data)[:12]
+            break
+    return "%s %s" % (sha, datetime.date.today().isoformat())
+
+
 def build(out_name: str = "d4t_bundle.py", root: str = "",
           items: Optional[List[Tuple[str, bytes]]] = None,
           part: int = 1, n_parts: int = 1, total_files: int = 0,
@@ -417,7 +439,8 @@ def build(out_name: str = "d4t_bundle.py", root: str = "",
     items = collect(root) if items is None else items
     parts = [EXTRACTOR % {"name": out_name, "sentinel": SENTINEL,
                           "part": part, "n_parts": n_parts,
-                          "total": total_files or len(items)}, SENTINEL]
+                          "total": total_files or len(items),
+                          "build": build_id(items)}, SENTINEL]
     if not compress:
         # **預設**：逐檔 lzma+base64（純 ASCII、git 壓得動、夠小）。
         parts.append("#ENC lzma+base64/file")

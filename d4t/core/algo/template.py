@@ -51,6 +51,7 @@ patch 通常**比一個重複單元還小**，所以每張 patch 看到的只是
 margin 0.01–0.24。**structure 這一關差了一個數量級**，另外兩關會重疊。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import base64
 import math
@@ -439,7 +440,8 @@ def decode_template(text: str) -> Optional[Tuple[np.ndarray, Tuple[int, int]]]:
         if not (1 <= sx <= w and 1 <= sy <= h):
             return cell, (w, h)
         return cell, (sx, sy)
-    except Exception:                       # noqa: BLE001 — 壞字串一律當沒有
+    except Exception:  # 壞字串一律當沒有
+        swallowed("template.decode_template")
         return None
 
 

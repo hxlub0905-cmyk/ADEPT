@@ -85,7 +85,7 @@ def install(locale: str) -> str:
     path = LOCALE_DIR / ("%s.json" % use)
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:              # noqa: BLE001 — 見上
+    except Exception:  # 見上
         _locale, _catalog = DEFAULT_LOCALE, {}
         return _locale
     if not isinstance(raw, dict):

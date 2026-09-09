@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
 
 from .widgets import (ChoiceChips, clear_layout_parked, glyph_icon,
                       small_button)
-from .number_picker import fill_number_picker, number_tips  # noqa: F401 — tree_panel 與測試從這裡拿
+from .number_picker import fill_number_picker, number_tips
 from .viewmodel import MAX_BIN
 
 __all__ = ["DecidePanel"]
@@ -661,7 +661,7 @@ class DecidePanel(QWidget):
         return bool(w is not None and w.hasFocus() and self.isAncestorOf(w)
                     and isinstance(w, (QLineEdit, QSpinBox, QDoubleSpinBox)))
 
-    def focusOutEvent(self, ev) -> None:            # noqa: N802 — Qt 的名字
+    def focusOutEvent(self, ev) -> None:  # Qt 的名字
         super().focusOutEvent(ev)
         if self._stale:
             self.refresh(force=True)

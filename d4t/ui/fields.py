@@ -99,7 +99,7 @@ class _HintLabel(QLabel):
     def is_expanded(self) -> bool:
         return self._expanded
 
-    def resizeEvent(self, e) -> None:          # noqa: D102 - Qt hook
+    def resizeEvent(self, e) -> None:  # Qt hook
         super().resizeEvent(e)
         if not self._expanded:
             self._sync()
@@ -316,14 +316,14 @@ def _make_slider(spec: Dict[str, Any], editor: QWidget) -> Optional[QSlider]:
 
         s.setValue(to_tick(editor.value()))
 
-        def from_slider(v: int) -> None:      # noqa: F811 — 兩型別各一份
+        def from_slider(v: int) -> None:  # 兩型別各一份
             if guard["busy"]:
                 return
             guard["busy"] = True
             editor.setValue(lo + (float(v) / _SLIDER_TICKS) * span)
             guard["busy"] = False
 
-        def from_box(v: float) -> None:       # noqa: F811
+        def from_box(v: float) -> None:
             if guard["busy"]:
                 return
             guard["busy"] = True
@@ -469,7 +469,7 @@ class ProfilePanel(QWidget):
         b = self._fill_btn
         b.move(max(2, self.width() - b.width() - 10), 4)
 
-    def resizeEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def resizeEvent(self, e) -> None:  # Qt hook
         super().resizeEvent(e)
         self._place_button()
 
@@ -572,7 +572,7 @@ class ProfilePanel(QWidget):
         if span is not None:
             self.measure_changed.emit(self.axis(), span[0], span[1])
 
-    def mousePressEvent(self, e) -> None:          # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         if e.button() != Qt.LeftButton or not self.has_data():
             return
         i = self._index_at(e.position().x())
@@ -582,7 +582,7 @@ class ProfilePanel(QWidget):
         self.update()
         e.accept()
 
-    def mouseMoveEvent(self, e) -> None:           # noqa: D102 - Qt hook
+    def mouseMoveEvent(self, e) -> None:  # Qt hook
         if self._ruler is None:
             return
         self._ruler = (self._ruler[0], self._index_at(e.position().x()))
@@ -590,7 +590,7 @@ class ProfilePanel(QWidget):
         self.update()
         e.accept()
 
-    def mouseReleaseEvent(self, e) -> None:        # noqa: D102 - Qt hook
+    def mouseReleaseEvent(self, e) -> None:  # Qt hook
         if e.button() != Qt.LeftButton or self._ruler is None:
             return
         span = abs(self._ruler[1] - self._ruler[0])
@@ -665,7 +665,7 @@ class ProfilePanel(QWidget):
                    float(d.get("confidence", 0.0))))
 
     # -- paint -------------------------------------------------------------
-    def paintEvent(self, _e) -> None:      # noqa: D102 - Qt hook
+    def paintEvent(self, _e) -> None:  # Qt hook
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
         rect = QRectF(self.rect()).adjusted(6, 6, -6, -6)
@@ -1250,7 +1250,7 @@ class TemplateField(QWidget):
             from ..core.algo.template import decode_cell
 
             cell = decode_cell(self._value)
-        except Exception:                       # noqa: BLE001 — 顯示用
+        except Exception:  # 顯示用
             cell = None
         if cell is None or getattr(cell, "size", 0) == 0:
             return ("A template is stored, but it cannot be read back. "
@@ -1574,7 +1574,7 @@ class CurveEditor(QWidget):
             p.drawRect(QRectF(plot.left() + i * bw, plot.bottom() - bar,
                               max(1.0, bw), bar))
 
-    def paintEvent(self, _e) -> None:      # noqa: D102 - Qt hook
+    def paintEvent(self, _e) -> None:  # Qt hook
         from ..core.algo.curve import curve_lut
 
         p = QPainter(self)
@@ -1619,7 +1619,7 @@ class CurveEditor(QWidget):
         p.end()
 
     # -- interaction -------------------------------------------------------
-    def mousePressEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         pos = QPointF(e.position())
         idx = self._hit(pos)
         if e.button() == Qt.RightButton:
@@ -1635,7 +1635,7 @@ class CurveEditor(QWidget):
         self._drag = idx
         self.setCursor(Qt.ClosedHandCursor)
 
-    def mouseMoveEvent(self, e) -> None:       # noqa: D102 - Qt hook
+    def mouseMoveEvent(self, e) -> None:  # Qt hook
         if self._drag is None:
             return
         x, y = self._to_unit(QPointF(e.position()))
@@ -1652,12 +1652,12 @@ class CurveEditor(QWidget):
         self.update()
         self.curve_changed.emit(self.text())
 
-    def mouseReleaseEvent(self, _e) -> None:   # noqa: D102 - Qt hook
+    def mouseReleaseEvent(self, _e) -> None:  # Qt hook
         if self._drag is not None:
             self._drag = None
             self.setCursor(Qt.CrossCursor)
 
-    def mouseDoubleClickEvent(self, e) -> None:  # noqa: D102 - Qt hook
+    def mouseDoubleClickEvent(self, e) -> None:  # Qt hook
         idx = self._hit(QPointF(e.position()))
         if idx is not None:
             self._remove(idx)
@@ -1801,7 +1801,7 @@ class ChartStyleField(QWidget):
         self._text = str(text or "")
         try:
             said = chart_style.describe(self._text)
-        except Exception:                  # noqa: BLE001 — 壞掉的值也要顯示
+        except Exception:  # 壞掉的值也要顯示
             said = "not readable - press the button to start over"
         self.summary.setText(said)
 
@@ -1880,7 +1880,7 @@ class ChartSpecField(QWidget):
         self._text = str(text or "")
         try:
             said = chart_spec.describe(self._text)
-        except Exception:                  # noqa: BLE001 — 壞掉的值也要顯示
+        except Exception:  # 壞掉的值也要顯示
             said = "not readable - press the button to start over"
         self.summary.setText(said)
 

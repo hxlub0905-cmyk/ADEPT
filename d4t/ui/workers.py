@@ -181,7 +181,7 @@ class DatasetLoadWorker(_ThreadedWorker):
         def job() -> None:
             try:
                 ds = load_dataset(path_s, tiff_s)
-            except Exception as e:                      # noqa: BLE001 — 一律回報
+            except Exception as e:  # 一律回報
                 self.failed.emit(f"{type(e).__name__}: {e}")
             else:
                 self.loaded.emit(ds)
@@ -207,7 +207,7 @@ class DatasetLoadWorker(_ThreadedWorker):
         def job() -> None:
             try:
                 ds = load_tiff_stack(path_s, n)
-            except Exception as e:                      # noqa: BLE001 — 一律回報
+            except Exception as e:  # 一律回報
                 self.failed.emit(f"{type(e).__name__}: {e}")
             else:
                 self.loaded.emit(ds)
@@ -229,7 +229,7 @@ class DatasetLoadWorker(_ThreadedWorker):
         def job() -> None:
             try:
                 ds = load_folder(d)
-            except Exception as e:                      # noqa: BLE001 — 一律回報
+            except Exception as e:  # 一律回報
                 self.failed.emit(f"{type(e).__name__}: {e}")
             else:
                 self.loaded.emit(ds)
@@ -251,7 +251,7 @@ class DatasetLoadWorker(_ThreadedWorker):
         def job() -> None:
             try:
                 ds = load_image_file(f)
-            except Exception as e:                      # noqa: BLE001 — 一律回報
+            except Exception as e:  # 一律回報
                 self.failed.emit(f"{type(e).__name__}: {e}")
             else:
                 self.loaded.emit(ds)
@@ -342,7 +342,7 @@ class PreviewWorker(_ThreadedWorker):
                 r = run_defect(recipe, item, kind, keep_context=True,
                                upto_node=upto, track_changes=True,
                                sources=sources)
-            except Exception as e:          # noqa: BLE001 — 合約外的意外
+            except Exception as e:  # 合約外的意外
                 self.failed.emit(f"{type(e).__name__}: {e}")
             else:
                 self.ready.emit(r)
@@ -410,7 +410,7 @@ class TrialWorker(_ThreadedWorker):
                                 limit=limit, progress=progress_cb,
                                 abort_check=self._abort.is_set,
                                 sample=spec)
-            except Exception as e:          # noqa: BLE001 — 整批爆掉才會走到這
+            except Exception as e:  # 整批爆掉才會走到這
                 self.failed.emit(f"{type(e).__name__}: {e}")
             else:
                 self.done.emit(out)
@@ -477,7 +477,7 @@ class RegionCheckWorker(_ThreadedWorker):
             from .region_check import check_regions
             try:
                 out = check_regions(*args)
-            except Exception as e:          # noqa: BLE001 — 合約外的意外
+            except Exception as e:  # 合約外的意外
                 self.failed.emit(f"{type(e).__name__}: {e}")
             else:
                 self.ready.emit(out)
@@ -527,7 +527,7 @@ class CalibrateWorker(_ThreadedWorker):
         def job() -> None:
             try:
                 out = CalibrateWorker.run_sync(*args)
-            except Exception as e:          # noqa: BLE001 — 合約外的意外
+            except Exception as e:  # 合約外的意外
                 self.failed.emit(f"{type(e).__name__}: {e}")
             else:
                 self.ready.emit(out)
@@ -599,7 +599,7 @@ class OutputWorker(_ThreadedWorker):
         def job() -> None:
             try:
                 bctx = run_batch_steps(recipe, dataset, payload)
-            except Exception as e:      # noqa: BLE001 — 整個機制爆掉才會走到這
+            except Exception as e:  # 整個機制爆掉才會走到這
                 # 單張卡失敗是 `bctx.errors`（鐵則 7 的跨顆版），不會走到這裡。
                 self.failed.emit(f"{type(e).__name__}: {e}")
             else:

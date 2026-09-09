@@ -26,7 +26,7 @@ from ..pipeline import chart_spec as spec_mod
 from .chart_frame import (
     COL_COL, COL_REGION, COL_ROW, COL_X, COLUMNS_FIXED, Frame,
 )
-from .uniformity_charts import (  # noqa: PLC2701 — 見檔頭：刻度只該有一份
+from .uniformity_charts import (  # 見檔頭：刻度只該有一份
     REGION_COLOURS, _axis_names, _empty, _esc, _fmt, _frame, _head,
     _is_dark, _mark_colour, _nice_ticks, _opacity, _span, _text_attrs,
     _xlabels, _ylabels, draw_refs, fill_attrs, heat_hex, seq_hex,

@@ -22,6 +22,54 @@
 
 ---
 
+## 體檢與十四件待辦（2026-09-09 第五輪）
+
+使用者：「給這個專案一些建議（各方面）」→「把它整理成待處理事項，列出解決方法」
+→「好 開始修正」。先量再開清單，十四件裡十三件做完，一件做了一半（見末段）。
+
+量到的（都有證據）：`studio.py` 的天花板兩天被調高 17 次（尺變成流水帳）；
+`d4t/` 有 203 個 `except Exception`、59 個直接吞掉、零處 `logging`；文件裡
+「幾張卡／幾份 recipe」四處三種答案；421 條 `noqa` 標的是沒開的規則；
+`test_glv_combinations.py` 在核心批裡開 Qt，沒有 Qt 函式庫的機器核心批紅 34 條；
+`pytest` 與 `python -m pytest` 不是同一個直譯器；`docs/plans/` 八份有七份早已出貨。
+
+做了什麼（一件一個 commit）：
+
+* **尺**：`HARD_CAPS` —— `studio.py` 那三格上限本身不准再調高（凍在 logger 那一刀
+  之後的 7,753／298／437）。`CLAUDE.md` 也進 `FILE_CEILINGS`。
+* **留痕**：`d4t/core/log.py`（一個 logger、預設不寫；`swallowed("模組.函式")`），
+  59 處補一行、`ctx.warn` 送一份、CLI `run --log`、Studio 寫進 `crashlog.log_dir()`。
+  `tests/test_core_log.py` 用 ast 守「寬的 except 不准再安靜吞掉」。
+* **文件對真值**：`tests/test_docs_match_registry.py` 從 registry 與 `recipes/` 數。
+  `tests/test_plan_docs.py`：計畫書前 5 行要有「狀態：」，七份已收斂的搬進 history。
+* **測試分批**：兩支改名 `test_ui_*`；核心批的 lazy Qt import 一律
+  `importorskip("PySide6.QtWidgets", exc_type=ImportError)`（pytest 9 起預設只認
+  `ModuleNotFoundError`；dev extra 的 pytest 底線抬到 8.2）；`test_no_qt.py` 兩條守門。
+* **工具鏈**：`ruff` 加 `RUF100`、清 352 條沒作用的 `noqa`（有說明的留成註解）；
+  `tools/typecheck.py`（pyright basic 掃 core，上限 136）＋ CI job；UI 批只在 3.11 跑；
+  `.gitattributes`（KLARF／fixtures／bundle 標 `-text`）；文件一律 `python -m pytest`。
+* **doctor**：Qt 開不了視窗是 △，結論分「命令列可以、Studio 不行」兩句；指令用
+  `os.sep`。
+* **版本**：bundle 檔頭 `BUILD <sha12> <date>`（= `tools/FILELIST.txt` 的 blob SHA），
+  `python -m d4t --version` 印同一個數 —— 公司機沒有 git，這是它答得出「哪一版」的
+  唯一方式。
+* **第三份出貨 recipe**：`recipes/ebi-die-to-die.json`（ref 借 test 的範圍、
+  |test − ref|、median 3、GLV 讀最亮那一點；三個 seed 各 24 顆：24／22／23 中）。
+  「用範例資料試一次」入口打開（`SHOW_SAMPLE_DATA = True`，`TEMPLATE_RECIPE` 指它）。
+* **`CLAUDE.md` 647 → 319 行**：規則留下，故事逐字封存進
+  `docs/history/CLAUDE-2026-09-09.md`。
+
+**做了一半的那一件**：`studio.py` 的接線搬成 controller 模組
+（`results_wiring` / `decide_wiring` / `canvas_wiring`）。這台容器沒有 Qt 系統函式庫
+（`libEGL.so.1`），UI 測試一條都跑不了，盲搬 7,700 行的 god object 不是一個可以
+驗收的動作 —— 留給家用機。同一個理由：這一輪改到的 UI 測試
+（`test_ui_template_library.py`、`test_ui_welcome.py` 那條「整條路跑到底」、
+`test_ui_glv_combinations.py`、`test_ui_guided_condition.py`）**沒有在這裡跑過**，
+請先 `python tools/run_tests.py`。核心批（`--ignore-glob="*test_ui_*"`）與黃金值
+三份在這裡全綠。
+
+---
+
 ## Results 表：四欄一樣的 min、跟 Tiles 一樣的排序與篩選（2026-09-09 第四輪）
 
 使用者：「results 內 table 會有重名的 column，例如中間會有 4 欄一樣的 min
@@ -153,8 +201,8 @@ worst、score 是指什麼」。四個提案（補說明／`across_boxes` 那格
 判定、Results，在 1440×900 與 1366×768、light 與 dark 上截圖）。結論：
 **引擎與設計系統是 A，畫面組合是 B−，首次使用的可理解度是 C+。**
 使用者定調「加入待辦事項後開始修正」，版面配置「按照你的建議改」。
-逐項在 [`docs/plans/F99-ui-review-fixes.md`](docs/plans/F99-ui-review-fixes.md)，
-版面在 [`docs/plans/F100-workbench-layout.md`](docs/plans/F100-workbench-layout.md)。
+逐項在 [`docs/history/plans/F99-ui-review-fixes.md`](docs/history/plans/F99-ui-review-fixes.md)，
+版面在 [`docs/history/plans/F100-workbench-layout.md`](docs/history/plans/F100-workbench-layout.md)。
 
 ### 三個 P0 全都符合 F83 那句「UI 的路壞掉不會讓任何測試變紅」
 
@@ -1742,7 +1790,7 @@ teardown）由 `except RuntimeError` 收尾。
 
 使用者：「目前在畫布拖動沒有像之前那樣絲滑的感覺（有點是一格一格的），這是我們
 哪部改動造成的?」—— 是 F79 的拖曳吸附，而那個描述是**準確的**。
-計畫書：[`docs/plans/F82-drag-magnet.md`](docs/plans/F82-drag-magnet.md)。
+計畫書：[`docs/history/plans/F82-drag-magnet.md`](docs/history/plans/F82-drag-magnet.md)。
 
 F79 的 `_snapped` 是**無條件**量化：每一次滑鼠移動都被 round 到 `GRID`（20）的
 倍數 —— 100% 縮放時一步 20 螢幕 px、fit 到 54% 時一步約 11。也就是**卡片從頭到
@@ -1774,7 +1822,7 @@ round 掉了）：① 每一顆事件都從場景座標重算 view 座標，可�
 ## F81：真的變成 flat（2026-09-03）
 
 F80 §5 那個決定，使用者在 A/B/C 三張圖裡選了 **B**。
-計畫書：[`docs/plans/F81-flat-for-real.md`](docs/plans/F81-flat-for-real.md)。
+計畫書：[`docs/history/plans/F81-flat-for-real.md`](docs/history/plans/F81-flat-for-real.md)。
 
 **`theme.py` 檔頭那句「全平面 —— 沒有陰影、沒有漸層」從 F7-2 寫到現在，一直是
 假的**：節點卡底下一直畫著一塊實心、單一 alpha、有硬邊的偏移方塊（那不是陰影，
@@ -1818,7 +1866,7 @@ hover 是同一個薄度的另一側，所以底線 2.0。工具列現在貼著�
 
 接 F78 §5 剩下的五條（使用者：「按照你說的繼續做」）。做了三條，**#7 量完之後
 折進 #6**，而 #6 需要使用者選一邊 —— 三個選項已經 render 成圖。
-計畫書：[`docs/plans/F80-focus-visible-and-motion.md`](docs/plans/F80-focus-visible-and-motion.md)。
+計畫書：[`docs/history/plans/F80-focus-visible-and-motion.md`](docs/history/plans/F80-focus-visible-and-motion.md)。
 
 **① 焦點環只在鍵盤導覽時出現**（`d4t/ui/focus_visible.py`，新模組）。
 `QPushButton` 預設是 `StrongFocus`，滑鼠點一下就拿到焦點，而 QSS 的 `:focus` 對
@@ -1864,8 +1912,8 @@ CSS 有 `:focus-visible`，Qt 沒有；一支裝在 `QApplication` 上的事件�
 
 ## F79：點陣底要說實話（2026-09-03）
 
-接 [F78](docs/plans/F78-canvas-focus-and-lod.md) §5 的第 5 條（使用者：「接著做」）。
-計畫書：[`docs/plans/F79-grid-tells-the-truth.md`](docs/plans/F79-grid-tells-the-truth.md)。
+接 [F78](docs/history/plans/F78-canvas-focus-and-lod.md) §5 的第 5 條（使用者：「接著做」）。
+計畫書：[`docs/history/plans/F79-grid-tells-the-truth.md`](docs/history/plans/F79-grid-tells-the-truth.md)。
 
 **症狀**：畫布上唯一那個說「這裡有一套對齊」的東西，指的是一套不存在的對齊。
 背景點陣間距 `GRID` 是 22，而版面用的是另外一組數字 —— 欄距
@@ -1907,7 +1955,7 @@ bug，只是漂的是像素不是分數。這不是推論：把吸附加在所�
 使用者：「我想要針對 Studio 的 UI 細節（畫布跟按鈕）做美觀，請給我建議。」
 
 給了十條，做掉代價最低的四條；另外六條連同代價寫在
-[`docs/plans/F78-canvas-focus-and-lod.md`](docs/plans/F78-canvas-focus-and-lod.md) §5。
+[`docs/history/plans/F78-canvas-focus-and-lod.md`](docs/history/plans/F78-canvas-focus-and-lod.md) §5。
 **一行都沒有動 `studio.py`。**
 
 1. **選中一張卡 → 接著它的線亮起來，其餘退下去。** 以前選一張卡只有那張卡自己

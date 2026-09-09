@@ -29,6 +29,7 @@
 下次開窗的那句「要救回來嗎」指向一個載不起來的檔案。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import json
 import os
@@ -170,8 +171,8 @@ class AutosaveGuard(QObject):
         """換過 model 之後重新掛 listener（`_apply_model` 走的那條路）。"""
         try:
             self.window.model.add_listener(self.touch)
-        except Exception:                  # noqa: BLE001 — 網不准擋路
-            pass
+        except Exception:  # 網不准擋路
+            swallowed("autosave.rebind")
         self.touch()
 
     def write_now(self) -> str:
@@ -186,7 +187,7 @@ class AutosaveGuard(QObject):
             return ""
         try:
             data = model.to_recipe().to_json_dict()
-        except Exception:                  # noqa: BLE001 — 網不准擋路
+        except Exception:  # 網不准擋路
             return ""
         return save(data, str(getattr(self.window, "recipe_path", "") or ""),
                     bool(getattr(model, "dirty", True)))
@@ -220,7 +221,7 @@ def restore_into(window: Any, data: Dict[str, Any]) -> bool:
     try:
         recipe = Recipe.from_json_dict(dict(data.get("recipe") or {}))
         window._apply_model(RecipeModel.from_recipe(recipe))
-    except Exception:                      # noqa: BLE001 — 壞掉的草稿不准擋開窗
+    except Exception:  # 壞掉的草稿不准擋開窗
         return False
     # **原檔路徑要跟著回來**，不然 `Ctrl+S` 會問「存到哪」，而使用者的答案是
     # 「存回原來那個」—— 那份資訊本來就在草稿裡。

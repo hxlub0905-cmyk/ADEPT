@@ -193,6 +193,8 @@ def test_the_seed_reaches_the_user(monkeypatch):
     所以跑完那句話是使用者唯一讀得到它的地方。
     """
     import os
+    import pytest
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
     QApplication.instance() or QApplication([])

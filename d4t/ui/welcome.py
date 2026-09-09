@@ -15,9 +15,9 @@ d4t 的存在意義是讓**不會寫 code 的製程／設備工程師**把一個
 2. **開啟我自己的 KLARF** —— 關掉自己，交給 Studio 的「開啟 KLARF…」。
 3. **看範例 recipe** —— 打開 :class:`RecipeLibraryDialog`（範例 recipe 庫）。
 
-⚠ **第 1 顆仍然是隱藏的**（``scope.SHOW_SAMPLE_DATA``）：它產得出一批合成
-資料，但**不載 pipeline** —— 使用者按完看到的是資料配一張空白畫布。
-上面那句「全產品最重要的一顆鈕」仍然成立，只是這條路還少一半。
+**第 1 顆 2026-09-09 回來了**（``scope.SHOW_SAMPLE_DATA``）：它以前產得出
+一批合成資料，但**不載 pipeline** —— `studio.TEMPLATE_RECIPE` 指著一個刪掉的
+路徑。現在指 `recipes/ebi-die-to-die.json`，整條路通到 Gallery。
 
 **第 3 顆 2026-09-08 回來了**（F91 X4，``scope.SHOW_TEMPLATE_LIBRARY``）：
 `recipes/` 有出貨的 recipe 了，而且逐份有測試跑過。兩顆從此看**兩個**旗標
@@ -154,7 +154,7 @@ def saved_theme(default: str = "light") -> str:
     """使用者上次選的主題（讀不到就回 ``default``）。"""
     try:
         return str(app_settings().value(THEME_KEY, default) or default)
-    except Exception:                       # noqa: BLE001 — 設定讀不到不該擋開窗
+    except Exception:  # 設定讀不到不該擋開窗
         return default
 
 
@@ -201,7 +201,7 @@ def read_recipe_info(path: Any) -> Dict[str, Any]:
             d = json.load(f)
         if not isinstance(d, dict):
             raise ValueError("top level is not a JSON object")
-    except Exception as e:                       # noqa: BLE001 — UI 邊界
+    except Exception as e:  # UI 邊界
         info["error"] = "%s: %s" % (type(e).__name__, e)
         return info
 
@@ -383,7 +383,7 @@ class WelcomeDialog(QDialog):
         # 導覽是**第一次用的人看到的第一個畫面**，上面不能有按了撞牆的鈕。
         # 兩顆各看自己的旗標（F91 X4 拆開的 —— 它們的死法不一樣，見
         # `scope.SHOW_SAMPLE_DATA` 的說明）：範本庫 2026-09-08 回來了，
-        # 範例資料仍然收著（產得出資料，但不載 pipeline）。
+        # 範例資料 2026-09-09 跟著回來（`recipes/ebi-die-to-die.json`）。
         # 收起來的是入口不是能力 —— ``click_demo`` / ``click_library`` 與訊號
         # 一行都沒動，測試照樣直接呼叫得到。
         self.btn_demo.setVisible(bool(scope.SHOW_SAMPLE_DATA))

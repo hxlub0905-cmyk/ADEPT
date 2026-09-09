@@ -41,7 +41,7 @@ def _load_recipe(path: str):
 
     try:
         return Recipe.load(path)
-    except Exception as exc:  # noqa: BLE001 — CLI 邊界
+    except Exception as exc:  # CLI 邊界
         print(f"[錯誤] 無法載入 recipe：{exc}", file=sys.stderr)
         return None
 
@@ -117,6 +117,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
     recipe = _load_recipe(args.recipe)
     if recipe is None:
         return 2
+    if getattr(args, "log", None):
+        from d4t.core.log import attach_file
+        attach_file(args.log)
+        print(f"紀錄：{args.log}")
 
     ds = _open_input(args.klarf, args.tiff)
     print(f"資料集：kind={ds.kind}，{len(ds.items)} 顆 defect")
@@ -154,7 +158,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             # 只複製 recipe 真的要 carry 的那幾欄（幾十萬顆 ×24 欄是幾百 MB，
             # 而那幾欄還要 pickle 進每個 worker）。
             rep = pair_ingest.attach(ds, second, sid, columns=want)
-        except Exception as e:              # noqa: BLE001 — CLI 邊界，一律回報
+        except Exception as e:  # CLI 邊界，一律回報
             print("[錯誤] --source %s：%s" % (spec, e), file=sys.stderr)
             return 2
         # **打錯一個欄名要在這裡就停**，不是讓每一顆都失敗一次：整批跑完才發現
@@ -425,7 +429,7 @@ def _cmd_export(args: argparse.Namespace) -> int:
         try:
             run = store.get_run(args.run_id)
             results = list(store.iter_results(args.run_id))
-        except Exception as exc:  # noqa: BLE001 — CLI 邊界
+        except Exception as exc:  # CLI 邊界
             print(f"[錯誤] 讀不到 run '{args.run_id}'：{exc}", file=sys.stderr)
             return 2
     print(f"run {args.run_id}：{len(results)} 筆結果"
@@ -558,7 +562,7 @@ def _find_ground_truth(arg, klarf_path: str):
             try:
                 with open(guess, encoding="utf-8") as f:
                     return guess, json.load(f)
-            except Exception:              # noqa: BLE001 — 找不到就算了
+            except Exception:  # 找不到就算了
                 return "", None
     return "", None
 
@@ -579,6 +583,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         prog="d4t",
         description="d4t — 把想法變算法的 ADC 工具",
     )
+    # `--version` 印版本 + build id（= tools/FILELIST.txt 的 SHA，跟 bundle 檔頭
+    # 同一個數）。回報問題時附這一行，就知道那台機器跑的是哪一包。
+    from d4t import version_line
+    ap.add_argument("--version", action="version", version=version_line())
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("gui", help="開啟 Studio 視覺化介面").set_defaults(func=_cmd_gui)
@@ -615,6 +623,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_run.add_argument("--cache", default=None, help="影像段快取資料夾（改算法段參數重跑會大幅加速）")
     p_run.add_argument("--db", default=None, help="存入批次歷史 SQLite（例：~/.d4t/runs.db）")
     p_run.add_argument("--notes", default=None, help="批次備註")
+    p_run.add_argument("--log", default=None, metavar="FILE",
+                       help=("把被接住的例外與每一顆的警告寫進這個檔（UTF-8、append）。"
+                             "出事要回報的時候把這個檔傳回來；⚠ 多 worker 的紀錄只在 "
+                             "--workers 1 時齊全。"))
     p_run.add_argument(
         "--ground-truth", default=None, metavar="JSON",
         help=("ground_truth.json（有的話跑完直接印正確率/抓漏率/誤殺率）。"

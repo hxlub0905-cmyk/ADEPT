@@ -6,7 +6,9 @@
 方便未來換成別的殼（嵌進廠內既有 app）時只改這一個檔。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
+import os
 import sys
 from typing import List, Optional, Sequence
 
@@ -30,6 +32,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # 最沒有線索的那一種（畫面上什麼都還沒有出現過），而它正是最需要一份
     # traceback 的那一種（U3）。
     crashlog.install()
+    # 被接住然後吃掉的例外（`d4t.core.log.swallowed`）跟當機紀錄同一個資料夾：
+    # 使用者只要學一個「把那個資料夾傳回來」。測試不走這裡（它們開的是
+    # `StudioWindow`，不是 `main`），所以不會寫進開發者真正的 ~/.d4t/log。
+    try:
+        from d4t.core.log import attach_file
+        attach_file(os.path.join(crashlog.log_dir(), "d4t.log"))
+    except Exception:
+        swallowed("app.main")
 
     # 產品範圍（U10）：一個字串決定一組開關。**在建任何視窗之前** ——
     # `HIDDEN_STEPS` 是卡片庫建構時就讀掉的，晚一步設等於沒設。

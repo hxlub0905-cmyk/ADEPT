@@ -28,6 +28,7 @@
 所以這裡的每一支都是純函式：吃 model、回答案，不改任何東西。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from dataclasses import dataclass, field
 from typing import Any, List, Dict
@@ -349,7 +350,8 @@ def producers_of(model: Any, stream: str) -> List[str]:
             step_cls = get_step(key)
             params = step_cls.validate_params({})
             writes = step_cls.resolve_writes_for_kind(params, model.kind)
-        except Exception:              # noqa: BLE001 — 顯示用
+        except Exception:  # 顯示用
+            swallowed("edit_plan.producers_of")
             continue
         if stream in writes and step_cls.label:
             out.append(str(step_cls.label))

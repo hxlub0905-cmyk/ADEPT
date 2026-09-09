@@ -38,6 +38,7 @@ from d4t.core.pipeline.batch import run_batch_steps          # noqa: E402
 
 RECIPES = REPO / "recipes"
 RSEM = RECIPES / "rsem-worst-box.json"
+EBI = RECIPES / "ebi-die-to-die.json"
 
 #: **允許出現的 error，一份 recipe 一張表**（``{檔名: {(節點, code)}}``）。
 #:
@@ -339,3 +340,83 @@ def test_the_uniformity_recipe_wires_the_region_not_types_it():
     wires = {(e.src, e.src_out, e.dst, e.dst_in) for e in recipe.edges}
     glv = next(nid for nid, n in recipe.nodes.items() if n.step == "glv_stats")
     assert (roi, recipe.nodes[roi].params["roi_out"], glv, "roi") in wires
+
+
+# --------------------------------------------------------------------------- #
+# 4. `ebi-die-to-die.json` —— EBI patch，test − ref，差異圖裡最亮的那一點
+# --------------------------------------------------------------------------- #
+def _ebi_lot(tmp_path, n=24, seed=7):
+    from make_sample import generate
+
+    made = generate(str(tmp_path / "ebi"), n=n, seed=seed)
+    gt = json.loads(Path(made["ground_truth"]).read_text(encoding="utf-8"))
+    return load_dataset(made["klarf"]), gt
+
+
+def _ebi(folder):
+    recipe = Recipe.load(EBI)
+    recipe.nodes["report"].params["folder"] = str(folder)
+    return recipe
+
+
+def test_the_ebi_recipe_wires_the_pair_so_the_two_stay_comparable():
+    """**ref 借 test 的範圍**（`range_from`）—— 那條線是「兩張圖還比得起來」
+    的前提（CLAUDE.md §3：借另一條流的資訊要有自己的參數，它在畫布上就是
+    第二條線）。少了它 normalize 各拉各的，差異圖裡留下的是兩片 die 的亮度差，
+    不是缺陷。"""
+    recipe = Recipe.load(EBI)
+    wires = {(e.src, e.src_out, e.dst, e.dst_in) for e in recipe.edges}
+    assert ("load", "test", "norm_ref", "range_from") in wires
+    assert ("load", "ref", "norm_ref", "streams") in wires
+    assert ("load", "test", "norm", "streams") in wires
+    assert ("norm", "test", "sub", "a") in wires and ("norm_ref", "ref", "sub", "b") in wires
+    assert ("sub", "diff", "dn", "streams") in wires and ("dn", "diff", "glv", "source") in wires
+    assert recipe.nodes["sub"].params["absolute"] is True, "暗缺陷也要留下來"
+
+
+def test_the_ebi_recipe_gives_an_unmeasurable_defect_its_own_bin():
+    recipe = Recipe.load(EBI)
+    lets = {x.name: x for x in recipe.decide.let}
+    assert lets["peak"].fill == "-1"
+    assert recipe.decide.tree.when.replace(" ", "") == "peak<0"
+    assert recipe.decide.tree.yes.bin == 9
+    assert recipe.decide.tree.no.yes.bin == 0
+    assert recipe.decide.score == "peak"
+    assert recipe.nodes["report"].params["rank_by"] == "score"
+
+
+@pytest.mark.parametrize("seed", [7, 3, 11])
+def test_the_ebi_recipe_tells_the_real_defects_from_the_nuisance(tmp_path, seed):
+    """整條路跑一次，而且**分得開** —— 這份 recipe 唯一的驗收條件。
+
+    合成 EBI（一半是真的）上實測 seed 7／3／11 各 24 顆：24、22、23 中。
+    門檻放在 80%：低於它就不是「調一下就好」，是承諾的那件事沒有發生。
+    """
+    ds, gt = _ebi_lot(tmp_path, seed=seed)
+    rows = run_batch(_ebi(tmp_path / "out"), ds, workers=1)
+    assert all(r.get("ok") for r in rows), \
+        [r.get("error") for r in rows if not r.get("ok")]
+    assert {int(r["bin"]) for r in rows} <= {0, 1, 9}
+    assert all(int(r["features"]["decide_unanswered"]) == 0 for r in rows)
+
+    hit = sum(1 for r in rows
+              if (int(r["bin"]) != 0)
+              == bool(gt[str(r["defect_id"])]["is_real"]))
+    assert hit >= 0.8 * len(rows), "%d/%d" % (hit, len(rows))
+    real = [float(r["features"]["score"]) for r in rows
+            if gt[str(r["defect_id"])]["is_real"]]
+    nuis = [float(r["features"]["score"]) for r in rows
+            if not gt[str(r["defect_id"])]["is_real"]]
+    assert max(real) > 3 * max(nuis)
+
+
+def test_the_ebi_recipe_is_the_one_behind_try_with_sample_data():
+    """Studio「用範例資料試一次」載的就是這一份（`studio.TEMPLATE_RECIPE`），
+    而那顆鈕產的是 `ebi_patch` lot —— route 對不上的那天這一條會先講。"""
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    from d4t.ui import scope
+    from d4t.ui import studio as studio_mod
+
+    assert studio_mod.TEMPLATE_RECIPE == EBI
+    assert "ebi_patch" in Recipe.load(EBI).routes
+    assert scope.SHOW_SAMPLE_DATA is True

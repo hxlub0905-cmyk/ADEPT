@@ -26,6 +26,19 @@ jobs:
       # `[tool.ruff]` 那一段，這裡刻意不重複一份（會漂）。
       - run: ruff check --output-format=github
 
+  # pyright（basic）只掃 d4t/core，錯誤數不准超過 tools/typecheck.py 的上限。
+  # 跟 lint 一樣是一份答案、自己一個 job；它要 numpy/cv2 的 stub 才認得型別，
+  # 所以裝執行時相依（不裝 Qt —— 只掃 core）。
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install numpy opencv-python-headless tifffile openpyxl pyright==1.1.408
+      - run: python tools/typecheck.py
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -88,9 +101,14 @@ jobs:
       - name: Run tests (core)
         env:
           QT_QPA_PLATFORM: offscreen
-        run: pytest -q --ignore-glob="*test_ui_*"
+        run: python -m pytest -q --ignore-glob="*test_ui_*"
 
       - name: Run tests (UI, one process per file)
+        # UI 那一批只在 3.11 跑（2026-09-09）。三個版本各跑一輪逐檔 UI 測試，
+        # 而它們問的是同一件事：Qt 畫得對不對，跟 Python 版本無關。
+        # 3.9 / 3.12 要守的是語法與 stdlib 相容性，核心批 + `test_py39_syntax`
+        # 那條 `ast.parse(feature_version=(3, 9))` 就是在守那個。
+        if: matrix.python-version == '3.11'
         env:
           QT_QPA_PLATFORM: offscreen
         # 一個檔案一個行程 —— 跟 `AGENTS.md` §5 給開發者的做法一模一樣。
@@ -100,7 +118,7 @@ jobs:
           fail=0
           for f in tests/test_ui_*.py; do
             echo "::group::$f"
-            pytest -q "$f" || fail=1
+            python -m pytest -q "$f" || fail=1
             echo "::endgroup::"
           done
           exit $fail

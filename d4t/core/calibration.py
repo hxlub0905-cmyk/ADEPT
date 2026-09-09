@@ -12,6 +12,7 @@
 Profiles are persisted as JSON files in ~/.d4t/calibrations/.
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import json
 import os
@@ -88,7 +89,7 @@ class CalibrationManager:
                 p = CalibrationProfile.from_dict(d)
                 self._profiles[p.profile_id] = p
             except Exception:
-                pass
+                swallowed("calibration._load_all")
 
     def list_profiles(self) -> List[CalibrationProfile]:
         return sorted(self._profiles.values(), key=lambda p: p.profile_name)
