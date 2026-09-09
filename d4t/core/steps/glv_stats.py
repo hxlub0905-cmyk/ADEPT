@@ -692,7 +692,18 @@ class GlvStatsStep(MultiSourceStep):
                   "lays hundreds of them across a big image). pooled treats "
                   "them as one pile of pixels; each box measures every box on "
                   "its own and reports the typical one, the odd one out, and "
-                  "which box that was."),
+                  "which box that was.\n\n"
+                  "Two families of numbers come out of each box, and they "
+                  "often point at different boxes: <stat>_worst is that "
+                  "statistic measured on the ONE box the judge below picked "
+                  "(glv_worst_score says how far out it is, in sigmas; "
+                  "glv_worst_baseline is the other boxes' middle) - use these "
+                  "when you want every number to come from the same box. "
+                  "<stat>_typical is the middle of all the boxes, "
+                  "<stat>_outlier is the furthest-out box on that one "
+                  "statistic alone, and <stat>_outlier_box is that box's "
+                  "number - use these when one statistic matters on its "
+                  "own."),
         ),
         ParamSpec(
             name="report", type="multi_choice", default=DEFAULT_REPORT,

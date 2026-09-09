@@ -500,10 +500,17 @@ def run_status_from(results) -> Dict[str, Tuple[int, int, float]]:
 
 
 def run_text(status) -> str:
-    """卡片右上角那一小句：``24 ok · 0.3 s`` 或 ``3 failed``。沒跑過是空字串。
+    """卡片右上角那一小句：``24 ok · 71 img/s`` 或 ``3 failed``。沒跑過是空字串。
 
-    失敗優先（那是使用者要先看的），時間是**這張卡在這一批的總耗時**——
-    「哪張卡是這批的瓶頸」以前只能去 traces 裡翻。"""
+    失敗優先（那是使用者要先看的）。速率是**這張卡每秒處理幾顆**
+    （跑好的顆數 ÷ 這張卡在這一批的總耗時）—— 2026-09-09 使用者：「我想改成
+    X img/s 而不是 total time」。總耗時跟著批次大小走（200 顆的 0.3 s 與
+    2,000 顆的 3 s 是同一張卡），速率才是卡片自己的性質，兩批之間比得起來。
+
+    ⚠ 總耗時是**每顆的 ms 加總**，平行跑的時候它是所有 worker 的 CPU 時間，
+    所以這個數字是「每顆花多少」倒過來，不是牆上時鐘 —— 4 個 worker 不會讓
+    它變四倍。快取命中的卡沒有 trace（`run_defect_cached`），根本不會有這行。
+    耗時是 0 的（沒量到）只寫顆數，不寫一個無限大。"""
     if not status:
         return ""
     ok, bad, ms = int(status[0]), int(status[1]), float(status[2])
@@ -511,9 +518,11 @@ def run_text(status) -> str:
         return "%d failed" % bad
     if ok <= 0:
         return ""
-    secs = ms / 1000.0
-    when = "<0.1 s" if secs < 0.1 else "%.1f s" % secs
-    return "%d ok · %s" % (ok, when)
+    if ms <= 0.0:
+        return "%d ok" % ok
+    rate = ok * 1000.0 / ms
+    speed = ("%.0f" % rate) if rate >= 10 else ("%.1f" % rate)
+    return "%d ok · %s img/s" % (ok, speed)
 
 class _NodeItem(QGraphicsItem):
     """一張節點卡（自繪；顏色全部取自 ``theme.TOKENS``）。"""

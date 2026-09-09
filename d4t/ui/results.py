@@ -69,7 +69,18 @@ class ResultsWindow(QMainWindow):
     這樣它可以單獨測，Studio 也可以在沒有它的情況下跑完整流程。
     """
 
-    run_all_requested = Signal()
+    #: 「Re-run」：照現在的 ADC 設定把判定重跑一次（量測卡沒改的話秒級；
+    #: 改了就整批重跑）。Studio 決定走哪一條 —— 本視窗不碰 recipe。
+    rerun_requested = Signal()
+    #: 「Write outputs」：把**現在這批**結果照 Output 卡寫出去（2026-09-09，
+    #: 使用者：「跑完後可以檢查結果再按一個鍵 output」）。以前跑整批會順手寫，
+    #: 使用者連看一眼的機會都沒有 —— 而寫 KLARF 是不可逆的。
+    write_requested = Signal()
+    #: 舊名字留著給還接著它的地方（現在它就是 `rerun_requested`）。
+    run_all_requested = rerun_requested
+    #: 使用者點了一顆（單擊、或用方向鍵走到）＝「主畫面帶我去看它」，**不搶
+    #: 焦點**（雙擊才是 `defect_activated`，那一個會把主視窗叫到前面）。
+    defect_selected = Signal(str)
     #: 下面那張圖現在要看哪一個東西（``SCORE`` 或一個 feature 名）。
     #: 這是 Spread 的新家（F18 第 2 步）—— 見 :meth:`_build_spread`。
     shown_feature_changed = Signal(str)
@@ -110,18 +121,24 @@ class ResultsWindow(QMainWindow):
         # 這裡（使用者正在看的是試跑的結果）。以前這一格是「Export…」，開一個
         # 輸出精靈；精靈拿掉之後（F16 Stage 5c）寫什麼、寫去哪住在畫布上的
         # Output 卡上，這顆鈕只負責「跑完整批然後照卡片寫」。
-        self.btn_run_all = QToolButton(self)
-        # ⚠ ``&&`` 不是筆誤：Qt 把單一個 ``&`` 當成助憶鍵的記號吃掉，畫出來
-        # 是 **``Run all _write``**（使用者就是這樣叫它的 —— 那個名字是從畫面上
-        # 讀來的，不是從程式碼）。要顯示一個真的 ``&`` 就得寫兩個。
-        self.btn_run_all.setText("Run all && write")
-        self.btn_run_all.setToolButtonStyle(Qt.ToolButtonTextOnly)
-        self.btn_run_all.setCursor(Qt.PointingHandCursor)
-        self.btn_run_all.setObjectName("primary")
-        self.btn_run_all.setToolTip(
-            "Run every defect, then write whatever the Output cards say")
-        self.btn_run_all.clicked.connect(self.run_all_requested)
-        bar.addWidget(self.btn_run_all)
+        # 這一格以前是一顆「Run all && write」：跑整批**然後順手寫**。
+        # 2026-09-09 使用者：「跑完後可以檢查結果再按一個鍵 output」、
+        # 「將 Results 內的 Run all & write 更改為 re-run 鍵」—— 所以拆成兩顆：
+        # 看完覺得對了才寫（寫 KLARF 是不可逆的），改了 ADC 就 Re-run
+        # （量測卡沒動的話只重判，秒級）。
+        self.btn_rerun = QToolButton(self)
+        self.btn_rerun.setText("Re-run")
+        self.btn_rerun.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self.btn_rerun.setCursor(Qt.PointingHandCursor)
+        self.btn_rerun.setObjectName("primary")
+        self.btn_rerun.clicked.connect(self.rerun_requested)
+        bar.addWidget(self.btn_rerun)
+        self.btn_write = QToolButton(self)
+        self.btn_write.setText("Write outputs")
+        self.btn_write.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self.btn_write.setCursor(Qt.PointingHandCursor)
+        self.btn_write.clicked.connect(self.write_requested)
+        bar.addWidget(self.btn_write)
         self.set_run_all_enabled(False)     # 還沒有結果（同 A1 的可用性規則）
 
         self.gallery = GalleryPanel(self)
@@ -135,9 +152,21 @@ class ResultsWindow(QMainWindow):
         self.table = ResultsTablePane(self)
         self.table.defect_activated.connect(self.defect_activated)
         self.gallery.defect_activated.connect(self.defect_activated)
+        self.table.defect_selected.connect(self.defect_selected)
+        self.gallery.defect_selected.connect(self.defect_selected)
         self.table.trace_requested.connect(self.trace_requested)
         self.table.bin_overrides_changed.connect(self._on_bin_overrides_changed)
         self.table.truth_marked.connect(self.truth_marked)
+        # **兩種看法、同一個排序與篩選**（2026-09-09，使用者：「希望它跟
+        # Tiles 一樣支援排序跟篩選」）。縮圖的下拉換了 → 表格照那一欄排；
+        # 表頭點了 → 縮圖的下拉跟著。篩選由宿主走 `set_filter` 一次餵兩邊，
+        # 任何一邊按掉 chip 另一邊也清。`_syncing` 擋互相回彈。
+        self._syncing = False
+        self.gallery.sort_changed.connect(self._on_gallery_sort)
+        self.table.table.horizontalHeader().sortIndicatorChanged.connect(
+            self._on_table_sort)
+        self.gallery.filter_changed.connect(self._on_gallery_filter)
+        self.table.filter_cleared.connect(self.clear_filter)
         self.view_stack = QStackedWidget(self)
         self.view_stack.addWidget(self.gallery)
         self.view_stack.addWidget(self.table)
@@ -420,6 +449,59 @@ class ResultsWindow(QMainWindow):
             "CSV, KLARF and the run database still get the engine's bin, "
             "and a new run clears the marks." % int(n))
 
+    # ---- 篩選與排序：兩邊一起 ---------------------------------------------
+    def set_filter(self, spec: Any) -> None:
+        """只看哪幾顆（`gallery.make_filter` 的寫法）—— 縮圖與表格一起。"""
+        if self._syncing:
+            return
+        self._syncing = True
+        try:
+            self.gallery.set_filter(spec)
+            self.table.set_filter(spec)
+        finally:
+            self._syncing = False
+
+    def clear_filter(self) -> None:
+        self.set_filter(None)
+
+    def _on_gallery_filter(self) -> None:
+        # 縮圖那邊按掉 chip（`clear_filter` → `set_filter(None)`）→ 表格也清。
+        # 條件本身由宿主經 `set_filter` 餵，這裡只追「清掉」那一半。
+        if self._syncing:
+            return
+        if not self.gallery.filter_text():
+            self.table.set_filter(None)
+
+    def _on_gallery_sort(self, key: Any, descending: bool) -> None:
+        if self._syncing:
+            return
+        cols = self.table.columns()
+        name = str(key or "")
+        if name not in cols:
+            return
+        self._syncing = True
+        try:
+            self.table.table.sortByColumn(
+                cols.index(name),
+                Qt.DescendingOrder if descending else Qt.AscendingOrder)
+        finally:
+            self._syncing = False
+
+    def _on_table_sort(self, column: int, order: Any) -> None:
+        if self._syncing:
+            return
+        cols = self.table.columns()
+        if not (0 <= int(column) < len(cols)):
+            return
+        name = cols[int(column)]
+        if name not in self.gallery.sort_keys():
+            return                        # 徽章／class／truth 那幾欄縮圖排不了
+        self._syncing = True
+        try:
+            self.gallery.set_sort(name, order == Qt.DescendingOrder)
+        finally:
+            self._syncing = False
+
     def set_summary(self, text: str) -> None:
         """工具列左側的一句話（「跑了幾顆、成功幾顆、花多久」）。"""
         self.summary_label.setText(str(text or ""))
@@ -427,11 +509,29 @@ class ResultsWindow(QMainWindow):
     def summary_text(self) -> str:
         return self.summary_label.text()
 
-    def set_run_all_enabled(self, enabled: bool) -> None:
-        self.btn_run_all.setEnabled(bool(enabled))
-        self.btn_run_all.setToolTip(
-            "Run every defect, then write whatever the Output cards say"
-            if enabled else "No results yet — run a trial first.")
+    def set_run_all_enabled(self, enabled: bool,
+                            n_outputs: Optional[int] = None) -> None:
+        """有結果了嗎 → 兩顆鈕一起亮。``n_outputs``＝啟用的 Output 卡有幾張
+        （0 = 「Write outputs」灰掉並講為什麼；None = 不知道，照 ``enabled``）。"""
+        on = bool(enabled)
+        self.btn_rerun.setEnabled(on)
+        self.btn_rerun.setToolTip(
+            "Decide again with the current ADC settings - the numbers are "
+            "already measured, so this takes seconds. If a measuring card "
+            "changed, every defect is run again."
+            if on else "No results yet — run a trial first.")
+        can_write = on and (n_outputs is None or int(n_outputs) > 0)
+        self.btn_write.setEnabled(can_write)
+        if not on:
+            tip = "No results yet — run a trial first."
+        elif not can_write:
+            tip = ("This recipe has no Output card - add one on the canvas "
+                   "to write these results out.")
+        else:
+            tip = ("Write these results out the way the Output cards say - "
+                   "report, charts, KLARF. Nothing is written until you "
+                   "press this.")
+        self.btn_write.setToolTip(tip)
 
     def status(self, msg: str) -> None:
         self.statusBar().showMessage(str(msg))

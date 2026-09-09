@@ -47,14 +47,38 @@ def fixed_columns() -> List[str]:
     return [BADGE_COLUMN] + base[:i] + [CLASS_COLUMN] + base[i:]
 
 
+#: 變體後綴在表頭上的字（2026-09-09）。**同一個統計量的四個變體以前四欄都
+#: 寫 ``Min``** —— `glv_stats` 開 each box 之後 ``_typical`` / ``_outlier`` /
+#: ``_outlier_box`` / ``_worst`` 各一欄，而表頭只看 metric（使用者：「中間會有
+#: 4 欄一樣的 min 4 欄一樣的 max」）。原始欄名仍然在懸停第一行。
+VARIANT_WORDS = {
+    "typical": "typical", "outlier": "outlier", "outlier_box": "box #",
+    "worst": "worst", "nm": "nm", "nm2": "nm²", "missing": "missing?",
+    "raw": "raw", "rescued": "overwritten",
+    "range": "range", "range_pct": "range %", "cv_pct": "cv %",
+    "slope_x": "slope x", "slope_y": "slope y",
+}
+
+
 def stat_label(bound: Any) -> str:
     """下層表頭的短標籤。metric id 查 `widgets.metric_face`（那張表**認不得
     的也答得出來**），沒有 metric 的（引擎名、load 的座標那些）用 base ——
-    **不猜**，原始欄名永遠在懸停上。"""
+    **不猜**，原始欄名永遠在懸停上。
+
+    名字裡真的有的兩段再接上去，**同一張卡的兩欄不會長得一樣**：``cmp_*``
+    比的是哪個統計量（``Δ · Median`` 與 ``Δ · Max`` 是兩欄），以及變體後綴
+    （:data:`VARIANT_WORDS`）。沒有那兩段的名字一個字都不變。
+    """
     spec = bound.spec
-    if spec.metric:
-        return metric_face(spec.metric)[1]
-    return spec.base or spec.name
+    head = metric_face(spec.metric)[1] if spec.metric else (spec.base or spec.name)
+    bits = [head]
+    stat = str(getattr(spec, "stat", "") or "")
+    if stat:
+        bits.append(metric_face(stat)[1])
+    var = str(getattr(spec, "variant", "") or "")
+    if var in VARIANT_WORDS:
+        bits.append(VARIANT_WORDS[var])
+    return " · ".join(bits)
 
 
 def column_tree(results: Sequence[Dict[str, Any]],

@@ -86,7 +86,8 @@ def test_results_window_is_not_shown_until_there_is_something_to_show(qapp, lot)
     try:
         assert win.results_visible() is False
         assert win.results.summary_text() == "No results yet."
-        assert win.results.btn_run_all.isEnabled() is False
+        assert win.results.btn_rerun.isEnabled() is False
+        assert win.results.btn_write.isEnabled() is False
     finally:
         win.close()
 
@@ -100,7 +101,8 @@ def test_running_populates_and_presents_the_results_window(window):
     assert window.results_visible() is True, "按 Run 想看的就是這個"
     assert window.histogram.has_data() is True
     assert window.gallery.displayed_count() == 8
-    assert window.results.btn_run_all.isEnabled() is True
+    assert window.results.btn_rerun.isEnabled() is True
+    assert window.results.btn_write.isEnabled() is False, "沒有 Output 卡：寫不了"
 
     summary = window.results.summary_text()
     assert "8 defects" in summary and "8 ok" in summary and "0 failed" in summary
@@ -123,9 +125,13 @@ def test_the_write_button_in_results_reaches_the_studio(window):
     """
     window.run_trial(8, workers=1, sync=True)
     seen = []
-    window.results.run_all_requested.connect(lambda: seen.append(True))
-    window.results.btn_run_all.click()
-    assert seen, "Results 視窗那顆鈕要接回 Studio 的整批入口"
+    # 2026-09-09：那一格拆成兩顆 —— Re-run（改了 ADC 再判）與 Write outputs。
+    window.results.rerun_requested.connect(lambda: seen.append("rerun"))
+    window.results.write_requested.connect(lambda: seen.append("write"))
+    window.results.btn_rerun.click()
+    window.results.set_run_all_enabled(True, 1)     # 有 Output 卡的樣子
+    window.results.btn_write.click()
+    assert seen == ["rerun", "write"], "Results 視窗那兩顆鈕要接回 Studio"
 
 
 # --------------------------------------------------------------------------- #

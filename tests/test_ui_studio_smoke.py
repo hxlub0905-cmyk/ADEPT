@@ -439,7 +439,8 @@ def test_run_all_lives_in_the_trial_button_menu(window):
     **跟 Results 視窗上那顆逐字相同**的名字 —— 同一個動作在兩個地方叫兩個
     名字，正是它一開始變成兩顆鈕的那一步。
     """
-    assert [a.text() for a in window.trial_menu.actions()] == ["Run all && write"]
+    # 2026-09-09：跑與寫拆開，這一項只跑（寫是 Results 上的「Write outputs」）。
+    assert [a.text() for a in window.trial_menu.actions()] == ["Run all"]
     # F7-23 第四輪把 ``▶`` 與 ``▾`` 換成自繪圖示（那兩個字元在廠內的 Windows
     # 上不保證有字型），所以問的是圖示的名字，不是那顆字。
     assert window.btn_trial.text() == "Run trial"

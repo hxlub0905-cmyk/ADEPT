@@ -280,6 +280,7 @@ class _GridView(QAbstractScrollArea):
 
     selection_changed = Signal(object)      # list[str]
     defect_activated = Signal(str)
+    defect_selected = Signal(str)           # 單擊一張（沒有修飾鍵）
     thumbs_requested = Signal(object)       # list[str]：可視範圍內還沒有縮圖的
 
     _EMPTY_TEXT = "(Thumbnails for every defect appear here after a trial run)"
@@ -711,6 +712,10 @@ class _GridView(QAbstractScrollArea):
         self.viewport().update()
         if self._selected != before:
             self.selection_changed.emit(list(self._selected))
+        if idx is not None and not (mods & (Qt.ShiftModifier | Qt.ControlModifier
+                                            | Qt.MetaModifier)):
+            # 一顆、沒按修飾鍵＝「去看這一顆」。多選那幾種手勢在挑一組，不跳。
+            self.defect_selected.emit(self._items[self._view[idx]]["defect_id"])
         e.accept()
 
     def mouseDoubleClickEvent(self, e) -> None:   # noqa: D102 - Qt hook
@@ -822,7 +827,15 @@ class GalleryPanel(QWidget):
 
     selection_changed = Signal(object)      # list[str]
     defect_activated = Signal(str)
+    #: 單擊一張＝「主畫面帶我去看這一顆」（2026-09-09）—— 跟雙擊差在不搶焦點。
+    defect_selected = Signal(str)
     thumbs_requested = Signal(object)       # list[str]
+    #: 使用者換了排序（下拉或 ↓↑ 鈕）：``(欄名或 None, 降冪?)``。程式呼叫
+    #: `set_sort` **不發** —— Results 視窗拿它把表格排成一樣，反過來也是，
+    #: 發的話兩邊會互相回彈。
+    sort_changed = Signal(object, bool)
+    #: 篩選條件變了（含清掉）。Results 視窗拿它讓表格跟著。
+    filter_changed = Signal()
 
     _ORDER_DESC = "↓ High to low"
     _ORDER_ASC = "↑ Low to high"
@@ -896,6 +909,7 @@ class GalleryPanel(QWidget):
         self.grid = _GridView(self)
         self.grid.selection_changed.connect(self.selection_changed)
         self.grid.defect_activated.connect(self.defect_activated)
+        self.grid.defect_selected.connect(self.defect_selected)
         self.grid.thumbs_requested.connect(self.thumbs_requested)
         outer.addWidget(self.grid, 1)
 
@@ -979,6 +993,7 @@ class GalleryPanel(QWidget):
         """設定篩選條件（見 :func:`make_filter` 支援的寫法）。"""
         self.grid.set_filter(spec)
         self._refresh_header()
+        self.filter_changed.emit()
 
     def filter_by_score_range(self, lo: Optional[float],
                               hi: Optional[float]) -> None:
@@ -1086,9 +1101,11 @@ class GalleryPanel(QWidget):
         key = None if idx <= 0 else self.sort_combo.currentText()
         self.grid.set_sort(key, self.grid.sort_descending())
         self._refresh_header()
+        self.sort_changed.emit(key, self.grid.sort_descending())
 
     def _toggle_order(self) -> None:
         self.set_sort(self.grid.sort_key(), not self.grid.sort_descending())
+        self.sort_changed.emit(self.grid.sort_key(), self.grid.sort_descending())
 
     def _on_zoom_changed(self, _idx: int) -> None:
         px = self.zoom_combo.currentData()

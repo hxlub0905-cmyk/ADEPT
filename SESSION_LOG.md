@@ -6,7 +6,7 @@
 
 | 期間 | 在哪 |
 |---|---|
-| **2026-09-01 起** | 這個檔案（下面）—— F67 GLV 的「跟誰比」由線決定、F68 GLV 是抓 defect 的主力卡、F69–F72 設定欄／Feature 表／ADC 那一頁／報表打得開、F73 把 F68 的驗收真的跑完、F74 Region 段只剩一張卡、F83 使用者回報的三個 UI bug、F84 ruff 那道關／`align_off` 的症狀／bundle 不再壓縮／救回兩份沒併進來的東西、F85 PEAR 的均勻度（一格參數、四張圖、三個「我原本說錯了」）、F86 使用者拿去用回來的四件（試跑不寫要說出來／Golden Cell 130 s→17 s／recipe 少了 CSV／手冊漏了那排快捷鈕） |
+| **2026-09-01 起** | 這個檔案（下面）—— F67 GLV 的「跟誰比」由線決定、F68 GLV 是抓 defect 的主力卡、F69–F72 設定欄／Feature 表／ADC 那一頁／報表打得開、F73 把 F68 的驗收真的跑完、F74 Region 段只剩一張卡、F83 使用者回報的三個 UI bug、F84 ruff 那道關／`align_off` 的症狀／bundle 不再壓縮／救回兩份沒併進來的東西、F85 PEAR 的均勻度（一格參數、四張圖、三個「我原本說錯了」）、F86 使用者拿去用回來的四件（試跑不寫要說出來／Golden Cell 130 s→17 s／recipe 少了 CSV／手冊漏了那排快捷鈕）、F99／F100 UI 評審的二十一件、**2026-09-09 四輪**（working numbers 到處找得到、下拉一張卡一組帶說明、跑與寫拆開＋Re-run、Results 單擊帶主畫面、Output／判定樹的預覽跑到底、卡片寫 img/s、表頭四個變體四種字、縮圖與表格同一份排序／篩選） |
 | 2026-08-19 ～ 08-28 | [`docs/history/2026-08b.md`](docs/history/2026-08b.md) —— F42 區域線走 edges、F43–F45 結果表分層／區域接線／FeatureSpec、F46/F47 檔案架構與授權、F48 六個決定、F50 畫布上只剩卡片和線、F51/F52 特徵名與數字只有一種寫法、F53–F57 五件小事、F58–F66 合成資料長成真的那種 layout |
 | 2026-08-07 ～ 08-18 | [`docs/history/2026-08.md`](docs/history/2026-08.md) —— F8 純規則 ROI、畫布 n8n 化、Phase 1 收斂、F10、Phase 2 的 Input／Enhance／Region 三段 |
 | 2026-07 | [`docs/history/2026-07.md`](docs/history/2026-07.md) —— M0–M7、F7-9…F7-24 前半、兩台機器與搬運通道的成形 |
@@ -19,6 +19,131 @@
 （`docs/history/` 不進搬運包）。包的大小**不是限制**（2026-08-17 使用者確認直接
 複製 raw，見 `AGENTS.md` §2）—— 封存是為了 diff 乾淨與公司機用不到的東西不佔
 體積，不是為了那道 1 MB 的線。
+
+---
+
+## Results 表：四欄一樣的 min、跟 Tiles 一樣的排序與篩選（2026-09-09 第四輪）
+
+使用者：「results 內 table 會有重名的 column，例如中間會有 4 欄一樣的 min
+4 欄一樣的 max，同時希望它跟 Tiles 一樣支援排序跟篩選」。
+
+* **重名的欄**：下層表頭只看 metric（`feature_tree.stat_label`），而
+  `glv_stats` 開 each box 之後同一個統計量有 typical / outlier / outlier_box /
+  worst 四欄。現在名字裡真的有的兩段接上去（``Min · typical``、
+  ``Δ · Median``；`VARIANT_WORDS` 一張表），沒有那兩段的一個字不變（既有測試
+  `"Median"` 照過）。兩張卡只差 `output_prefix` 的那種（``N_glv_min`` /
+  ``M_glv_min``）另一條路：`header_spans` 把前綴當成區域那樣在上層表頭成段
+  （淡灰，區域才有顏色）；`group_row_wanted` 是「要不要上層」的唯一判準。
+* **排序**：表頭點一下本來就會排（`setSortingEnabled`），缺的是跟縮圖**同一
+  個**排序 —— 現在縮圖的下拉換了表格照那欄排、表頭點了下拉跟著
+  （`ResultsWindow._on_gallery_sort` / `_on_table_sort`，`_syncing` 擋回彈；
+  `GalleryPanel.sort_changed` 只在使用者手勢時發）。
+* **篩選**：`ResultsTableModel.set_filter` 吃跟 Gallery 一字不差的
+  `make_filter` spec（`_all_rows` 留著，換條件不重餵；排序連篩掉的一起排）。
+  宿主改走 `ResultsWindow.set_filter` 一次餵兩邊（判定段點一類、直方圖點一根
+  bar），任一邊按掉 chip 另一邊也清。
+
+尺：`test_ui_results_layers.py` 三條（四個變體四種字、cmp 講比的是哪個
+統計量、前綴成段而平鋪仍單層）、`test_ui_results_table.py` 三條、
+`test_ui_results_sync.py`（新，兩條：一個條件到兩邊、排序來回）。
+
+---
+
+## 跑與寫拆開、Re-run、Results 單擊帶主畫面、卡片上寫 img/s（2026-09-09 第三輪）
+
+使用者點名四件事，全部做了：
+
+1. **Output 卡也看得到 working numbers。** 清單只有一個來源
+   （`studio._dynamic_choices_for`），整批一次的卡（`scale == SCALE_LOT`）接上
+   `decision_features()`；逐顆的卡**不接**（判定在它們之後才算，列了就是
+   `x = x` 那個 bug）。順手抓到 **`feature_key`（單一個名字）從來沒有過下拉**
+   —— `param_form._make_editor` 那一行只認 `expr` / `feature_keys`，於是三張
+   Output 卡的 `rank_by` 一直是純文字框，而 `output.py` 的 spec 上寫著「UI 會
+   給這一格一支」。lint 那一半：`recipe.let_names_written` 是 let 會寫的名字
+   的**唯一的家**（`_decide_unknown` 改用它；`validate` 對整批卡的
+   `stale-feature-ref` 現在認得 let）。「插入數字 ▾」搬進 `ui/number_picker.py`
+   —— `param_form` 也要用，而它反過來 import `decide_panel` 是一個圈。
+2. **跑不寫，寫是另一顆鈕。** 使用者問「還是你覺得不適合」—— 適合：
+   `run_batch` 與 `run_batch_steps` 本來就是兩支（batch.py 的 docstring 講的
+   正是「寫做成旗標遲早有人忘記關」），Studio 只是把它們綁在一個鈕上。現在
+   `run_all` 只跑、`write_outputs` 寫（KLARF `inplace` 的確認搬到寫的時候問；
+   被停掉的部分結果拒寫並講出來）。Results 那顆「Run all & write」拆成
+   **Re-run** 與 **Write outputs**。Re-run 走 `batch.rerun_decision`：每一行
+   let 重算（含跟整批比的，錨拔掉重算）、上一次判定失敗的顆救回來
+   （`redecide(revive=True)`）、影像一顆不碰；`batch.measurement_signature`
+   決定能不能這樣走 —— 量測那一段改了就整批重跑，**不拿舊數字配新量測卡**。
+   底稿是 `_last_run["rows"]`（原封不動那一份），不是畫面上那份。
+   ⚠ `tests/test_ui_write_only_on_run_all.py` 的契約整份改寫（那條「試跑不寫，
+   只有整批才寫」是使用者 F16 定的，這次也是使用者改的）。
+3. **Results 單擊（或方向鍵）一顆 → 主畫面帶過去，不搶焦點**
+   （`defect_selected`，雙擊仍是 `defect_activated` 會叫主視窗到前面）。
+   「ADC 跟 output 段影像預設不顯示？」—— 是，而且是 F11「沒有線就沒有圖」
+   那條規矩的假陽性：Output 卡是整批一次的，逐顆引擎跳過它、沒有 trace，
+   `_selected_card_ran` 就把影像清掉。現在 `_preview_whole_route`：選的是
+   整批一次的卡、或正在編判定樹（`_tree_focus`）→ 預覽跑到底、連判定，
+   路徑才亮得起來。
+4. **卡片右上角從總耗時改成每秒幾顆**（`canvas.run_text`：``24 ok · 71 img/s``）。
+   加總的 ms 是所有 worker 的 CPU 時間，不是牆上時鐘 —— docstring 講了。
+
+尺：`test_rerun_decision.py`（五條，core）、`test_ui_rerun_and_jump.py`（七條）、
+`test_ui_number_picker.py`（三條）、`test_rename_fallout.py` 兩條；改契約的
+`test_ui_write_only_on_run_all.py`、`test_ui_button_labels.py`、
+`test_ui_results.py`、`test_ui_studio_m5.py`、`test_ui_f99_gestures.py`。
+`docs/USING-UNIFORMITY.md` §5 跟著改。
+
+---
+
+## 判定樹上找得到 working numbers；「插入數字 ▾」一張卡一組（2026-09-09）
+
+使用者拿一份 recipe 來問「為何我沒法執行，working numbers 設的 attribute QAA
+在後面 tree 上也找不到」。兩件事，一件是 recipe 自己的（樹上有一步 `when` 是
+空的 → `bad-rule`；ROI 卡沒模板 → `not-configured`），一件是 Studio 的缺口：
+
+* **樹那一步的「pick a number」與「插入數字 ▾」只列卡片宣告的名字**
+  （`labelled_features` 走的是 `_declared_specs`），而引擎（`_eval_decision`
+  先算 let 再走樹）與 lint（`_decide_unknown`）早就認得 let 的名字。清單少列
+  的那一半正好是使用者自己剛取的。⚠ 這一輪先講錯過一次：「下拉會標成
+  from Decision」—— 那是畫布上幽靈線的字，不是下拉的。**答一個 UI 問題之前
+  把那一格的來源讀完。**
+
+  補在 `RecipeModel.decision_features(upto_let=None)`：名字、`_missing`、
+  `_raw` **不再抄一份規則**，由 `verdict_features.bound_specs` 宣告（family
+  `engine`、`base` 是 let 名），這裡只按行序過濾 —— 第 n 行 let 只看得到前
+  n−1 行（引擎順序，lint 講的同一句話）；樹的問題與 score 看得到全部。
+  卡片的 `labelled_features` **不動**：讓一張卡看到判定段的名字就是 F21-B
+  那個 `x = x`。
+* **「ADC 下拉選單分類可以再做更好一點嗎」** → `decide_panel.fill_number_picker`
+  一支填三個下拉（let 行、score、樹那一步的兩種編法）：一張卡一組、組名是
+  卡片的 `label`、組名 disabled 點不到、working numbers 永遠第一組；名字裡
+  不再重複「— 誰算的」（`glv_stats` 開 each box 一張卡 55 個名字，那半邊
+  重複 55 次）。`itemData` / `findData` 仍是裸名，呼叫端一個字沒改。
+
+順手答掉的三句（寫在對話裡，不進 docs）：算式的空格可有可無（tokenizer
+跳過空白）；`_typical` 是逐框值的中位數（含自己）、`_outlier` 是離它最遠那格
+的值（跟著 `direction`）、`_outlier_box` 是那一格的序號（0 起算）。
+
+**第二輪（同日）：「你覺得 user 會不會混淆 or 看不懂」—— 會。** 證據不是
+猜的：作者自己問了三次才分清 `_outlier` 與 `_worst`，而 `glv_stats.py` 的
+`FEATURE_HELP` 註解記著 2026-09-02 有人問過一模一樣的「typical 跟 outliner、
+worst、score 是指什麼」。四個提案（補說明／`across_boxes` 那格講兩族／
+`_outlier` 一族預設收起來／不改名），使用者：「1 跟 2 先做」。
+
+* **每個下拉項目帶 tooltip**（`decide_panel.number_tips`）：卡片算的走
+  `feature_gloss` ＋ `feature_unit`（**跟 Feature 表那一欄同一支**，說明只有
+  一個家）；working number 講它的算式、fill、scale，`_missing` / `_raw` 各一
+  句。`RecipeModel.bound_feature_specs` 是 `bound_specs` 的投影（同
+  `feature_owners` / `feature_regions`）。
+* **`across_boxes` 的 help 多一段**：兩族常常指到不同格；`_worst` 一族全部來
+  自 judge 挑的那一格，`_typical` / `_outlier` / `_outlier_box` 是每個統計量
+  各自的。使用者是在那一格決定開 each box 的，那裡是他唯一會讀說明的時候。
+* 第 3 項（收起 `_outlier`）**沒做**，等使用者點頭：出貨 recipe 只用
+  `_worst`，但使用者手上那份用了 `_outlier`。
+
+尺：`test_viewmodel.py` 三條（列得出、只看上面幾行、沒判定就空）、
+`test_ui_tree_edit.py` 四條（導引式列得出、點了寫進 model、算式框那個也列、
+分組長相）、`test_ui_f22_decide_panel.py` 一條（第 n 行只看前 n−1 行）；第二輪再加
+`test_glv.py` 一條（那一格的 help 兩族都在）、`test_ui_tree_edit.py` 一條
+（每一項都有 tooltip，`_outlier_box` 標成 box）。
 
 ---
 

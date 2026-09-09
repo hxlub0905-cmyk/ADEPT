@@ -190,3 +190,43 @@ def test_an_empty_batch_is_an_empty_table(qapp):
     t = ResultsTable()
     t.set_results([], {})
     assert t.row_count() == 0 and t.columns()
+
+
+# --------------------------------------------------------------------------- #
+# 列的篩選 —— 跟 Gallery 同一套寫法（2026-09-09）
+# --------------------------------------------------------------------------- #
+def test_the_table_filters_rows_with_the_gallery_spec(qapp):
+    t = _table(qapp)
+    assert t.row_count() == 3 and t.total_count() == 3
+    t.set_filter({"mode": "bin", "bin": 2})
+    assert t.row_count() == 1 and t.total_count() == 3
+    assert t.cell_text(0, "defect_id") == "1"
+    assert t.filter_text() == "bin 2 only"
+    t.set_filter("failed")
+    assert [t.cell_text(i, "defect_id") for i in range(t.row_count())] == ["3"]
+    t.set_filter(None)
+    assert t.row_count() == 3 and t.filter_text() == ""
+
+
+def test_sorting_survives_a_filter_change(qapp):
+    t = _table(qapp)
+    t.sortByColumn(t.columns().index("score"), Qt.AscendingOrder)
+    t.set_filter({"mode": "bin", "bin": 2})
+    t.set_filter(None)
+    got = [t.cell_text(i, "defect_id") for i in range(t.row_count())]
+    assert got == ["2", "1", "3"], "升冪：0.10、0.42，沒量到的排最後"
+
+
+def test_the_pane_shows_a_chip_and_clearing_it_tells_the_host(qapp):
+    from d4t.ui.results_table import ResultsTablePane
+    pane = ResultsTablePane()
+    pane.set_results(_results(), {"1": "bright", "2": "nuisance"})
+    seen = []
+    pane.filter_cleared.connect(lambda: seen.append(True))
+    pane.set_filter({"mode": "bin", "bin": 0})
+    assert pane.row_count() == 1
+    chip = pane._filter_chip
+    assert chip is not None and "bin 0 only" in chip.text()
+    chip.click()
+    assert pane.row_count() == 3 and pane._filter_chip is None
+    assert seen == [True]

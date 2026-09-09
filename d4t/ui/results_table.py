@@ -194,7 +194,9 @@ def header_spans(visible: Sequence[str],
     """上層表頭的跨欄段：可見欄序列 → ``[{start, count, region,
     region_index, node_id}, …]``（start 是可見序的索引）。
 
-    同一張卡（node_id）同一個區域的**連續**欄合成一段；沒有區域的欄不成段。
+    同一張卡（node_id）同一個區域的**連續**欄合成一段；沒有區域但使用者填了
+    ``output_prefix`` 的（2026-09-09：兩張 GLV 卡各填 ``N`` / ``M``，欄名只差
+    那個前綴）也成段，段上寫那個前綴。兩者都沒有的欄不成段。
     畫的跟測的都走這一支 —— 表頭不自己推一份。
     """
     spans: List[Dict[str, Any]] = []
@@ -202,15 +204,26 @@ def header_spans(visible: Sequence[str],
     for i, name in enumerate(visible):
         b = (spec_of or {}).get(str(name))
         region = str(b.spec.region) if b is not None else ""
-        key = (b.node_id, region) if (b is not None and region) else None
+        own = str(getattr(b.spec, "own", "") or "") if b is not None else ""
+        label = region or own
+        key = (b.node_id, label) if (b is not None and label) else None
         if key is not None and key == prev:
             spans[-1]["count"] += 1
         elif key is not None:
-            spans.append({"start": i, "count": 1, "region": region,
+            spans.append({"start": i, "count": 1, "region": label,
                           "region_index": int(b.spec.region_index),
                           "node_id": str(b.node_id)})
         prev = key
     return spans
+
+
+def group_row_wanted(spec_of: Optional[Dict[str, Any]]) -> bool:
+    """要不要上層表頭：任何一欄帶區域、或帶使用者填的前綴（同 `header_spans`
+    成段的條件 —— 兩邊問同一句話）。"""
+    for b in (spec_of or {}).values():
+        if getattr(b.spec, "region", "") or getattr(b.spec, "own", ""):
+            return True
+    return False
 
 
 def row_warnings(row: Dict[str, Any],
@@ -256,6 +269,9 @@ class ResultsTableModel(QAbstractTableModel):
 
     def __init__(self, parent: Optional[Any] = None) -> None:
         super().__init__(parent)
+        self._all_rows: List[Dict[str, Any]] = []
+        self._filter_fn: Any = None
+        self._filter_text = ""
         self._rows: List[Dict[str, Any]] = []
         self._columns: List[str] = []
         self._verdict_columns: List[str] = []
@@ -302,12 +318,35 @@ class ResultsTableModel(QAbstractTableModel):
                     else len(cols)
                 cols.insert(at, TRUTH_COLUMN)
         self._alarms = dict(alarms or {})
-        self._rows = []
+        self._all_rows = []
         for r in results or []:
             row = dict(r)
             row["cls"] = names.get(str(r.get("defect_id", "")), "")
-            self._rows.append(row)
+            self._all_rows.append(row)
+        self._rows = self._filtered(self._all_rows)
         self.endResetModel()
+
+    # ---- 篩選（2026-09-09，跟 Gallery 同一套 `make_filter`）-----------------
+    def set_filter(self, spec: Any) -> None:
+        """只列符合條件的顆（``None`` = 全部）。條件的寫法跟 Gallery 一字不差
+        （`gallery.make_filter`）—— 使用者：「希望它跟 Tiles 一樣支援排序跟
+        篩選」。整批仍然在 `_all_rows` 上，換條件不用重餵。"""
+        from .gallery import make_filter
+
+        self._filter_fn, self._filter_text = make_filter(spec)
+        self.beginResetModel()
+        self._rows = self._filtered(self._all_rows)
+        self.endResetModel()
+
+    def filter_text(self) -> str:
+        return str(self._filter_text or "")
+
+    def total_count(self) -> int:
+        return len(self._all_rows)
+
+    def _filtered(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        fn = getattr(self, "_filter_fn", None)
+        return list(rows) if fn is None else [r for r in rows if fn(r)]
 
     def columns(self) -> List[str]:
         return list(self._columns)
@@ -592,6 +631,7 @@ class ResultsTableModel(QAbstractTableModel):
             return (0, 0.0, str(v))
 
         self.layoutAboutToBeChanged.emit()
+        self._all_rows.sort(key=key, reverse=rev)     # 篩掉的也排，換條件時序不亂
         self._rows.sort(key=key, reverse=rev)
         # 空值那一組要留在最後，所以反轉之後把它們撈回來。
         if rev:
@@ -626,8 +666,7 @@ class TwoLevelHeader(QHeaderView):
         return get() if callable(get) else []
 
     def _has_region_row(self) -> bool:
-        return any(getattr(b.spec, "region", "")
-                   for b in self._spec_of().values())
+        return group_row_wanted(self._spec_of())
 
     # ---- Qt ----------------------------------------------------------------
     def sizeHint(self) -> QSize:  # noqa: N802 — Qt
@@ -659,8 +698,11 @@ class TwoLevelHeader(QHeaderView):
         span = next((s for s in spans
                      if s["start"] <= pos < s["start"] + s["count"]), None)
         if span is not None:
-            band = QColor(region_hex(span["region_index"]))
-            band.setAlphaF(0.30)
+            # 區域段用那個區域的顏色；只有前綴的段沒有顏色可對應 —— 淡灰。
+            band = (QColor(region_hex(span["region_index"]))
+                    if int(span["region_index"]) >= 0
+                    else QColor(TOKENS["text_primary"]))
+            band.setAlphaF(0.30 if int(span["region_index"]) >= 0 else 0.08)
             painter.fillRect(top, band)
             # 字畫在**整段**的座標上、剪在自己這一節 —— 局部重繪（只髒中間
             # 一節）也不會把跨欄的字畫掉一半。
@@ -700,6 +742,10 @@ class ResultsTable(QTableView):
 
     #: 使用者要去看某一顆（跟 `GalleryPanel.defect_activated` 同一個約定）。
     defect_activated = Signal(str)
+    #: 目前那一列換了（單擊、方向鍵）＝「主畫面帶我去看這一顆」，不搶焦點
+    #: （2026-09-09，使用者：「點選 Results 內的 tiles 或 table 上的 did，
+    #: 主畫面要能夠帶到那顆 defect 的資訊並顯示」）。
+    defect_selected = Signal(str)
     #: 使用者點了判定欄（score / bin / class）＝「這一顆**為什麼**判成這樣」
     #: —— 回溯面板（PR-3）。值是 defect_id；面板開不開由宿主決定。
     trace_requested = Signal(str)
@@ -745,6 +791,7 @@ class ResultsTable(QTableView):
         head.setHighlightSections(False)
         self.doubleClicked.connect(self._on_double_click)
         self.clicked.connect(self._on_click)
+        self.selectionModel().currentRowChanged.connect(self._on_current_row)
 
     #: 標記的三個鍵（X2）。**R / N 是廠內講的那兩個字的字首**
     #: （real / nuisance），第三個是「我看過但說不準」—— 那不是 nuisance，
@@ -793,6 +840,15 @@ class ResultsTable(QTableView):
 
     def columns(self) -> List[str]:
         return self._model.columns()
+
+    def set_filter(self, spec: Any) -> None:
+        self._model.set_filter(spec)
+
+    def filter_text(self) -> str:
+        return self._model.filter_text()
+
+    def total_count(self) -> int:
+        return self._model.total_count()
 
     def row_count(self) -> int:
         return self._model.rowCount()
@@ -908,6 +964,15 @@ class ResultsTable(QTableView):
         if did:
             self.defect_activated.emit(did)
 
+    def _on_current_row(self, current, _previous) -> None:
+        """換了一列就講一聲 —— 單擊與方向鍵走的是同一條（`currentRowChanged`
+        兩種都發）；同一列再點一次不發，宿主不會被重複叫去跳同一顆。"""
+        if current is None or not current.isValid():
+            return
+        did = self._model.defect_id_at(current.row())
+        if did:
+            self.defect_selected.emit(did)
+
     def _on_click(self, index) -> None:
         """點徽章＝把明細攤開來看（跟懸停同一份字 —— 資料只有一份）。
         點判定欄（score / bin / class）＝問「為什麼」（PR-3 的回溯面板）。
@@ -933,14 +998,22 @@ class ResultsTable(QTableView):
 class ResultsTablePane(QWidget):
     """表 ＋ 分層的控制列（搜尋框、「All measurements (N)」）。
 
+    **列的篩選**（哪幾顆）跟 Gallery 同一套（`set_filter`，2026-09-09），
+    chip 排在維度 chip 旁邊；按掉發 `filter_cleared`，宿主把 Gallery 那邊
+    也清掉 —— 兩種看法看的是同一批。
+
     分層的**邏輯**全在 :func:`visible_columns`（純函式）；這裡只把它的答案
     套到 `setColumnHidden` 上。展開狀態與搜尋字是純 instance attr ——
     session 級，開新視窗就歸零（跟這個 UI 其他的暫態一樣，不進 QSettings）。
     """
 
+    #: 使用者按掉了「只看這幾顆」那顆 chip。
+    filter_cleared = Signal()
+
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._expanded = False
+        self._filter_chip: Optional[FilterChip] = None
 
         self.search = QLineEdit(self)
         self.search.setObjectName("resultsColumnSearch")
@@ -984,6 +1057,7 @@ class ResultsTablePane(QWidget):
         self.table = ResultsTable(self)
         #: 轉出去給宿主接的訊號（跟以前 `ResultsTable` 的約定一字不變）。
         self.defect_activated = self.table.defect_activated
+        self.defect_selected = self.table.defect_selected
         self.trace_requested = self.table.trace_requested
         self.bin_overrides_changed = self.table.bin_overrides_changed
         self.truth_marked = self.table.truth_marked
@@ -1058,6 +1132,36 @@ class ResultsTablePane(QWidget):
         return self._expanded
 
     # ---- 維度過濾（PR-3） --------------------------------------------------
+    # ---- 列的篩選（哪幾顆）------------------------------------------------
+    def set_filter(self, spec: Any) -> None:
+        self.table.set_filter(spec)
+        self._refresh_filter_chip()
+
+    def clear_filter(self) -> None:
+        self.set_filter(None)
+
+    def filter_text(self) -> str:
+        return self.table.filter_text()
+
+    def _refresh_filter_chip(self) -> None:
+        if self._filter_chip is not None:
+            self._filter_chip.setParent(None)
+            self._filter_chip.deleteLater()
+            self._filter_chip = None
+        text = self.table.filter_text()
+        if not text:
+            return
+        chip = FilterChip("Filter: %s" % text, "Click to remove this filter.",
+                          self)
+        chip.setObjectName("resultsRowFilter")
+        chip.clicked.connect(self._on_filter_chip)
+        self._filter_chip = chip
+        self._chip_bar.insertWidget(0, chip)
+
+    def _on_filter_chip(self) -> None:
+        self.clear_filter()
+        self.filter_cleared.emit()
+
     def dims(self) -> List[Tuple[str, str]]:
         return list(self._dims)
 

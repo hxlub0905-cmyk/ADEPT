@@ -158,10 +158,13 @@ def test_run_status_folds_traces_per_card():
     st = run_status_from(results)
     assert st["load"] == (2, 0, 22.0)
     assert st["glv"] == (1, 1, 123.5)
-    assert run_text(st["load"]) == "2 ok · <0.1 s"
+    # 2026-09-09：總耗時 → 每秒幾顆（使用者：「X img/s 而不是 total time」）
+    assert run_text(st["load"]) == "2 ok · 91 img/s"       # 2 顆 / 22 ms
     assert run_text(st["glv"]) == "1 failed", "失敗優先"
     assert run_text(None) == "" and run_text((0, 0, 0.0)) == ""
-    assert run_text((24, 0, 340.0)) == "24 ok · 0.3 s"
+    assert run_text((24, 0, 340.0)) == "24 ok · 71 img/s"
+    assert run_text((3, 0, 1200.0)) == "3 ok · 2.5 img/s", "慢的卡留一位小數"
+    assert run_text((5, 0, 0.0)) == "5 ok", "沒量到時間不寫無限大"
 
 
 def test_the_canvas_keeps_run_status_and_paints_it(qapp):

@@ -221,3 +221,38 @@ def test_bins_come_back_biggest_first():
 
 def test_no_ground_truth_means_no_purity_block():
     assert "bin_purity" not in summarize(_rows([(1, True)]))
+
+
+# --------------------------------------------------------------------------- #
+# working numbers 互相看得到，但只看得到上面那幾行（2026-09-09）
+# --------------------------------------------------------------------------- #
+def _lets_panel(qapp):
+    from d4t.core.pipeline.recipe import DecideSpec, Let, TreeLeaf
+    from d4t.ui.decide_panel import DecidePanel
+    from d4t.ui.viewmodel import RecipeModel
+    m = RecipeModel()
+    m.add_step("glv_stats")
+    m.decide = DecideSpec(
+        let=[Let(name="QAA", expr="glv_max * 2", fill="0"),
+             Let(name="z", expr="QAA", scale="z")],
+        tree=TreeLeaf(bin=0), score="")
+    p = DecidePanel()
+    p.set_model(m)
+    p.set_features(m.labelled_features())
+    return p
+
+
+def _pickers(p):
+    from PySide6.QtWidgets import QComboBox
+    return [c for c in p.findChildren(QComboBox)
+            if c.itemText(0).startswith("Insert a number")]
+
+
+def test_each_let_line_only_offers_the_lines_above_it(qapp):
+    p = _lets_panel(qapp)
+    first, second, score = _pickers(p)      # 兩行 let ＋ score，由上而下
+    assert first.findData("QAA") < 0, "第一行不能看到自己"
+    assert second.findData("QAA") >= 0 and second.findData("QAA_missing") >= 0
+    assert second.findData("z") < 0, "第二行不能看到自己"
+    assert score.findData("z") >= 0 and score.findData("z_raw") >= 0
+    assert score.findData("glv_max") >= 0, "卡片算的還是要在"

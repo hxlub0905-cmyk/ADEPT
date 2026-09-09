@@ -210,3 +210,41 @@ def test_klarf_does_not_complain_about_a_size_feature_it_is_not_using():
     assert card.optional_features_in(dict(base, size_col="")) == []
     assert card.optional_features_in(dict(base, size_col="DSIZE")) == ["cd_median"]
     assert card.optional_features_in(dict(base, mode="annotate")) == []
+
+
+# --------------------------------------------------------------------------- #
+# 4. Output 卡看得到 working numbers（2026-09-09）
+# --------------------------------------------------------------------------- #
+def test_an_output_card_may_rank_by_a_working_number():
+    """整批一次的卡在每一顆判定完之後才跑，`let` 的名字那時候真的在每一列的
+    features 裡 —— 以前 `validate` 不知道 let 存在，`rank_by = QAA` 被標成
+    「nobody produces it」（使用者 2026-09-09：「Output card 中也要能夠連動
+    working numbers」）。"""
+    from d4t.core.pipeline.recipe import DecideSpec, Let, TreeLeaf
+
+    r = _recipe("epi")
+    r.score = ScoreSpec(expr="", threshold=0.0, bins={"below": 0, "above": 1})
+    r.decide = DecideSpec(let=[Let(name="QAA", expr="glv_median * 2", fill="0"),
+                               Let(name="z", expr="QAA", scale="z")],
+                          tree=TreeLeaf(bin=0))
+    for name in ("QAA", "QAA_missing", "z", "z_raw"):
+        r.nodes["out"].params["rank_by"] = name
+        assert not [i for i in validate(r, kind="ebi_patch")
+                    if i.code == "stale-feature-ref"], name
+    r.nodes["out"].params["rank_by"] = "nosuch"
+    assert [i for i in validate(r, kind="ebi_patch")
+            if i.code == "stale-feature-ref"], "真的沒人算的還是要講"
+
+
+def test_let_names_written_is_the_one_home():
+    from d4t.core.pipeline.recipe import (DecideSpec, Let, TreeLeaf,
+                                          let_names_written)
+
+    d = DecideSpec(let=[Let(name="a", expr="1", fill="0"),
+                        Let(name="", expr=""),
+                        Let(name="b", expr="a", scale="z")],
+                   tree=TreeLeaf(bin=0))
+    assert let_names_written(d) == ["a", "a_missing", "b", "b_raw"]
+    assert let_names_written(d, upto=1) == ["a", "a_missing"]
+    assert let_names_written(d, upto=0) == []
+    assert let_names_written(None) == []

@@ -42,7 +42,8 @@ from PySide6.QtWidgets import (
 )
 
 from .widgets import (ChoiceChips, clear_layout_parked, glyph_icon,
-                      region_dot_icon, small_button, split_labelled)
+                      small_button)
+from .number_picker import fill_number_picker, number_tips  # noqa: F401 — tree_panel 與測試從這裡拿
 from .viewmodel import MAX_BIN
 
 __all__ = ["DecidePanel"]
@@ -69,30 +70,17 @@ _PICK_EMPTY = "No numbers upstream yet"
 
 
 def _feature_combo(items: Sequence[str], on_pick,
-                   regions: Optional[Dict[str, int]] = None) -> QComboBox:
+                   regions: Optional[Dict[str, int]] = None,
+                   tips: Optional[Dict[str, str]] = None) -> QComboBox:
     """共用的「插入數字 ▾」（F21-B 的那一支，這裡是它的第三個使用者）。
 
-    顯示的是「名字 — 誰算的」，**送出去的只有名字** —— 插錯半邊的話使用者會
-    得到一個永遠指不到的變數名，而錯誤要等跑起來才出現。
-
-    ``regions`` 有的名字前面點一顆**那個區域的顏色**（2026-09-01）——
-    跟 Feature 表的上標、影像上那個框同一個顏色。一份 recipe 接了兩三個區域
-    之後，這張清單上一半的名字只差前綴那一段，而顏色比字先被看到。
+    **送出去的只有名字** —— 插錯半邊的話使用者會得到一個永遠指不到的變數名，
+    而錯誤要等跑起來才出現。分組的長相在 :func:`fill_number_picker`。
     """
-    regions = dict(regions or {})
     combo = QComboBox()
-    combo.addItem(_PICK_PLACEHOLDER if items else _PICK_EMPTY, "")
+    fill_number_picker(combo, items, regions,
+                       _PICK_PLACEHOLDER if items else _PICK_EMPTY, tips)
     combo.setEnabled(bool(items))
-    for it in items:
-        name, owner = split_labelled(it)
-        if not name:
-            continue
-        text = "%s   —   %s" % (name, owner) if owner else name
-        idx = regions.get(name, -1)
-        if idx >= 0:
-            combo.addItem(region_dot_icon(idx), text, name)
-        else:
-            combo.addItem(text, name)
     combo.setToolTip("Pick one of the numbers the cards above work out - "
                      "it is put in at the cursor.")
 
@@ -200,6 +188,7 @@ class DecidePanel(QWidget):
         self._features: List[str] = []
         #: 特徵名 → 第幾個區域（下拉上那顆顏色點）。`refresh` 更新。
         self._regions: Dict[str, int] = {}
+        self._tips: Dict[str, str] = {}
         self._counts: Dict[int, int] = {}
         self._purity: Dict[int, Any] = {}
         self._building = False
@@ -249,6 +238,12 @@ class DecidePanel(QWidget):
     def set_model(self, model: Any) -> None:
         self._model = model
         self.refresh()
+
+    def _numbers(self, upto_let: Optional[int] = None) -> List[str]:
+        """卡片算出來的 ＋ 判定段自己算出來的（`RecipeModel.decision_features`）。"""
+        getter = getattr(self._model, "decision_features", None)
+        extra = list(getter(upto_let)) if callable(getter) else []
+        return list(self._features) + extra
 
     def set_features(self, labelled: Sequence[str]) -> None:
         """「插入數字 ▾」的清單（``"名字\\t誰算的"``）。"""
@@ -314,6 +309,7 @@ class DecidePanel(QWidget):
         # 因為接了／剪了一條區域線之後那張表就變了。
         getter = getattr(m, "feature_regions", None)
         self._regions = dict(getter()) if callable(getter) else {}
+        self._tips = number_tips(m)
         on = getattr(m, "decide", None) is not None
         if on:
             tree = getattr(m.decide, "tree", None) is not None
@@ -389,11 +385,12 @@ class DecidePanel(QWidget):
         sc = QLineEdit(str(d.score or ""))
         sc.setPlaceholderText("empty = the score is 0")
         sc.textEdited.connect(lambda t: m.set_decide_score(str(t)))
+        # score 在每一行 let 之後才算，所以 working numbers 全部列得進來。
         self.body_lay.addWidget(self._labelled(
-            "", sc, _feature_combo(self._features,
+            "", sc, _feature_combo(self._numbers(),
                                    lambda tok: m.set_decide_score(
                                        _insert_at_cursor(sc, tok)),
-                                   regions=self._regions)))
+                                   regions=self._regions, tips=self._tips)))
 
     def _let_row(self, i: int, item: Any) -> QWidget:
         """一行 working number ＝ 面板上的**兩行**。
@@ -423,10 +420,12 @@ class DecidePanel(QWidget):
         expr.setPlaceholderText("e.g. cmp_delta_median * cd_deq")
         expr.setMinimumWidth(140)
         expr.textEdited.connect(lambda t, k=i: m.set_let(k, expr=str(t)))
-        pick = _feature_combo(self._features,
+        # 第 i 行只看得到前 i−1 行的 working numbers（引擎照順序算）——
+        # 列出自己或後面那一行，點下去就是一份每一顆都失敗的 recipe。
+        pick = _feature_combo(self._numbers(upto_let=i),
                               lambda tok, e=expr, k=i:
                               m.set_let(k, expr=_insert_at_cursor(e, tok)),
-                              regions=self._regions)
+                              regions=self._regions, tips=self._tips)
         pick.setFixedWidth(140)
         rm = _tight(small_button("✕"), 24)
         rm.setToolTip("Take this line out")

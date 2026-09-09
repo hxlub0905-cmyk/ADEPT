@@ -395,6 +395,8 @@ def test_the_write_action_runs_the_whole_lot(qapp, synlot, tmp_path):
         win.model.set_param(node, "folder", str(out))
         win.model.set_param(node, "contents", "table")
         assert win.run_all(sync=True) is True
+        assert not out.exists(), "跑不寫（2026-09-09）：寫是另一顆鈕"
+        assert win.write_outputs(sync=True) is True
         assert out.exists()
         assert win.gallery.total_count() == N
 
@@ -439,7 +441,8 @@ def test_a_trial_says_it_wrote_nothing_when_output_cards_are_wired(window,
     # 問的正好是「跑完那一刻使用者看到什麼」。
     text = window.status_text()
     assert "nothing written" in text, text
-    assert "Run all" in text, "要指名那個動作，不是只說『沒寫』"
+    # 2026-09-09：要指名的動作變成「Write outputs」（跑與寫拆開了）
+    assert "Write outputs" in text, "要指名那個動作，不是只說『沒寫』"
     assert not (tmp_path / "out").exists(), "試跑寫了檔 —— 那它就不是試跑"
     window.model.remove(nid)
 

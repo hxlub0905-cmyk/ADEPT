@@ -37,6 +37,7 @@ from .engine import (
 from .recipe import Recipe, execution_order
 
 __all__ = ["run_batch", "apply_lot_scaling", "redecide",
+           "rerun_decision", "measurement_signature",
            "item_filters", "select_items",
            "pin_cv2_deterministic"]
 
@@ -482,10 +483,28 @@ def _stat_rows(rows, name: str, expr: str):
     return out
 
 
-def redecide(recipe: Recipe, rows) -> int:
+def _measured_fine(r: Dict[str, Any]) -> bool:
+    """這一顆的**量測**都成功了嗎（失敗的是判定那一段）。
+
+    `result_to_json_dict` 的 ``traces`` 是逐卡的紀錄；判定不是一張卡，所以
+    「每一張卡都 ok、整顆卻 ok=False」只有一種可能：分數／判定那一段炸了
+    （``error`` 以 ``[score]`` 開頭）。這種顆在 `redecide(..., revive=True)`
+    時要**救回來** —— 使用者修好樹之後按 Re-run，那些顆該重新有 bin。
+    """
+    if r.get("ok"):
+        return True
+    traces = r.get("traces") or []
+    if not traces or not (r.get("features") or {}):
+        return False
+    return all(bool(t.get("ok") if isinstance(t, dict)
+                    else getattr(t, "ok", False)) for t in traces)
+
+
+def redecide(recipe: Recipe, rows, revive: bool = False) -> int:
     """用**已經算好的 features** 重跑一次判定（不重跑影像），就地改寫 ``rows``。
 
-    回傳重算成功的顆數。
+    回傳重算成功的顆數。``revive``：連上一次**判定**失敗（量測都好）的顆也
+    重算 —— Studio 的 Re-run 用（`rerun_decision`）；預設 False 跟以前一字不差。
 
     **判定邏輯只有一個家**（F3，2026-08-24）
     ----------------------------------------
@@ -514,7 +533,9 @@ def redecide(recipe: Recipe, rows) -> int:
                          if not str(getattr(x, "scale", "") or "")]))
     redone = 0
     for r in rows:
-        if not r.get("ok") or r.get("bin") is None:
+        if revive and _measured_fine(r):
+            pass                          # 量測都好 → 判定重算，失敗的也救回來
+        elif not r.get("ok") or r.get("bin") is None:
             continue
         ctx = Context()
         ctx.features.update({k: v for k, v in (r.get("features") or {}).items()
@@ -531,8 +552,76 @@ def redecide(recipe: Recipe, rows) -> int:
         r["features"] = feats
         r["score"] = _safe_num(score)
         r["bin"] = int(b)
+        r["ok"], r["error"] = True, None      # revive：救回來的顆從此是好的
         redone += 1
     return redone
+
+
+def rerun_decision(recipe: Recipe, rows) -> int:
+    """**只重跑判定段**，影像與量測一顆都不重算（2026-09-09，使用者：「可以根據
+    ADC 的設定快速 Re-run（因為 feature 應該都算了？）」—— 對，都算了）。
+
+    跟 :func:`redecide` 差在三件事，而每一件都是「使用者改了 ADC 之後」才會
+    碰到的：
+
+    * **每一行 ``let`` 都重算**，包括標了「跟整批比」的那幾行 —— `redecide`
+      把它們拿掉（值已經是最終的），但使用者可能剛改了那一行的算式。做法：
+      先把 ``<名字>_raw`` 那個錨拔掉、用一份 ``scale`` 全清空的 recipe 逐顆
+      算出原始值，再走 `apply_lot_scaling` 換算 ＋ 重判（它讀 ``_raw`` 當錨，
+      錨不在就用剛算的值）。
+    * **上一次判定失敗的顆救回來**（``revive``）：修好樹之後那些顆該重新有 bin。
+    * 回傳重判的顆數。
+
+    ⚠ 它不知道量測卡有沒有改。「這批 features 還是不是現在這份 recipe 會算出
+    來的」由呼叫端拿 :func:`measurement_signature` 比 —— 拿舊 features 配新
+    量測卡重判，就是這個 repo 最怕的「跑得完、有數字、而且是錯的」。
+    """
+    decide = getattr(recipe, "decide", None)
+    rows = list(rows or [])
+    if decide is None:
+        return redecide(recipe, rows, revive=True)
+    scaled = [str(x.name).strip() for x in decide.let
+              if str(getattr(x, "scale", "") or "") and str(x.name).strip()]
+    for r in rows:
+        feats = r.get("features")
+        if isinstance(feats, dict):
+            for name in scaled:
+                feats.pop(name + "_raw", None)
+    raw = _replace(recipe, decide=_replace(
+        decide, let=[_replace(x, scale="") for x in decide.let]))
+    n = redecide(raw, rows, revive=True)
+    apply_lot_scaling(recipe, rows)
+    return n
+
+
+def measurement_signature(recipe: Recipe) -> str:
+    """這份 recipe **會算出哪些 features** 的簽章 —— 判定段與整批一次的卡
+    （Output 段）不算在內，其他改一個位元就不同。
+
+    Studio 的 Re-run 拿它決定走哪條路：簽章跟上一批一樣 → 只重判
+    （`rerun_decision`，秒級）；不一樣 → 整批重跑。**判準是「改了會不會讓
+    features 變」**，不是「改了哪張卡」：Output 卡的資料夾換了不影響任何
+    數字，而量測卡的一格參數會讓每一個數字都變。
+    """
+    import json
+
+    d = recipe.to_json_dict()
+    for key in ("decide", "score", "author", "description", "app_version",
+                "recipe_id"):
+        d.pop(key, None)
+    nodes = dict(d.get("nodes") or {})
+    lot = set()
+    for nid, node in nodes.items():
+        cls = REGISTRY.get(str((node or {}).get("step", "")))
+        if cls is not None and getattr(cls, "scale", "") == SCALE_LOT:
+            lot.add(nid)
+    d["nodes"] = {k: v for k, v in nodes.items() if k not in lot}
+    d["routes"] = {k: [x for x in (v or []) if x not in lot]
+                   for k, v in (d.get("routes") or {}).items()}
+    d["edges"] = [e for e in (d.get("edges") or [])
+                  if len(e) >= 3 and e[0] not in lot and e[2] not in lot]
+    blob = json.dumps(d, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()
 
 
 def apply_lot_scaling(recipe: Recipe, rows) -> int:
