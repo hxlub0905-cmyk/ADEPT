@@ -165,7 +165,7 @@ def feature_unit(spec: Any) -> str:
         from ..core.pipeline import get_step
 
         table = get_step(str(getattr(spec, "card", "") or "")).feature_units()
-    except Exception:                      # noqa: BLE001 — 顯示用，不能擋畫面
+    except Exception:  # 顯示用，不能擋畫面
         return ""
     for key in (getattr(spec, "metric", ""), getattr(spec, "base", ""),
                 getattr(spec, "name", "")):
@@ -181,7 +181,7 @@ def _card_says(spec: Any) -> str:
         from ..core.pipeline import get_step
 
         table = get_step(str(getattr(spec, "card", "") or "")).feature_help()
-    except Exception:                      # noqa: BLE001 — 顯示用，不能擋畫面
+    except Exception:  # 顯示用，不能擋畫面
         return ""
     for key in (getattr(spec, "base", ""), getattr(spec, "metric", ""),
                 getattr(spec, "name", "")):

@@ -260,7 +260,7 @@ def item_filters(recipe: Recipe,
             continue
         try:
             got = step_cls.item_filter(dict(node.params or {}))
-        except Exception:              # noqa: BLE001 — 壞參數由 validate 講
+        except Exception:  # 壞參數由 validate 講
             continue
         if got:
             out.append((str(nid), str(got[0]), tuple(got[1])))
@@ -293,7 +293,7 @@ def select_items(recipe: Recipe, dataset: Any, items: Sequence[Any],
             have.update((getattr(it, "fields", None) or {}).keys())
         try:
             fill_fields(dataset, sorted(have | set(missing)))
-        except Exception:              # noqa: BLE001 — 補不到就照原值比
+        except Exception:  # 補不到就照原值比
             pass
 
     def keep(it: Any) -> bool:
@@ -463,7 +463,7 @@ def _stat_rows(rows, name: str, expr: str):
     """
     try:
         variables = sorted(parse_expression(str(expr)).variables)
-    except Exception:              # noqa: BLE001 — 壞算式第一趟就逐顆失敗了
+    except Exception:  # 壞算式第一趟就逐顆失敗了
         variables = []
     out = []
     for r in rows:
@@ -542,7 +542,7 @@ def redecide(recipe: Recipe, rows, revive: bool = False) -> int:
                              if isinstance(v, (int, float))})
         try:
             score, b = _eval_score(recipe, ctx)
-        except Exception as e:             # noqa: BLE001 — 鐵則 7：單顆失敗
+        except Exception as e:  # 鐵則 7：單顆失敗
             r["ok"] = False
             r["error"] = "[score] %s" % e
             r["score"], r["bin"] = None, None
@@ -759,6 +759,6 @@ def run_batch_steps(recipe: Recipe, dataset: Any,
             try:
                 params = step_cls.validate_params(node.params)
                 step_cls().run_batch(bctx, params)
-            except Exception as e:          # noqa: BLE001 — 鐵則 7 的跨顆版
+            except Exception as e:  # 鐵則 7 的跨顆版
                 bctx.errors[nid] = str(e)
     return bctx

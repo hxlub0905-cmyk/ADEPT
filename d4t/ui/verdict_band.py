@@ -87,7 +87,7 @@ class _Bar(QWidget):
     def fraction(self) -> float:
         return self._frac
 
-    def paintEvent(self, event) -> None:            # noqa: N802 — Qt
+    def paintEvent(self, event) -> None:  # Qt
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
         w, h = float(self.width()), float(self.height())
@@ -275,7 +275,7 @@ class _ClickableRow(QWidget):
     def key(self) -> str:
         return self._key
 
-    def mouseReleaseEvent(self, event) -> None:     # noqa: N802 — Qt
+    def mouseReleaseEvent(self, event) -> None:  # Qt
         if event.button() == Qt.LeftButton and self.rect().contains(
                 event.position().toPoint()):
             self.clicked.emit(self._key)

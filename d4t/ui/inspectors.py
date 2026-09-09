@@ -186,7 +186,7 @@ class Inspector(QWidget):
         p.setPen(QColor(TOKENS["text_disabled"]))
         p.drawText(rect, Qt.AlignCenter | Qt.TextWordWrap, self.empty_reason())
 
-    def paintEvent(self, _e) -> None:      # noqa: D102 - Qt hook
+    def paintEvent(self, _e) -> None:  # Qt hook
         """**畫不出來不得毀掉整個畫面**（2026-08-20）——鐵則 7 的 UI 版。
 
         Qt 的 ``paintEvent`` 一丟例外就留下一個沒收尾的 painter
@@ -204,7 +204,7 @@ class Inspector(QWidget):
                 self._say_empty(p, rect)
             else:
                 self.paint_body(p, rect)
-        except Exception:                  # noqa: BLE001 — 見 docstring
+        except Exception:  # 見 docstring
             traceback.print_exc()
             try:
                 p.setPen(QColor(TOKENS["danger_text"]))
@@ -212,7 +212,7 @@ class Inspector(QWidget):
                            Qt.AlignCenter | Qt.TextWordWrap,
                            "This panel could not be drawn (see the terminal). "
                            "Everything else still works.")
-            except Exception:              # noqa: BLE001 — 連錯誤都畫不出來
+            except Exception:  # 連錯誤都畫不出來
                 pass
         finally:
             p.end()
@@ -287,7 +287,7 @@ class AlignInspector(Inspector):
                      "radius” and run again." % stuck)
         return text
 
-    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:
         pts = self.points()
         r = max(self.radius(), max((max(abs(x), abs(y)) for x, y in pts),
                                    default=1.0), 1.0)
@@ -600,7 +600,7 @@ class EnhanceInspector(Inspector):
     #: 它回答的是一個是非題（「有沒有別的顆更糟」），不是一張要細看的圖。
     _STRIP_H = 22.0
 
-    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:
         panes = self.panes()
         if not panes:
             return
@@ -886,7 +886,7 @@ class CrossInspector(Inspector):
         return dict(crossings.get(name) or (
             list(crossings.values())[0] if len(crossings) == 1 else {}))
 
-    def set_context(self, *a, **kw) -> None:   # noqa: D102
+    def set_context(self, *a, **kw) -> None:
         super().set_context(*a, **kw)
         rec = self.record()
         left, right = note_header(
@@ -939,7 +939,7 @@ class CrossInspector(Inspector):
             bits.append(str(rec["reason"]))
         return " · ".join(bits)
 
-    def paintEvent(self, _e) -> None:          # noqa: D102 - 內容由子元件畫
+    def paintEvent(self, _e) -> None:  # 內容由子元件畫
         pass
 
 
@@ -1058,7 +1058,7 @@ class TemplateInspector(Inspector):
         return ("could not place the region — %s: %s%s"
                 % (first, why[first], tail))
 
-    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:
         gates = self.gates()
         row_h = min(30.0, rect.height() / (len(gates) + 1))
         for i, ((label, got, need, ok), (_l, _k, _p, full)) in enumerate(
@@ -1193,7 +1193,7 @@ class MeasureInspector(Inspector):
     AXIS_MIN_ROW_H = 34
     AXIS_H = 12
 
-    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:
         names = self.rows()
         if not names:
             # 子類可能因為**別的理由**說「有資料」（`PairInspector` 手上有配對
@@ -1469,7 +1469,7 @@ class GlvInspector(Inspector):
         phrase = region_words.INTENT_PHRASE.get(region_words.role_of(region))
         return "%s (%s)" % (phrase, region) if phrase else region
 
-    def tab_title(self) -> str:                # noqa: D102
+    def tab_title(self) -> str:
         rows = self.rows()
         if not rows:
             return self.title
@@ -1487,7 +1487,7 @@ class GlvInspector(Inspector):
         return "%s · %s on %s" % (self.title, self._intent_name(who),
                                   str(first.get("stream") or "?"))
 
-    def tab_tooltip(self) -> str:              # noqa: D102
+    def tab_tooltip(self) -> str:
         rows = self.rows()
         if not rows:
             return self.empty_reason()
@@ -1508,7 +1508,7 @@ class GlvInspector(Inspector):
         return "\n".join(bits)
 
     # -- 畫 -----------------------------------------------------------------
-    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:
         rows = self.rows()
         if not rows:
             self._say_empty(p, rect)
@@ -1535,7 +1535,7 @@ class GlvInspector(Inspector):
         """
         return QColor(region_hex(index))
 
-    def _label_rows(self) -> List[Dict[str, Any]]:   # noqa: D102
+    def _label_rows(self) -> List[Dict[str, Any]]:
         return list(self.rows())
 
     def _paint_row(self, p: QPainter, band: QRectF, row: Dict[str, Any],
@@ -2129,7 +2129,7 @@ class CdInspector(Inspector):
                                 str(n.get("prefix", ""))))
         return out
 
-    def _label_rows(self) -> List[Dict[str, Any]]:   # noqa: D102
+    def _label_rows(self) -> List[Dict[str, Any]]:
         return self.notes()
 
     def note(self) -> Optional[Dict[str, Any]]:
@@ -2150,7 +2150,7 @@ class CdInspector(Inspector):
         stream = str(note.get("stream") or "")
         return "%s @ %s" % (region, stream) if stream else region
 
-    def tab_title(self) -> str:                # noqa: D102
+    def tab_title(self) -> str:
         notes = self.notes()
         if not notes:
             return "CD"
@@ -2187,7 +2187,7 @@ class CdInspector(Inspector):
         note = (self.note() if note is None else note) or {}
         return str(note.get("shape")) == "blob"
 
-    def tab_tooltip(self) -> str:              # noqa: D102
+    def tab_tooltip(self) -> str:
         note = self.note()
         if note is None:
             return ""
@@ -2198,7 +2198,7 @@ class CdInspector(Inspector):
                 % (note.get("criterion", "?"), note.get("axis", "?"),
                    note.get("target_used") or note.get("target", "?")))
 
-    def summary(self) -> str:                  # noqa: D102
+    def summary(self) -> str:
         """一行 —— 接了幾個區域就講幾個，各自冠上自己的名字。
 
         以前這裡只講第一個、後面補一句 ``+N more``，而「+1 more」說不出那一個
@@ -2251,7 +2251,7 @@ class CdInspector(Inspector):
         return "  ·  ".join(bits)
 
     # -- 畫 -----------------------------------------------------------------
-    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:
         """**接了幾個區域就畫幾列**（每列一個顏色）。
 
         以前這裡只畫 ``notes()[0]``，而那一份是**照名字排序**的第一個 ——
@@ -2710,7 +2710,7 @@ class InputInspector(Inspector):
             bits.append("measured in pixels — set nm/px when you export")
         return " · ".join(bits)
 
-    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:
         pages = self.pages()
         head = QRectF(rect.left(), rect.top(), rect.width(), 15)
         p.setPen(QColor(TOKENS["text_secondary"]))
@@ -2813,7 +2813,7 @@ class GdsInspector(Inspector):
                         % ", ".join(str(i) for i in extra))
         return " · ".join(bits)
 
-    def paintEvent(self, _e) -> None:          # noqa: D102 - Qt hook
+    def paintEvent(self, _e) -> None:  # Qt hook
         from .theme import region_hex
 
         rec = self.record()
@@ -2980,7 +2980,7 @@ class WriteBackInspector(Inspector):
             plan = plan_writeback(doc, rows, self.mode())
             return {"changed": int(getattr(plan, "n_rows_changed", 0)),
                     "out": int(getattr(plan, "n_rows_out", 0)), "note": ""}
-        except Exception:                  # noqa: BLE001 — 提示不准擋路
+        except Exception:  # 提示不准擋路
             ok = sum(1 for r in rows if r.get("ok"))
             return {"changed": ok, "out": len(rows), "note": "estimated"}
 
@@ -2995,7 +2995,7 @@ class WriteBackInspector(Inspector):
                 % (mode, what, info.get("changed", 0), info.get("out", 0),
                    " (estimated)" if info.get("note") else ""))
 
-    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:
         info = self.plan()
         mode = self.mode()
         lines = [("Mode", mode)]
@@ -3138,7 +3138,7 @@ class SubtractInspector(Inspector):
                    100.0 * float(r.get("beyond3") or 0.0),
                    100.0 * float(r.get("clipped") or 0.0)))
 
-    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:
         r = self.record()
         if not r.get("bins"):
             self._say_empty(p, rect)
@@ -3243,7 +3243,7 @@ class OutputPreviewInspector(Inspector):
         try:
             from ..core.pipeline.step import get_step
             return list(get_step(self.STEP_KEY).planned_files(self.params))
-        except Exception:              # noqa: BLE001 — 提示不准擋路
+        except Exception:  # 提示不准擋路
             return []
 
     def path(self) -> str:
@@ -3275,7 +3275,7 @@ class OutputPreviewInspector(Inspector):
         lines.append(("Defects", self._count_line()))
         return lines
 
-    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:
         lines = self._lines()
         row_h = max(15.0, min(20.0, rect.height() / max(1, len(lines))))
         y = rect.top()
@@ -3443,16 +3443,16 @@ class UniformityPreviewInspector(OutputPreviewInspector):
             int(self.width() - w - 14), int(self.height() - h - 12),
             int(w), int(h))
 
-    def set_context(self, *a, **kw) -> None:          # noqa: D102
+    def set_context(self, *a, **kw) -> None:
         super().set_context(*a, **kw)
         self._place_button()
 
-    def resizeEvent(self, event) -> None:             # noqa: D102, N802
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._place_button()
 
     # -- 畫 -----------------------------------------------------------------
-    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:
         series = self.series()
         if not series.get("groups"):
             super().paint_body(p, rect)
@@ -3562,7 +3562,7 @@ class FocusInspector(MeasureInspector):
     #: 單顆那一段的高度：一列 header + 一列數字 + 一列提示。
     NOTE_H = 46.0
 
-    def paint_body(self, p: QPainter, rect: QRectF) -> None:   # noqa: D102
+    def paint_body(self, p: QPainter, rect: QRectF) -> None:
         notes = self.notes()
         if not notes:
             super().paint_body(p, rect)

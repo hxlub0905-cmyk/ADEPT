@@ -1,0 +1,30 @@
+# 家用機是 Windows、CI 是 Linux、公司機靠「瀏覽器複製 → 記事本」拿檔案。
+# 這一份說的是：哪些檔案的位元組**不准被換行符正規化動到**。
+#
+# 為什麼要有它（2026-09-09）：以前沒有這支檔案，所以「Windows 上 autocrlf 會不會
+# 改掉 fixture」完全看每一台機器的 git 設定 —— 而 KLARF 寫回的驗收是
+# 「沒被改到的 byte 逐位元組相同」（CLAUDE.md 鐵則 6），黃金值也是逐位元組凍的。
+# 一份被 autocrlf 安靜改過的 fixture 會讓那兩道關同時說謊：測試照樣綠，
+# 而它比的是被改過的那一份。
+
+* text=auto
+
+# KLARF：無損寫回的參照物，位元組就是規格。
+*.klarf -text
+*.KLARF -text
+
+# 測試 fixture 整個目錄：黃金值、合成 KLARF、bench 基準都在這裡。
+tests/fixtures/** -text
+
+# 搬運包：解包程式對「換行符被改過」有自己的防護（test_offline_tools 有測），
+# 但它的檔案清單是 git blob SHA —— 那是對**位元組**算的，被正規化就對不上。
+bundle/d4t_bundle.py -text
+tools/FILELIST.txt -text
+
+# 影像與二進位資料，git 本來就不該碰。
+*.tif binary
+*.tiff binary
+*.png binary
+*.jpg binary
+*.npz binary
+*.db binary

@@ -162,7 +162,7 @@ class _Row(QFrame):
             self.setCursor(Qt.PointingHandCursor)
             self.setToolTip("Click to jump to whatever produced ‘%s’." % name)
 
-    def mouseReleaseEvent(self, event) -> None:     # noqa: N802 — Qt
+    def mouseReleaseEvent(self, event) -> None:  # Qt
         name = str(self.row.get("name") or "")
         if name and event.button() == Qt.LeftButton and \
                 self.rect().contains(event.position().toPoint()):
@@ -256,7 +256,7 @@ class WhyPanel(QWidget):
             self.item_activated.emit(str(name))
 
     # ---- Qt ----------------------------------------------------------------
-    def keyPressEvent(self, event) -> None:         # noqa: N802 — Qt
+    def keyPressEvent(self, event) -> None:  # Qt
         if event.key() == Qt.Key_Escape:
             self.dismiss()
             event.accept()

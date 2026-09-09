@@ -41,7 +41,7 @@ def _load_recipe(path: str):
 
     try:
         return Recipe.load(path)
-    except Exception as exc:  # noqa: BLE001 — CLI 邊界
+    except Exception as exc:  # CLI 邊界
         print(f"[錯誤] 無法載入 recipe：{exc}", file=sys.stderr)
         return None
 
@@ -154,7 +154,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             # 只複製 recipe 真的要 carry 的那幾欄（幾十萬顆 ×24 欄是幾百 MB，
             # 而那幾欄還要 pickle 進每個 worker）。
             rep = pair_ingest.attach(ds, second, sid, columns=want)
-        except Exception as e:              # noqa: BLE001 — CLI 邊界，一律回報
+        except Exception as e:  # CLI 邊界，一律回報
             print("[錯誤] --source %s：%s" % (spec, e), file=sys.stderr)
             return 2
         # **打錯一個欄名要在這裡就停**，不是讓每一顆都失敗一次：整批跑完才發現
@@ -425,7 +425,7 @@ def _cmd_export(args: argparse.Namespace) -> int:
         try:
             run = store.get_run(args.run_id)
             results = list(store.iter_results(args.run_id))
-        except Exception as exc:  # noqa: BLE001 — CLI 邊界
+        except Exception as exc:  # CLI 邊界
             print(f"[錯誤] 讀不到 run '{args.run_id}'：{exc}", file=sys.stderr)
             return 2
     print(f"run {args.run_id}：{len(results)} 筆結果"
@@ -558,7 +558,7 @@ def _find_ground_truth(arg, klarf_path: str):
             try:
                 with open(guess, encoding="utf-8") as f:
                     return guess, json.load(f)
-            except Exception:              # noqa: BLE001 — 找不到就算了
+            except Exception:  # 找不到就算了
                 return "", None
     return "", None
 

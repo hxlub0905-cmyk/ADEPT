@@ -415,7 +415,7 @@ def _tiff_handle_locked(path):
         if hit is not None:               # 檔案變了：關掉舊的
             try:
                 hit[0].close()
-            except Exception:             # noqa: BLE001 — 關檔失敗不該擋住讀取
+            except Exception:  # 關檔失敗不該擋住讀取
                 pass
             _OPEN.pop(path, None)
         tf = tifffile.TiffFile(path)
@@ -445,7 +445,7 @@ def _tiff_handle_locked(path):
             _old, (old_tf, _k, _i) = _OPEN.popitem(last=False)
             try:
                 old_tf.close()
-            except Exception:             # noqa: BLE001
+            except Exception:
                 pass
         return tf, index
 
@@ -456,7 +456,7 @@ def close_cached_tiffs() -> None:
         for tf, _key, _index in _OPEN.values():
             try:
                 tf.close()
-            except Exception:             # noqa: BLE001
+            except Exception:
                 pass
         _OPEN.clear()
 

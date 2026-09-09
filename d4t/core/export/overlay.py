@@ -494,7 +494,7 @@ def worst_note_for_overlay(ctx: Any) -> Tuple[list, int, Optional[Dict[str, Any]
             continue
         try:
             rects = list(ctx.roi_norm_rects(region))
-        except Exception:       # noqa: BLE001 — note 指著一個已經不在的區域
+        except Exception:  # note 指著一個已經不在的區域
             continue
         if not rects:
             continue

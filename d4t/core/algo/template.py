@@ -439,7 +439,7 @@ def decode_template(text: str) -> Optional[Tuple[np.ndarray, Tuple[int, int]]]:
         if not (1 <= sx <= w and 1 <= sy <= h):
             return cell, (w, h)
         return cell, (sx, sy)
-    except Exception:                       # noqa: BLE001 — 壞字串一律當沒有
+    except Exception:  # 壞字串一律當沒有
         return None
 
 

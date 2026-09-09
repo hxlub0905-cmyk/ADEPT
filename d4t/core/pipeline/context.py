@@ -99,7 +99,7 @@ class Context:
                 "was_clipped_low": _clipped(before, low=True),
                 "was_clipped_high": _clipped(before, low=False),
             }
-        except Exception:               # noqa: BLE001 — 記錄失敗不准影響執行
+        except Exception:  # 記錄失敗不准影響執行
             return
         self.meta.setdefault("stream_change", {})[str(key)] = rec
 

@@ -364,7 +364,7 @@ def write_csv(frame: Frame, path: str) -> str:
     `_esc` / `_fmt`）：**寫檔的規矩只該有一份**，而它已經在那裡了
     （atomic：`.tmp` + `os.replace`，鐵則 5）。
     """
-    from .report import _atomic_replace, _ensure_parent  # noqa: PLC2701
+    from .report import _atomic_replace, _ensure_parent
 
     path = str(path)
     _ensure_parent(path)

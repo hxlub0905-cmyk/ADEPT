@@ -200,7 +200,7 @@ class BaselineStore:
             try:
                 from .welcome import app_settings
                 self._settings = app_settings()
-            except Exception:              # noqa: BLE001 — 設定讀不到不准擋路
+            except Exception:  # 設定讀不到不准擋路
                 self._settings = False     # 記住失敗，不要每次都重試
         return self._settings or None
 
@@ -213,7 +213,7 @@ class BaselineStore:
         try:
             st.setValue(self._key, raw)
             st.sync()
-        except Exception:                  # noqa: BLE001 — 存不進去不准擋路
+        except Exception:  # 存不進去不准擋路
             pass
 
     def load(self) -> Optional[Dict[str, Any]]:
@@ -222,7 +222,7 @@ class BaselineStore:
         if st is not None:
             try:
                 raw = str(st.value(self._key, "") or "") or raw
-            except Exception:              # noqa: BLE001
+            except Exception:
                 pass
         if not raw:
             return None

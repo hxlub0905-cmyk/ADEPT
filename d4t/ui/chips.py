@@ -225,15 +225,15 @@ class _ChipBase(QFrame):
         self.update()
 
     # -- Qt hooks -----------------------------------------------------------
-    def enterEvent(self, _e) -> None:      # noqa: D102 - Qt hook
+    def enterEvent(self, _e) -> None:  # Qt hook
         self._hover = True
         self.update()
 
-    def leaveEvent(self, _e) -> None:      # noqa: D102 - Qt hook
+    def leaveEvent(self, _e) -> None:  # Qt hook
         self._hover = False
         self.update()
 
-    def mousePressEvent(self, e) -> None:  # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         if e.button() == Qt.LeftButton:
             self.click()
 
@@ -252,14 +252,14 @@ class _ChipBase(QFrame):
         self.update()
         self.toggled.emit(self.mid, self._checked)
 
-    def changeEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def changeEvent(self, e) -> None:  # Qt hook
         if e.type() == QEvent.EnabledChange:
             self.setCursor(Qt.PointingHandCursor if self.isEnabled()
                            else Qt.ArrowCursor)
             self.update()
         super().changeEvent(e)
 
-    def paintEvent(self, _e) -> None:      # noqa: D102 - Qt hook
+    def paintEvent(self, _e) -> None:  # Qt hook
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
@@ -331,7 +331,7 @@ class _MetricChip(_ChipBase):
                         "%s — %s" % (algo_glv.metric_label(self.mid),
                                      algo_glv.metric_formula(self.mid)))
 
-    def click(self) -> None:               # noqa: D102 - 見基底
+    def click(self) -> None:  # 見基底
         if self.adder:
             self.add_clicked.emit(self.mid)
             return
@@ -398,7 +398,7 @@ class _ChipFlow(QWidget):
             x += c.width() + 5
         self.setFixedHeight(y + _ChipBase.H if self._items else 0)
 
-    def resizeEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def resizeEvent(self, e) -> None:  # Qt hook
         self._relayout(e.size().width())
         super().resizeEvent(e)
 
@@ -407,11 +407,11 @@ class _ChipFlow(QWidget):
     #: 於是放進一個沒有 stretch 的 layout（判定面板那一列）時整塊被壓成 0 px
     #: 寬：膠囊都在、也都 `isVisible()`，但畫面上什麼都沒有（2026-09-01
     #: render 出來才看到）。ParamForm 那邊看不出來，因為它是 `addWidget(w, 1)`。
-    def sizeHint(self) -> QSize:           # noqa: D102 - Qt hook
+    def sizeHint(self) -> QSize:  # Qt hook
         return QSize(max([c.width() for c in self._items] or [0]) or 120,
                      max(self.height(), _ChipBase.H))
 
-    def minimumSizeHint(self) -> QSize:    # noqa: D102 - Qt hook
+    def minimumSizeHint(self) -> QSize:  # Qt hook
         return QSize(max([c.width() for c in self._items] or [0]),
                      _ChipBase.H)
 

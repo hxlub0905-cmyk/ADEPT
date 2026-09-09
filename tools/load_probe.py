@@ -67,7 +67,7 @@ class _Timer:
         t0 = time.time()
         try:
             out, err = fn(), None
-        except Exception as e:                    # noqa: BLE001 — 報告用
+        except Exception as e:  # 報告用
             out, err = None, "%s: %s" % (type(e).__name__, e)
         self.rows.append((label, time.time() - t0, err))
         return out

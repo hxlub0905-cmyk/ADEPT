@@ -411,7 +411,7 @@ class _GridView(QAbstractScrollArea):
                 try:
                     if fn(self._items[i]):
                         keep.append(i)
-                except Exception:            # noqa: BLE001 — 自訂條件炸掉不該殺 UI
+                except Exception:  # 自訂條件炸掉不該殺 UI
                     continue
             idx = keep
         if self._sort_key:
@@ -550,7 +550,7 @@ class _GridView(QAbstractScrollArea):
             if u8.ndim == 3 and u8.shape[2] not in (3, 4):
                 u8 = u8[:, :, 0]
             pm = QPixmap.fromImage(_qimage_from_uint8(u8))
-        except Exception:                     # noqa: BLE001 — 壞縮圖不該殺掉整頁
+        except Exception:  # 壞縮圖不該殺掉整頁
             return None
         s = self._thumb
         if pm.width() != s or pm.height() != s:
@@ -587,7 +587,7 @@ class _GridView(QAbstractScrollArea):
         return ""
 
     # -- 繪圖 ---------------------------------------------------------------
-    def paintEvent(self, _e) -> None:          # noqa: D102 - Qt hook
+    def paintEvent(self, _e) -> None:  # Qt hook
         p = QPainter(self.viewport())
         # 縮圖牆也用中性灰 —— 這裡是用眼睛掃整批的地方，背景偏差影響最大
         p.fillRect(self.viewport().rect(), QColor(TOKENS["image_backdrop"]))
@@ -670,7 +670,7 @@ class _GridView(QAbstractScrollArea):
                                               sub_rect.width()))
 
     # -- 互動 ---------------------------------------------------------------
-    def viewportEvent(self, e) -> bool:        # noqa: D102 - Qt hook
+    def viewportEvent(self, e) -> bool:  # Qt hook
         # **截掉的字要有地方讀全**（F99 P0-4）。一格 96 px 的縮圖底下裝
         # 「more than one box is off」與「#4 · bin 2 · 35.506」，省略是對的
         # （寬度不是免費的），但類別名是這一顆最重要的一句話 —— 停在上面就要
@@ -687,7 +687,7 @@ class _GridView(QAbstractScrollArea):
             return True
         return super().viewportEvent(e)
 
-    def mousePressEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         if e.button() != Qt.LeftButton:
             return
         idx = self.index_at(e.position().toPoint())
@@ -718,7 +718,7 @@ class _GridView(QAbstractScrollArea):
             self.defect_selected.emit(self._items[self._view[idx]]["defect_id"])
         e.accept()
 
-    def mouseDoubleClickEvent(self, e) -> None:   # noqa: D102 - Qt hook
+    def mouseDoubleClickEvent(self, e) -> None:  # Qt hook
         if e.button() != Qt.LeftButton:
             return
         idx = self.index_at(e.position().toPoint())
@@ -735,11 +735,11 @@ class _GridView(QAbstractScrollArea):
         self.defect_activated.emit(item["defect_id"])
         e.accept()
 
-    def scrollContentsBy(self, dx: int, dy: int) -> None:   # noqa: D102 - Qt hook
+    def scrollContentsBy(self, dx: int, dy: int) -> None:  # Qt hook
         self.viewport().update()
         self._maybe_request_thumbs()
 
-    def resizeEvent(self, e) -> None:          # noqa: D102 - Qt hook
+    def resizeEvent(self, e) -> None:  # Qt hook
         super().resizeEvent(e)
         self._update_scrollbar()
         self._maybe_request_thumbs()

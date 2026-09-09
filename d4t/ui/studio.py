@@ -351,7 +351,7 @@ def _save_sizes(key: str, sizes: Sequence[int]) -> None:
         return
     try:
         app_settings().setValue(key, ",".join(str(int(v)) for v in sizes))
-    except Exception:                   # noqa: BLE001
+    except Exception:
         pass
 
 
@@ -366,7 +366,7 @@ def _load_sizes(key: str, count: int) -> Optional[List[int]]:
     try:
         raw = str(app_settings().value(key, "") or "")
         out = [int(x) for x in raw.split(",") if x.strip()]
-    except Exception:                   # noqa: BLE001
+    except Exception:
         return None
     return out if len(out) == count and sum(out) > 0 else None
 
@@ -377,7 +377,7 @@ def _welcome_on_start_default() -> bool:
         return False
     try:
         return not welcome_disabled()
-    except Exception:                   # noqa: BLE001 — 設定讀不到不該擋開窗
+    except Exception:  # 設定讀不到不該擋開窗
         return False
 
 
@@ -401,7 +401,7 @@ def generate_demo_lot(out_dir: Any = None, n: int = DEMO_DEFECTS,
     tools_dir = str(Path(__file__).resolve().parents[2] / "tools")
     if tools_dir not in sys.path:
         sys.path.insert(0, tools_dir)
-    from make_sample import generate      # noqa: E402 — 刻意延遲（見 docstring）
+    from make_sample import generate
 
     return generate(out, n=int(n), seed=int(seed))
 
@@ -456,7 +456,7 @@ class ThumbWorker(_ThreadedWorker):
         for did, item in jobs or ():
             try:
                 arr = load_thumb(item, int(size))
-            except Exception:               # noqa: BLE001 — 單顆壞掉不該殺整批
+            except Exception:  # 單顆壞掉不該殺整批
                 continue
             if arr is not None:
                 out[str(did)] = arr
@@ -2127,7 +2127,7 @@ class StudioWindow(QMainWindow):
         """
         try:
             streams = list(self.model.available_streams())
-        except Exception:                # noqa: BLE001 — 顯示用，壞了就不標
+        except Exception:  # 顯示用，壞了就不標
             streams = []
         self.library.set_available_streams(streams)
 
@@ -2370,7 +2370,7 @@ class StudioWindow(QMainWindow):
         if issues is None:
             try:
                 issues = self.model.validate()
-            except Exception:                    # noqa: BLE001 — 顯示用，壞了就沒標記
+            except Exception:  # 顯示用，壞了就沒標記
                 return out
         rank = {"error": 0, "warning": 1, "info": 2}
         for issue in issues:
@@ -2391,7 +2391,7 @@ class StudioWindow(QMainWindow):
         # 各算一次的那天，畫面上會有一張卡是紅的而清單說沒有問題。
         try:
             issues: Sequence[Any] = self.model.validate()
-        except Exception:                        # noqa: BLE001 — 顯示用
+        except Exception:  # 顯示用
             issues = []
         self.problems.set_issues(issues)
         problems = self._node_problems(issues)
@@ -2411,17 +2411,17 @@ class StudioWindow(QMainWindow):
             try:
                 writes = list(step_cls.resolve_writes_for_kind(
                     node.params, self.model.kind))
-            except Exception:              # noqa: BLE001 — 顯示用，壞了就空著
+            except Exception:  # 顯示用，壞了就空著
                 writes = []
             try:
                 reads = list(step_cls.resolve_reads(node.params))
-            except Exception:              # noqa: BLE001
+            except Exception:
                 reads = []
             try:
                 # Region 卡不寫影像流，它定義的是具名區域 —— 副標要講得出
                 # 「ref → cell」，否則那張卡在畫布上看起來什麼都不產出。
                 regions_made = list(step_cls.resolve_regions_out(node.params))
-            except Exception:              # noqa: BLE001
+            except Exception:
                 regions_made = []
             # 右邊的**區域埠**還含「原樣送出的」（F12 第二輪，使用者：「區域線
             # 應該也要 follow 圖像線一樣，前進後出」）—— 跟影像的 `outs` 同一條
@@ -2587,7 +2587,7 @@ class StudioWindow(QMainWindow):
 
         try:
             issues = self.model.validate()
-        except Exception:                        # noqa: BLE001 — 顯示用
+        except Exception:  # 顯示用
             return ("", "")
         rank = {"error": 0, "warning": 1, "info": 2}
         best = None
@@ -2950,7 +2950,7 @@ class StudioWindow(QMainWindow):
             snap = baseline.snapshot(
                 self.trial_results, self.ground_truth, self.model.bins,
                 threshold=threshold)
-        except Exception:                # noqa: BLE001 — 顯示用，壞了就不講
+        except Exception:  # 顯示用，壞了就不講
             return
         self.results.set_run_snapshot(snap if self.trial_results else None)
 
@@ -4515,7 +4515,7 @@ class StudioWindow(QMainWindow):
         if sync:
             try:
                 ds = DatasetLoadWorker.run_sync(path, tiff)
-            except Exception as e:      # noqa: BLE001 — UI 邊界，一律回報
+            except Exception as e:  # UI 邊界，一律回報
                 self._status("Could not load dataset: %s: %s" % (type(e).__name__, e), "error")
                 return False
             return self._on_dataset_loaded(ds)
@@ -4544,7 +4544,7 @@ class StudioWindow(QMainWindow):
         if sync:
             try:
                 ds = DatasetLoadWorker.run_sync_stack(path, n)
-            except Exception as e:      # noqa: BLE001 — UI 邊界，一律回報
+            except Exception as e:  # UI 邊界，一律回報
                 self._status("Could not load image stack: %s: %s"
                              % (type(e).__name__, e), "error")
                 return False
@@ -4571,7 +4571,7 @@ class StudioWindow(QMainWindow):
         if sync:
             try:
                 ds = DatasetLoadWorker.run_sync_folder(d)
-            except Exception as e:      # noqa: BLE001 — UI 邊界，一律回報
+            except Exception as e:  # UI 邊界，一律回報
                 self._status("Could not load folder: %s: %s"
                              % (type(e).__name__, e), "error")
                 return False
@@ -4597,7 +4597,7 @@ class StudioWindow(QMainWindow):
         if sync:
             try:
                 ds = DatasetLoadWorker.run_sync_image_file(f)
-            except Exception as e:      # noqa: BLE001 — UI 邊界，一律回報
+            except Exception as e:  # UI 邊界，一律回報
                 self._status("Could not load image: %s: %s"
                              % (type(e).__name__, e), "error")
                 return False
@@ -4844,7 +4844,7 @@ class StudioWindow(QMainWindow):
         path = str(path)
         try:
             recipe = Recipe.load(path)
-        except Exception as e:          # noqa: BLE001 — UI 邊界
+        except Exception as e:  # UI 邊界
             self._status("Could not load recipe: %s: %s" % (type(e).__name__, e), "error")
             return False
         # 舊格式**升級了就要說**（U17）：畫布上多出來的線與拆開的卡是遷移補的，
@@ -4908,11 +4908,11 @@ class StudioWindow(QMainWindow):
         try:
             with open(str(path), "r", encoding="utf-8") as fh:
                 raw = json.load(fh)
-        except Exception:          # noqa: BLE001 — 只是一句提示
+        except Exception:  # 只是一句提示
             return []
         try:
             return list(describe_migration(raw, recipe))
-        except Exception:          # noqa: BLE001 — 同上
+        except Exception:  # 同上
             return []
 
     def _show_upgrade_detail(self, upgraded: List[str]) -> None:
@@ -4943,7 +4943,7 @@ class StudioWindow(QMainWindow):
             return False
         try:
             self.model.to_recipe().save(path)
-        except Exception as e:          # noqa: BLE001 — UI 邊界
+        except Exception as e:  # UI 邊界
             self._status("Could not save: %s: %s" % (type(e).__name__, e),
                          "error")
             return False
@@ -5041,7 +5041,7 @@ class StudioWindow(QMainWindow):
                 result = PreviewWorker.run_sync(recipe, item, kind,
                                                 upto_node=upto,
                                                 sources=self.sources_for_run())
-            except Exception as e:      # noqa: BLE001 — UI 邊界
+            except Exception as e:  # UI 邊界
                 self._status("Preview failed: %s: %s" % (type(e).__name__, e), "error")
                 return False
             self._on_preview_ready(result)
@@ -5212,7 +5212,7 @@ class StudioWindow(QMainWindow):
             try:
                 trace = verdict_trace(self.model.to_recipe(),
                                       self.model.kind, feats)
-            except Exception:              # noqa: BLE001 — 顯示層
+            except Exception:  # 顯示層
                 trace = None
             self._preview_trace = trace
             if trace is not None and trace.mode == "tree" and trace.path:
@@ -5700,7 +5700,7 @@ class StudioWindow(QMainWindow):
         if node is not None:
             try:
                 feats = list(get_step(node.step).resolve_features(node.params))
-            except Exception:              # noqa: BLE001 — 顯示用
+            except Exception:  # 顯示用
                 feats = []
         # 儀表要跟著**畫面上正在看的東西**走：並排比對打開時是左右那兩條流，
         # 所以底下的直方圖也是兩張、順序一樣（使用者是拿它們互相對照的）。
@@ -5894,7 +5894,7 @@ class StudioWindow(QMainWindow):
             recipe = self.model.to_recipe()
             bounds = bound_specs(recipe, self.model.kind)
             diags = diagnostic_columns(recipe, self.model.kind)
-        except Exception:              # noqa: BLE001 — 顯示層，壞了就不分組
+        except Exception:  # 顯示層，壞了就不分組
             bounds, diags = [], []
         return panel_model(getattr(result, "features", {}) or {}, bounds,
                            highlight=highlight,
@@ -5921,7 +5921,7 @@ class StudioWindow(QMainWindow):
                 continue
             try:
                 got = get_step(node.step).resolve_feature_specs(node.params)
-            except Exception:              # noqa: BLE001 — 顯示用，壞了就不拆
+            except Exception:  # 顯示用，壞了就不拆
                 continue
             for s in got:
                 out.setdefault(str(s.name), s)
@@ -5961,7 +5961,7 @@ class StudioWindow(QMainWindow):
             recipe = self.model.to_recipe()
             prefixes = feature_prefixes(list(self.model.node_order), recipe,
                                         REGISTRY)
-        except Exception:              # noqa: BLE001 — 顯示用，壞了就退回節點 id
+        except Exception:  # 顯示用，壞了就退回節點 id
             prefixes = {}
         for nid in self.model.node_order:
             node = self.model.nodes.get(nid)
@@ -5982,7 +5982,7 @@ class StudioWindow(QMainWindow):
                 diag |= {s.qualified(pfx).name
                          for s in step_cls.resolve_feature_specs(node.params)
                          if s.name in diag}
-            except Exception:              # noqa: BLE001 — 顯示用，壞了就當一般的
+            except Exception:  # 顯示用，壞了就當一般的
                 label, colour, diag = node.step, "", set()
             measured = [f for f in mine if f not in diag]
             diagnostics.extend(f for f in mine if f in diag)
@@ -6140,7 +6140,7 @@ class StudioWindow(QMainWindow):
             step_cls = get_step(node.step)
             produced = list(step_cls.resolve_regions_out(node.params))
             consumed = list(step_cls.resolve_regions_in(node.params))
-        except Exception:                  # noqa: BLE001 — 顯示用，不能擋畫面
+        except Exception:  # 顯示用，不能擋畫面
             return []
         names: List[str] = []
         for name in produced:
@@ -6203,7 +6203,7 @@ class StudioWindow(QMainWindow):
         try:
             lines, points, focus, labels = get_step(node.step).overlay_marks(
                 ctx, node.params, stream)
-        except Exception:                  # noqa: BLE001 — 顯示用，不能擋畫面
+        except Exception:  # 顯示用，不能擋畫面
             return [], [], -1, []
         # ``focus`` 可以是一個 index 或**一串**（一個記號不只一條線 ——
         # GLV 的贏家格是一個 X）。這裡不收窄成 int：收窄過的那一版，X 的第二
@@ -6224,7 +6224,7 @@ class StudioWindow(QMainWindow):
         try:
             cells, colours, legend = get_step(node.step).overlay_heat(
                 ctx, node.params, stream)
-        except Exception:                  # noqa: BLE001 — 顯示用，不能擋畫面
+        except Exception:  # 顯示用，不能擋畫面
             return [], [], None
         return list(cells or []), [str(c) for c in (colours or [])], legend
 
@@ -6255,7 +6255,7 @@ class StudioWindow(QMainWindow):
             return False
         try:
             return bool(getattr(get_step(node.step), "marks_solid", False))
-        except Exception:              # noqa: BLE001 — 顯示用，不能擋畫面
+        except Exception:  # 顯示用，不能擋畫面
             return False
 
     def _focus_box_index(self, boxes: Sequence[Sequence[float]]) -> int:
@@ -6310,7 +6310,7 @@ class StudioWindow(QMainWindow):
             return False
         try:
             return bool(get_step(node.step).resolve_regions_out(node.params))
-        except Exception:                  # noqa: BLE001 — 顯示用，不能擋畫面
+        except Exception:  # 顯示用，不能擋畫面
             return False
 
     def _picks_a_center(self) -> bool:
@@ -6324,7 +6324,7 @@ class StudioWindow(QMainWindow):
             return False
         try:
             names = get_step(node.step).resolve_regions_out(node.params)
-        except Exception:                  # noqa: BLE001 — 顯示用，不能擋畫面
+        except Exception:  # 顯示用，不能擋畫面
             return False
         return any(str(n).endswith("_center") for n in names)
 
@@ -6337,7 +6337,7 @@ class StudioWindow(QMainWindow):
         out: List[Sequence[float]] = []
         try:
             names = list(get_step(node.step).resolve_regions_out(node.params))
-        except Exception:                  # noqa: BLE001 — 顯示用，不能擋畫面
+        except Exception:  # 顯示用，不能擋畫面
             return []
         for name in names:
             if not str(name).endswith("_center"):
@@ -6497,7 +6497,7 @@ class StudioWindow(QMainWindow):
                     recipe, self.dataset, limit,
                     workers=int(workers) if workers else 1, cache_dir=cdir,
                     sample=spec)
-            except Exception as e:      # noqa: BLE001 — UI 邊界
+            except Exception as e:  # UI 邊界
                 self._status("Trial run failed: %s: %s" % (type(e).__name__, e), "error")
                 return False
             self._apply_trial_results(results, time.time() - t0)
@@ -6599,7 +6599,7 @@ class StudioWindow(QMainWindow):
         t0 = time.time()
         try:
             n = rerun_decision(recipe, rows)
-        except Exception as e:      # noqa: BLE001 — UI 邊界
+        except Exception as e:  # UI 邊界
             self._status("Re-run failed: %s: %s" % (type(e).__name__, e), "error")
             return False
         elapsed = time.time() - t0
@@ -6623,7 +6623,7 @@ class StudioWindow(QMainWindow):
             # 走的是**同一支** `run_batch_steps`（不是第二套邏輯）。
             try:
                 bctx = OutputWorker.run_sync(recipe, self.dataset, list(results))
-            except Exception as e:      # noqa: BLE001 — UI 邊界
+            except Exception as e:  # UI 邊界
                 self._on_outputs_failed("%s: %s" % (type(e).__name__, e))
                 return False
             self._on_outputs_done(bctx)
@@ -6737,7 +6737,7 @@ class StudioWindow(QMainWindow):
             return ("Based on the last run: %d of %d row(s) would change."
                     % (int(getattr(plan, "n_rows_changed", 0)),
                        int(getattr(plan, "n_rows_out", 0))))
-        except Exception:       # noqa: BLE001 — 這只是一句提示，不准擋路
+        except Exception:  # 這只是一句提示，不准擋路
             return ""
 
     def _on_trial_progress(self, done: int, total: int) -> None:
@@ -6764,7 +6764,7 @@ class StudioWindow(QMainWindow):
             try:
                 if get_step(node.step).category == CATEGORY_BATCH:
                     n += 1
-            except Exception:          # noqa: BLE001 — 一句提示不准擋畫面
+            except Exception:  # 一句提示不准擋畫面
                 continue
         return n
 
@@ -6918,7 +6918,7 @@ class StudioWindow(QMainWindow):
                 verdict_features.bound_specs(recipe, kind),
                 verdict_features.diagnostic_columns(recipe, kind))
             alarms = verdict_features.diagnostic_alarm_map(recipe, kind)
-        except Exception:              # noqa: BLE001 — 顯示層，見上
+        except Exception:  # 顯示層，見上
             layout = alarms = None
         # ⚠ 答案卷**一律傳**（沒有就是空 dict，不是 ``None``）：``None`` 的意思是
         # 「這個宿主沒有標注這回事」，而 Studio 永遠有 —— 那一欄消失的話，
@@ -7069,7 +7069,7 @@ class StudioWindow(QMainWindow):
         try:
             trace = verdict_trace(self.model.to_recipe(), self.model.kind,
                                   feats)
-        except Exception as e:              # noqa: BLE001 — 顯示層
+        except Exception as e:  # 顯示層
             self._status("Could not replay the decision: %s" % e, "error")
             return
         if trace.mode == "none":
@@ -7088,7 +7088,7 @@ class StudioWindow(QMainWindow):
         try:
             bound = {b.spec.name: b for b in verdict_features.bound_specs(
                 self.model.to_recipe(), self.model.kind)}
-        except Exception:                   # noqa: BLE001 — 顯示層
+        except Exception:  # 顯示層
             return
         b = bound.get(str(name))
         if b is None:
@@ -7222,7 +7222,7 @@ class StudioWindow(QMainWindow):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             paths = generate_demo_lot(out_dir, n=int(n))
-        except Exception as e:          # noqa: BLE001 — UI 邊界，一律回報
+        except Exception as e:  # UI 邊界，一律回報
             self._status("Could not generate sample data: %s: %s" % (type(e).__name__, e), "error")
             return False
         finally:
@@ -7293,7 +7293,7 @@ class StudioWindow(QMainWindow):
         if sync:
             try:
                 ds = DatasetLoadWorker.run_sync(str(klarf_path), None)
-            except Exception as e:          # noqa: BLE001 — UI 邊界，一律回報
+            except Exception as e:  # UI 邊界，一律回報
                 return self._on_pair_source_failed("%s: %s" % (type(e).__name__, e))
             self._pending_pair = (str(node_id), str(klarf_path))
             return self._on_pair_source_loaded(ds)
@@ -7578,7 +7578,7 @@ class StudioWindow(QMainWindow):
         try:
             from d4t.core.ingest import tiff_index
             pages = int(tiff_index.n_pages(path))
-        except Exception:                       # noqa: BLE001 — 只是拿來寫提示
+        except Exception:  # 只是拿來寫提示
             pages = 0
         prompt = ("How many images make up one defect?\n\n"
                   "%s\nEvery N consecutive pages become one defect; enter 1 if "
@@ -7699,7 +7699,7 @@ class StudioWindow(QMainWindow):
             return True
         return bool(self._on_save_recipe())
 
-    def showEvent(self, event) -> None:       # noqa: D102 - Qt hook
+    def showEvent(self, event) -> None:  # Qt hook
         super().showEvent(event)
         # 中欄的畫布/設定比例第一次 show 才套 —— setSizes 要有實際高度才
         # 算得出來（見 _build_body 的說明）。只做一次：之後的比例是使用者
@@ -7710,14 +7710,14 @@ class StudioWindow(QMainWindow):
             # 上還沒有任何東西，使用者不會以為那句話跟他剛才做的事有關。
             try:
                 autosave.offer_restore(self)
-            except Exception:            # noqa: BLE001 — 一張網不准擋開窗
+            except Exception:  # 一張網不准擋開窗
                 pass
             # 版面模式自己會去讀那一格 QSettings（U5）—— 這裡以前有一段
             # 「只在設定區攤開時才還原」的判斷，而那個判斷現在住在
             # `set_layout_mode` 裡（Build 模式不吃存下來的比例，它就是滿版）。
             self.set_layout_mode(self.layout_mode(), remember=False)
 
-    def closeEvent(self, event) -> None:      # noqa: D102 - Qt hook
+    def closeEvent(self, event) -> None:  # Qt hook
         if not self.confirm_close():
             event.ignore()
             return
@@ -7734,13 +7734,13 @@ class StudioWindow(QMainWindow):
             try:
                 if dlg is not None:
                     dlg.close()
-            except Exception:              # noqa: BLE001 — 關窗不准擋路
+            except Exception:  # 關窗不准擋路
                 pass
         for worker in (self.preview_worker, self.trial_worker,
                        self.dataset_worker, self.pair_worker,
                        self.thumb_worker, self.output_worker):
             try:
                 worker.stop()
-            except Exception:              # noqa: BLE001 — 關窗不准擋路
+            except Exception:  # 關窗不准擋路
                 pass
         super().closeEvent(event)

@@ -28,7 +28,7 @@ from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QGraphicsItem
 
 from ..core.pipeline.expression import parse_expression
-from ..core.pipeline.decide_tree import (          # noqa: F401 — 再匯出
+from ..core.pipeline.decide_tree import (
     OPS, count_yes, decision_info, display_tree, flow_counts, format_condition,
     layout_cells, leaf_color, leaf_stats, parse_simple_condition, path_text,
     rows_reaching, suggest_condition,
@@ -128,7 +128,7 @@ class _ZoneItem(QGraphicsItem):
         return self._rect.adjusted(-84.0, -24.0, 4.0, 4.0)
 
     # ---- 互動 -------------------------------------------------------------
-    def hoverMoveEvent(self, e) -> None:        # noqa: N802 — Qt
+    def hoverMoveEvent(self, e) -> None:  # Qt
         on = self._on_close(e.pos())
         if on != self._hover_close:
             self._hover_close = on
@@ -136,13 +136,13 @@ class _ZoneItem(QGraphicsItem):
             self.update()
         super().hoverMoveEvent(e)
 
-    def hoverLeaveEvent(self, e) -> None:       # noqa: N802 — Qt
+    def hoverLeaveEvent(self, e) -> None:  # Qt
         if self._hover_close:
             self._hover_close = False
             self.update()
         super().hoverLeaveEvent(e)
 
-    def mousePressEvent(self, e) -> None:       # noqa: N802 — Qt
+    def mousePressEvent(self, e) -> None:  # Qt
         if self._canvas is None or e.button() != Qt.LeftButton:
             super().mousePressEvent(e)
             return
@@ -153,7 +153,7 @@ class _ZoneItem(QGraphicsItem):
         self.setCursor(Qt.ClosedHandCursor)
         e.accept()
 
-    def mouseMoveEvent(self, e) -> None:        # noqa: N802 — Qt
+    def mouseMoveEvent(self, e) -> None:  # Qt
         if self._drag_from is None:
             super().mouseMoveEvent(e)
             return
@@ -164,7 +164,7 @@ class _ZoneItem(QGraphicsItem):
         self._canvas.move_decision_by(delta.x(), delta.y())
         e.accept()
 
-    def mouseReleaseEvent(self, e) -> None:     # noqa: N802 — Qt
+    def mouseReleaseEvent(self, e) -> None:  # Qt
         was_dragging = self._drag_from is not None
         self._drag_from = None
         self.setCursor(Qt.OpenHandCursor)
@@ -346,14 +346,14 @@ class _EntryItem(QGraphicsItem):
             p.setPen(_adc_color())
             p.drawText(r, Qt.AlignCenter, chip)
 
-    def mousePressEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         if e.button() == Qt.LeftButton:
             self._canvas.decision_clicked.emit()
             e.accept()
             return
         super().mousePressEvent(e)
 
-    def mouseDoubleClickEvent(self, e) -> None:  # noqa: D102 - Qt hook
+    def mouseDoubleClickEvent(self, e) -> None:  # Qt hook
         # 雙擊＝收合／展開整棵樹（F24 §4：嫌佔位的出口）。
         self._canvas.toggle_tree_collapsed()
         e.accept()
@@ -378,19 +378,19 @@ class _DiamondItem(QGraphicsItem):
                         "Click to edit this step."
                         % (self.when or "(empty question)"))
 
-    def mousePressEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         if e.button() == Qt.LeftButton and self._canvas is not None:
             self._canvas.tree_step_clicked.emit(self.tree_path)
             e.accept()
             return
         super().mousePressEvent(e)
 
-    def hoverEnterEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def hoverEnterEvent(self, e) -> None:  # Qt hook
         if self._canvas is not None:
             self._canvas.show_tree_ghosts(self)
         super().hoverEnterEvent(e)
 
-    def hoverLeaveEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def hoverLeaveEvent(self, e) -> None:  # Qt hook
         if self._canvas is not None:
             self._canvas.clear_tree_ghosts()
         super().hoverLeaveEvent(e)
@@ -453,7 +453,7 @@ class _TrayItem(QGraphicsItem):
             tip += "\nEverything no rule matched lands here."
         self.setToolTip(tip + "\nClick to edit this class.")
 
-    def mousePressEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         if e.button() == Qt.LeftButton and self._canvas is not None:
             self._canvas.tree_leaf_clicked.emit(str(self.cell.get("path", "")))
             e.accept()
@@ -761,7 +761,7 @@ def build_ghosts(scene: Any, canvas: Any, diamond: "_DiamondItem",
     """
     try:
         variables = sorted(parse_expression(str(diamond.when)).variables)
-    except Exception:              # noqa: BLE001 — 打到一半的算式沒有變數
+    except Exception:  # 打到一半的算式沒有變數
         variables = []
     target = diamond.pos() + QPointF(0.0, _DIA_H / 2.0)
     return ghost_wires(scene, canvas, target, variables, feat_owner)

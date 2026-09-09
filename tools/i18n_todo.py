@@ -60,7 +60,7 @@ def harvest() -> dict:
             win._refresh_all()
             win.select_node(nid)
             app.processEvents()
-        except Exception:              # noqa: BLE001 — 收集用，一張卡失敗不擋
+        except Exception:  # 收集用，一張卡失敗不擋
             continue
     out = strings.seen()
     win.close()
@@ -79,7 +79,7 @@ def main(argv=None) -> int:
     path = strings.LOCALE_DIR / ("%s.json" % args.locale)
     try:
         have = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:                  # noqa: BLE001
+    except Exception:
         have = {}
     seen = harvest()
     todo = [(t, n) for t, n in sorted(seen.items(), key=lambda kv: -kv[1])

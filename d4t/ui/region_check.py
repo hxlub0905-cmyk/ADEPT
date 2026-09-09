@@ -58,7 +58,7 @@ def regions_of_node(node: Any) -> List[str]:
     try:
         step_cls = get_step(node.step)
         return [str(r) for r in step_cls.resolve_regions_out(node.params)]
-    except Exception:                       # noqa: BLE001 — 顯示用
+    except Exception:  # 顯示用
         return []
 
 
@@ -80,7 +80,7 @@ def collect_source_images(recipe: Any, items: Sequence[Any], kind: str,
         try:
             res = run_defect(recipe, item, kind, keep_context=True,
                              upto_node=node_id, sources=dict(sources or {}))
-        except Exception:                    # noqa: BLE001 — 單顆爆不殺整批
+        except Exception:  # 單顆爆不殺整批
             continue
         ctx = getattr(res, "context", None)
         images = dict(getattr(ctx, "images", {}) or {}) if ctx is not None else {}
@@ -115,7 +115,7 @@ def check_regions(recipe: Any, items: Sequence[Any], kind: str, node_id: str,
         try:
             res = run_defect(recipe, item, kind, keep_context=True,
                              upto_node=node_id, sources=dict(sources or {}))
-        except Exception as e:              # noqa: BLE001 — 合約外的意外
+        except Exception as e:  # 合約外的意外
             entry["error"] = "%s: %s" % (type(e).__name__, e)
             out.append(entry)
             continue
@@ -175,7 +175,7 @@ def _locate_flag_names(recipe: Any, node_id: str) -> List[str]:
         p = step_cls.validate_params(dict(node.params))
         return [s.name for s in step_cls.resolve_feature_specs(p)
                 if s.metric == "locate_ok"]
-    except Exception:                       # noqa: BLE001 — 顯示用
+    except Exception:  # 顯示用
         return []
 
 
@@ -215,12 +215,12 @@ class RegionThumb(QFrame):
     def located(self) -> bool:
         return bool(self.entry.get("located", True))
 
-    def mousePressEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         if e.button() == Qt.LeftButton:
             self.clicked.emit(self.defect_id)
         super().mousePressEvent(e)
 
-    def paintEvent(self, _e) -> None:          # noqa: D102 - Qt hook
+    def paintEvent(self, _e) -> None:  # Qt hook
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
         thumb = self.entry.get("thumb")

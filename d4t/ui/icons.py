@@ -1026,7 +1026,7 @@ class _GlyphMixin(object):
     def glyph_name(self) -> str:
         return getattr(self, "_glyph_name", "")
 
-    def paintEvent(self, e) -> None:       # noqa: D102 - Qt hook
+    def paintEvent(self, e) -> None:  # Qt hook
         super().paintEvent(e)
         _paint_glyph(self, self._glyph_name, self._glyph_side)
 

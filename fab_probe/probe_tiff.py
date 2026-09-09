@@ -834,7 +834,7 @@ def main(argv=None):
     except ProbeError as exc:
         sys.stderr.write("錯誤：%s\n" % exc)
         return 2
-    except Exception as exc:                      # noqa: BLE001
+    except Exception as exc:
         sys.stderr.write("錯誤：探測失敗（%s: %s）。請把這行連同檔案大小回報。\n"
                          % (type(exc).__name__, exc))
         return 3

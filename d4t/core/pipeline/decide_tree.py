@@ -113,7 +113,7 @@ def rows_reaching(tree: Any, rows: Any, path: str) -> List[Dict[str, Any]]:
             continue
         try:
             p = _path_of(tree, dict(r.get("features") or {}))
-        except Exception:              # noqa: BLE001 — 顯示用，走不動就不算
+        except Exception:  # 顯示用，走不動就不算
             continue
         if p.startswith(want):
             out.append(r)
@@ -344,7 +344,7 @@ def flow_counts(tree: Any, rows: Any) -> Dict[str, int]:
             continue
         try:
             p = _path_of(tree, dict(r.get("features") or {}))
-        except Exception:              # noqa: BLE001 — 顯示用，走不動就不計
+        except Exception:  # 顯示用，走不動就不計
             continue
         for i in range(len(p) + 1):
             prefix = p[:i]
@@ -370,7 +370,7 @@ def leaf_stats(tree: Any, rows: Any,
             continue
         try:
             p = _path_of(tree, dict(r.get("features") or {}))
-        except Exception:              # noqa: BLE001
+        except Exception:
             continue
         real, n = out.get(p, (0, 0))
         out[p] = (real + (1 if gt.get("is_real") else 0), n + 1)
@@ -460,7 +460,7 @@ def features_used(decide: Any) -> List[str]:
     def take(text: Any) -> None:
         try:
             e = parse_expression(str(text or ""))
-        except Exception:              # noqa: BLE001 — 壞算式已經有人講過了
+        except Exception:  # 壞算式已經有人講過了
             return
         for v in sorted(e.variables):
             if v not in own and v not in order:
@@ -533,7 +533,7 @@ def verdict_rows(decide: Any, results: Any,
                 continue
             try:
                 p = _path_of(tree, dict(r.get("features") or {}))
-            except Exception:          # noqa: BLE001 — 顯示用，走不動就不計
+            except Exception:  # 顯示用，走不動就不計
                 continue
             by_path.setdefault(p, []).append(str(r.get("defect_id")))
 

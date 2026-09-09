@@ -51,7 +51,7 @@ import numpy as np
 # 這四支是 SVG 的共用零件，**唯一出處在 `boxplot.py`**。從那裡 import 而不是
 # 抄一份：刻度算法漂掉的那天，同一份報表上兩張圖的軸會對不起來。
 # （第三個消費者出現的時候，該做的是把它們搬進 `export/svg.py`，不是再抄一份。）
-from .boxplot import (  # noqa: PLC2701 — 見上
+from .boxplot import (  # 見上
     _esc, _fmt, _nice_ticks, build_boxplot_svg,
 )
 
@@ -567,7 +567,7 @@ def draw_refs(o: List[str], style: Dict[str, Any], lo: float, hi: float,
 
     try:
         refs = parse_refs(style.get("ref_lines", ""))
-    except Exception:                  # noqa: BLE001 — 畫圖不准被一格擋下來
+    except Exception:  # 畫圖不准被一格擋下來
         return
     if not refs or hi <= lo:
         return

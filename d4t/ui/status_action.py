@@ -61,7 +61,7 @@ def open_folder(path: Any) -> bool:
             return False
         return bool(QDesktopServices.openUrl(
             QUrl.fromLocalFile(str(target.resolve()))))
-    except Exception:              # noqa: BLE001 — 補充用的鈕，不准害死呼叫端
+    except Exception:  # 補充用的鈕，不准害死呼叫端
         return False
 
 

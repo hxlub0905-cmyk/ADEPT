@@ -286,7 +286,7 @@ class TreePanel(QWidget):
             return {}
         try:
             return dict(getter())
-        except Exception:          # noqa: BLE001 — 上色而已
+        except Exception:  # 上色而已
             return {}
 
     def _feature_names(self) -> List[str]:

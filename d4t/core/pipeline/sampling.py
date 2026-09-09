@@ -71,7 +71,7 @@ def _value_of(item: Any, column: str) -> str:
     fields = getattr(item, "fields", None) or {}
     try:
         return str(fields.get(str(column).upper(), "") or "").strip()
-    except Exception:              # noqa: BLE001 — 抽樣不准害死一次跑
+    except Exception:  # 抽樣不准害死一次跑
         return ""
 
 

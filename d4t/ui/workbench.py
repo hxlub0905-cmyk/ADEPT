@@ -156,7 +156,7 @@ class WorkbenchLayout:
             if was == "build" and self.library is not None:
                 try:
                     self.library.toggle_group(None)
-                except Exception:        # noqa: BLE001 — 版面不准擋在卡片庫上
+                except Exception:  # 版面不准擋在卡片庫上
                     pass
         return use
 

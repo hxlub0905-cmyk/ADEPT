@@ -186,7 +186,7 @@ class GcPaintView(QWidget):
             self._stamp(int(round(x0 + (x1 - x0) * t)),
                         int(round(y0 + (y1 - y0) * t)), self._radius, on)
 
-    def mousePressEvent(self, e) -> None:        # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         p = self.to_image(e.position().toPoint())
         if p is None:
             return
@@ -197,7 +197,7 @@ class GcPaintView(QWidget):
             self._stroke(p, p, self._mode != MODE_ERASE)
             self.update()
 
-    def mouseMoveEvent(self, e) -> None:         # noqa: D102 - Qt hook
+    def mouseMoveEvent(self, e) -> None:  # Qt hook
         p = self.to_image(e.position().toPoint())
         if p is None:
             return
@@ -210,7 +210,7 @@ class GcPaintView(QWidget):
             self._last = p
             self.update()
 
-    def mouseReleaseEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def mouseReleaseEvent(self, e) -> None:  # Qt hook
         if self._mode == MODE_RECT and self._rect_from and self._rect_to:
             (x0, y0), (x1, y1) = self._rect_from, self._rect_to
             if self._mask is not None:
@@ -222,7 +222,7 @@ class GcPaintView(QWidget):
         self.changed.emit()
 
     # -- 繪製 ---------------------------------------------------------------
-    def paintEvent(self, e) -> None:             # noqa: D102 - Qt hook
+    def paintEvent(self, e) -> None:  # Qt hook
         p = QPainter(self)
         try:
             p.fillRect(self.rect(), QColor(theme.TOKENS["canvas_bg"]))

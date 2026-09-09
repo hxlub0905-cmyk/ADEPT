@@ -732,7 +732,7 @@ def _region_producer(name: str, route: List[str], upto: int,
                 if name in step_cls.resolve_regions_out(
                         step_cls.validate_params(node.params)):
                     found = nid
-            except Exception:              # noqa: BLE001 — 壞參數交給 validate
+            except Exception:  # 壞參數交給 validate
                 continue
         return found
 
@@ -766,7 +766,7 @@ def describe_migration(raw: Any, recipe: Any) -> List[str]:
         return says
     try:
         old_version = _as_int(raw.get("version", 1), "recipe 'version'")
-    except Exception:              # noqa: BLE001 — 只是一句提示，不准擋載入
+    except Exception:  # 只是一句提示，不准擋載入
         return says
     if old_version >= RECIPE_VERSION:
         return says
@@ -840,7 +840,7 @@ def _migrate_region_params_into_edges(
                 continue
             try:
                 params = step_cls.validate_params(node.params)
-            except Exception:              # noqa: BLE001 — 壞參數交給 validate
+            except Exception:  # 壞參數交給 validate
                 params = dict(node.params)
             for spec in step_cls.region_input_specs():
                 raw = str(params.get(spec.name, "") or "")
@@ -1679,7 +1679,7 @@ def _migrate_chart_params_into_look(nodes: Dict[str, "RecipeNode"]) -> None:
         style: Dict[str, Any] = {}
         try:
             style.update(chart_style.parse_style(node.params.get("look", "")))
-        except Exception:              # noqa: BLE001 — 遷移不准當機
+        except Exception:  # 遷移不准當機
             style = {}
         lo = node.params.pop("value_lo", None)
         hi = node.params.pop("value_hi", None)
@@ -1696,7 +1696,7 @@ def _migrate_chart_params_into_look(nodes: Dict[str, "RecipeNode"]) -> None:
                 style[new] = node.params.pop(old)
         try:
             node.params["look"] = chart_style.format_style(style)
-        except Exception:              # noqa: BLE001 — 同上
+        except Exception:  # 同上
             node.params["look"] = ""
 
 
@@ -2405,14 +2405,14 @@ def _compare_feature_renames(nodes: Dict[str, "RecipeNode"]) -> Dict[str, str]:
     for node in nodes.values():
         try:
             step_cls = REGISTRY[node.step]
-        except Exception:              # noqa: BLE001 — 不認得的卡就跳過
+        except Exception:  # 不認得的卡就跳過
             continue
         renames = getattr(step_cls, "legacy_feature_renames", None)
         if renames is None:
             continue
         try:
             out.update(renames(dict(node.params)))
-        except Exception:              # noqa: BLE001 — 遷移不該讓開檔失敗
+        except Exception:  # 遷移不該讓開檔失敗
             continue
     return out
 
@@ -2466,11 +2466,11 @@ def _rescued_name_renames(nodes: Dict[str, "RecipeNode"],
             continue                   # 名字沒變，沒得遷移
         try:
             p = step_cls.validate_params(dict(node.params))
-        except Exception:              # noqa: BLE001
+        except Exception:
             p = dict(node.params)
         try:
             feats = list(step_cls.resolve_features(p))
-        except Exception:              # noqa: BLE001
+        except Exception:
             continue
         for f in feats:
             out["%s_%s" % (nid, f)] = "%s_%s" % (prefix, f)
@@ -2559,7 +2559,7 @@ class Recipe:
         """
         try:
             return region_edge_values(self.nodes, self.edges)
-        except Exception:              # noqa: BLE001 — 存檔不准因為健檢而失敗
+        except Exception:  # 存檔不准因為健檢而失敗
             return {}
 
     def to_json_dict(self) -> Dict[str, Any]:
@@ -3226,7 +3226,7 @@ def _chart_metric_issues(recipe: "Recipe", step_cls, p: Dict[str, Any],
             continue
         try:
             q = cls2.validate_params(dict(node.params))
-        except Exception:              # noqa: BLE001 — lint 不准當機
+        except Exception:  # lint 不准當機
             q = dict(node.params)
         if str(q.get("across_boxes", "")) == "each box":
             each_box = True
@@ -3416,7 +3416,7 @@ def validate(recipe: Recipe, kind: Optional[str] = None,
         # 合法的 str —— 但那張卡跑起來每一顆都會失敗，而以前要跑過一次才知道。
         try:
             unset = list(step_cls.configuration_issues(clean_params[nid]))
-        except Exception:                       # noqa: BLE001 — 卡片自己的程式
+        except Exception:  # 卡片自己的程式
             unset = []
         for msg in unset:
             issues.append(Issue(
@@ -3429,7 +3429,7 @@ def validate(recipe: Recipe, kind: Optional[str] = None,
         # 「這會不會跑不起來」。見 `Step.configuration_hints`。
         try:
             hints = list(step_cls.configuration_hints(clean_params[nid]))
-        except Exception:                       # noqa: BLE001 — 卡片自己的程式
+        except Exception:  # 卡片自己的程式
             hints = []
         for msg in hints:
             issues.append(Issue(

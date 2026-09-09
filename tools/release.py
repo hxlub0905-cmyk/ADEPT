@@ -66,8 +66,8 @@ from typing import List, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import make_filelist                      # noqa: E402  （tools/ 裡的同伴）
-import make_text_bundle                   # noqa: E402
+import make_filelist
+import make_text_bundle
 
 BUNDLE = os.path.join("bundle", "d4t_bundle.py")
 

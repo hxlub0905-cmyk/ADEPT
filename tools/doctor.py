@@ -250,7 +250,7 @@ def check_dependencies(rep: Report, verbose: bool = False) -> bool:
             mod = __import__(import_name)
             ver = getattr(mod, "__version__", None) or _dist_version(pip_name) or "（版本不明）"
             rep.add(OK, "套件 %s" % pip_name, "%s → import %s 成功" % (ver, import_name))
-        except BaseException as exc:  # noqa: BLE001 — 什麼爛事都可能發生
+        except BaseException as exc:  # 什麼爛事都可能發生
             detail = "import %s 失敗：%s" % (import_name, type(exc).__name__)
             if essential:
                 all_ok = False
@@ -269,7 +269,7 @@ def _dist_version(pip_name: str) -> Optional[str]:
     try:
         from importlib import metadata  # Python 3.8+
         return metadata.version(pip_name)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
@@ -280,11 +280,11 @@ def check_d4t_importable(rep: Report) -> bool:
     if cwd not in sys.path:
         sys.path.insert(0, cwd)
     try:
-        import d4t  # noqa: F401
+        import d4t
         where = os.path.dirname(os.path.abspath(d4t.__file__ or ""))
         rep.add(OK, "d4t 套件", "可以載入（%s）" % where)
         return True
-    except BaseException as exc:  # noqa: BLE001
+    except BaseException as exc:
         if has_dir:
             hint = ("目前資料夾裡有 d4t\\，但載入失敗 —— 通常是相依套件沒裝好"
                     "（看上面的套件檢查），或 d4t\\ 裡的檔案不完整（請重新解壓一次原始碼 zip）。")
@@ -419,7 +419,7 @@ def check_recipes(rep: Report, paths: Sequence[str] = ()) -> None:
             with open(path, "r", encoding="utf-8") as f:
                 doc = json.load(f)
             version = int(doc.get("version", 1))
-        except Exception:                     # noqa: BLE001 — 壞檔案不是這一項的事
+        except Exception:  # 壞檔案不是這一項的事
             unreadable.append(os.path.basename(path))
             continue
         if version < RECIPE_VERSION:
@@ -447,7 +447,7 @@ def _soften_stdout() -> None:
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(errors="replace")      # Python 3.7+
-        except Exception:                             # noqa: BLE001 — 沒有就算了
+        except Exception:  # 沒有就算了
             pass
 
 

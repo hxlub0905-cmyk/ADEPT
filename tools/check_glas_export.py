@@ -1057,7 +1057,7 @@ def check_klarf_join(klarf_path: str, man: Dict[str, object], rep: Report,
     rep.say("  reading    %s" % m.alias("KLARF", os.path.basename(found)))
     try:
         doc = klarf_core.load(found)
-    except Exception as exc:                              # noqa: BLE001
+    except Exception as exc:
         rep.say("  cannot read the KLARF: %s" % exc.__class__.__name__)
         rep.check("SKIP", "manifest image_id == KLARF DEFECTID",
                   "%s on %s — if that folder has no .001/.klarf/.txt, point "
@@ -1078,7 +1078,7 @@ def check_klarf_join(klarf_path: str, man: Dict[str, object], rep: Report,
         if len(r) > col:
             try:
                 name = doc.defect_image_filename(r)
-            except Exception:                             # noqa: BLE001
+            except Exception:
                 name = None
             if name:
                 files[str(r[col])] = str(name)

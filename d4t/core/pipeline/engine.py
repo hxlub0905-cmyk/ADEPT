@@ -112,7 +112,7 @@ def _finish(defect_id: str, ctx: Context, traces: List[StepTrace],
 
 # 定義 PR-3 起搬到 `step.py`（`FeatureSpec.qualified` 要用，而 engine
 # import step —— 反向就循環）。這裡是公開名字的家，re-export 不改呼叫端。
-from .step import qualified_feature_name  # noqa: F401,E402 — re-export
+from .step import qualified_feature_name  # noqa: E402 — re-export
 
 
 def feature_prefix(node_id: str, step_cls: Optional[Type[Step]],
@@ -153,12 +153,12 @@ def feature_prefix(node_id: str, step_cls: Optional[Type[Step]],
         return node_id
     try:
         p = step_cls.validate_params(dict(params or {}))
-    except Exception:              # noqa: BLE001 — 壞參數在執行時才該爆
+    except Exception:  # 壞參數在執行時才該爆
         p = dict(params or {})
     for resolve in (step_cls.resolve_writes, step_cls.resolve_reads):
         try:
             names = [str(x) for x in resolve(p) if str(x).strip()]
-        except Exception:          # noqa: BLE001
+        except Exception:
             return node_id
         if len(names) == 1:
             return names[0]
@@ -308,7 +308,7 @@ def _explicit_bindings(recipe: Recipe, registry: Dict[str, Type[Step]]
             continue
         try:
             params = step_cls.validate_params(node.params)
-        except Exception:              # noqa: BLE001 — 壞參數交給 validate 報
+        except Exception:  # 壞參數交給 validate 報
             continue
         ptype = _param_types(step_cls).get(e.dst_in, "")
         if ptype == "image_keys":
@@ -351,7 +351,7 @@ def _implicit_bindings(recipe: Recipe, order: List[str],
             continue
         try:
             params = step_cls.validate_params(node.params)
-        except Exception:              # noqa: BLE001
+        except Exception:
             continue
         for name in step_cls.resolve_reads(params):
             if name in last_writer:
@@ -814,11 +814,11 @@ def _writes_an_image(step_cls: Optional[Type[Step]],
         return False
     try:
         p = step_cls.validate_params(dict(params or {}))
-    except Exception:              # noqa: BLE001 — 壞參數在執行時才該爆
+    except Exception:  # 壞參數在執行時才該爆
         p = dict(params or {})
     try:
         return bool(step_cls.resolve_writes(p))
-    except Exception:              # noqa: BLE001
+    except Exception:
         return False
 
 
@@ -930,7 +930,7 @@ def _roi_snapshot(ctx: Context) -> List[Any]:
     for roi in (ctx.rois.rois if ctx.rois is not None else ()):
         try:
             rect = tuple(float(v) for v in roi.norm_rect)
-        except Exception:              # noqa: BLE001 — 快取是盡力而為
+        except Exception:  # 快取是盡力而為
             continue
         out.append((str(roi.label), rect))
     return out
@@ -969,7 +969,7 @@ def _streams_needed_across_checkpoint(
             continue
         try:
             params = step_cls.validate_params(node.params)
-        except Exception:              # noqa: BLE001 — 壞參數交給 validate 報
+        except Exception:  # 壞參數交給 validate 報
             continue
         for name in step_cls.resolve_reads(params):
             if (nid, name) not in explicit:
@@ -1071,7 +1071,7 @@ def run_defect_cached(recipe: Recipe, item: Any, kind: str,
     try:
         need = _streams_needed_across_checkpoint(recipe, order, ckpt,
                                                  registry, kind)
-    except Exception:                  # noqa: BLE001 — 算不出來就別用快取
+    except Exception:  # 算不出來就別用快取
         need = None
 
     if snap is not None and need is not None:

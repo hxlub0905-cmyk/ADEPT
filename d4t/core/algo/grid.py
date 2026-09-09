@@ -1029,7 +1029,7 @@ def calibrate_axis(images: Sequence[Any], axis: str,
             s = find_stripes(img, axis=axis, select=select, kinds=kinds,
                              sensitivity=sensitivity, smooth=smooth,
                              min_gap=min_gap)
-        except Exception:                    # noqa: BLE001 — 單張爆不殺整批
+        except Exception:  # 單張爆不殺整批
             continue
         if s.confidence < float(min_confidence):
             # 沒有結構的 patch 量不出 pitch —— 但它量得出**一個假的**：雜訊

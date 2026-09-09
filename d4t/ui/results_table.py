@@ -99,7 +99,7 @@ __all__ = [
 # ⚠ **這一段 2026-09-02 搬到 `feature_tree.py`**（F76 刀 3）：Preview 欄的新
 # 面板要吃同一棵樹，而同一件事兩份說法一定會漂 —— 區域顏色那個 bug 就是漂
 # 出來的第一個症狀。這裡留的是取用口，行為一個位元組都沒有變。
-from .feature_tree import (            # noqa: E402 — 位置沿用被搬走那一段
+from .feature_tree import (
     BADGE_COLUMN, CLASS_COLUMN, column_tree, fixed_columns, stat_label,
 )
 
@@ -441,17 +441,17 @@ class ResultsTableModel(QAbstractTableModel):
         return -1
 
     # ---- QAbstractTableModel ----------------------------------------------
-    def rowCount(self, parent=QModelIndex()) -> int:      # noqa: N802 — Qt
+    def rowCount(self, parent=QModelIndex()) -> int:  # Qt
         return 0 if parent.isValid() else len(self._rows)
 
-    def columnCount(self, parent=QModelIndex()) -> int:   # noqa: N802 — Qt
+    def columnCount(self, parent=QModelIndex()) -> int:  # Qt
         return 0 if parent.isValid() else len(self._columns)
 
     def spec_of(self) -> Dict[str, Any]:
         """欄名 → BoundSpec（`TwoLevelHeader` 的跨欄段吃這個）。"""
         return self._spec_of
 
-    def headerData(self, section, orientation, role=Qt.DisplayRole):  # noqa: N802
+    def headerData(self, section, orientation, role=Qt.DisplayRole):
         if orientation != Qt.Horizontal or \
                 not (0 <= section < len(self._columns)):
             return None
@@ -483,7 +483,7 @@ class ResultsTableModel(QAbstractTableModel):
             return "%s\n%s" % (name, " · ".join(bits))
         return None
 
-    def data(self, index, role=Qt.DisplayRole):           # noqa: N802 — Qt
+    def data(self, index, role=Qt.DisplayRole):  # Qt
         if not index.isValid():
             return None
         row = self._rows[index.row()]
@@ -561,13 +561,13 @@ class ResultsTableModel(QAbstractTableModel):
             return str(value)
         return None
 
-    def flags(self, index):                               # noqa: N802 — Qt
+    def flags(self, index):  # Qt
         base = super().flags(index)
         if index.isValid() and self._columns[index.column()] == "bin":
             return base | Qt.ItemIsEditable
         return base
 
-    def setData(self, index, value, role=Qt.EditRole) -> bool:  # noqa: N802
+    def setData(self, index, value, role=Qt.EditRole) -> bool:
         """``bin`` 那一欄改得動 —— **只改這份 row 副本**（F48）。
 
         改回引擎判的那個值＝把記號拿掉（不是再蓋一層「手動改成跟原本一樣」）：
@@ -605,7 +605,7 @@ class ResultsTableModel(QAbstractTableModel):
                     self.dataChanged.emit(idx, idx)
         return n
 
-    def sort(self, column: int, order=Qt.AscendingOrder) -> None:  # noqa: N802
+    def sort(self, column: int, order=Qt.AscendingOrder) -> None:
         """``None`` 一律排到最後（不管升冪降冪）—— 跟 Gallery 同一條規矩。
 
         「沒量到」不是一個小的值，把它排在最前面會讓一張照數字排的表最上面
@@ -669,13 +669,13 @@ class TwoLevelHeader(QHeaderView):
         return group_row_wanted(self._spec_of())
 
     # ---- Qt ----------------------------------------------------------------
-    def sizeHint(self) -> QSize:  # noqa: N802 — Qt
+    def sizeHint(self) -> QSize:  # Qt
         sz = super().sizeHint()
         if self._has_region_row():
             sz.setHeight(sz.height() * 2)
         return sz
 
-    def paintSection(self, painter, rect, logicalIndex) -> None:  # noqa: N802
+    def paintSection(self, painter, rect, logicalIndex) -> None:
         if not self._has_region_row():
             super().paintSection(painter, rect, logicalIndex)
             return
@@ -729,7 +729,7 @@ class _BinDelegate(QStyledItemDelegate):
     決定他的廠內編號要編到幾號。
     """
 
-    def createEditor(self, parent, option, index):        # noqa: N802 — Qt
+    def createEditor(self, parent, option, index):  # Qt
         box = QSpinBox(parent)
         box.setRange(0, 999)
         box.setAccelerated(True)
@@ -798,7 +798,7 @@ class ResultsTable(QTableView):
     #: 而混為一談會讓正確率的分母裝進一批沒有人真的判斷過的顆粒。
     TRUTH_KEYS = {Qt.Key_R: True, Qt.Key_N: False, Qt.Key_U: None}
 
-    def keyPressEvent(self, event) -> None:               # noqa: N802 — Qt
+    def keyPressEvent(self, event) -> None:  # Qt
         """R / N / U ＝ 標這幾列（沒有選任何一列就照常交給 Qt）。"""
         key = event.key()
         if key in self.TRUTH_KEYS and not event.modifiers():

@@ -173,7 +173,7 @@ def _headline_of(group: Dict[str, Any], feats: Dict[str, Any]):
     try:
         card = get_step(_card_key(specs))
         parts = list(card.panel_headline(feats, specs))
-    except Exception:                      # noqa: BLE001 — 顯示用，不能擋畫面
+    except Exception:  # 顯示用，不能擋畫面
         return [], set()
     if not parts:
         return [], set()

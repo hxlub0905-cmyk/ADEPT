@@ -185,7 +185,7 @@ def main(argv=None) -> int:
         import lzma
         try:
             raw = lzma.decompress(base64.b64decode("".join(b64)))
-        except Exception as exc:                     # noqa: BLE001
+        except Exception as exc:
             print("FAILED: cannot decode the data section: %%s" %% exc)
             print("        This file was truncated or altered while being")
             print("        copied. Copy it again, and do NOT open it in an")
@@ -195,7 +195,7 @@ def main(argv=None) -> int:
 
     try:
         items = list(entries(data, per_file))
-    except Exception as exc:                         # noqa: BLE001
+    except Exception as exc:
         print("FAILED: cannot decode the data section: %%s" %% exc)
         print("        This file was truncated or altered while being copied.")
         print("        Copy it again, and do NOT open it in an editor and")
@@ -294,7 +294,7 @@ def repo_root() -> str:
 
 
 def blob_sha(data: bytes) -> str:
-    h = hashlib.sha1()                                # noqa: S324 — git 的格式
+    h = hashlib.sha1()
     h.update(b"blob %d\0" % len(data))
     h.update(data)
     return h.hexdigest()

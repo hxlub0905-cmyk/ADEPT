@@ -154,7 +154,7 @@ def saved_theme(default: str = "light") -> str:
     """使用者上次選的主題（讀不到就回 ``default``）。"""
     try:
         return str(app_settings().value(THEME_KEY, default) or default)
-    except Exception:                       # noqa: BLE001 — 設定讀不到不該擋開窗
+    except Exception:  # 設定讀不到不該擋開窗
         return default
 
 
@@ -201,7 +201,7 @@ def read_recipe_info(path: Any) -> Dict[str, Any]:
             d = json.load(f)
         if not isinstance(d, dict):
             raise ValueError("top level is not a JSON object")
-    except Exception as e:                       # noqa: BLE001 — UI 邊界
+    except Exception as e:  # UI 邊界
         info["error"] = "%s: %s" % (type(e).__name__, e)
         return info
 

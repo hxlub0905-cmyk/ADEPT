@@ -349,7 +349,7 @@ def producers_of(model: Any, stream: str) -> List[str]:
             step_cls = get_step(key)
             params = step_cls.validate_params({})
             writes = step_cls.resolve_writes_for_kind(params, model.kind)
-        except Exception:              # noqa: BLE001 — 顯示用
+        except Exception:  # 顯示用
             continue
         if stream in writes and step_cls.label:
             out.append(str(step_cls.label))

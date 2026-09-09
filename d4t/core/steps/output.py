@@ -267,7 +267,7 @@ def _defect_marks(ctx: Any, pix: Dict[str, Any],
     if arr is None and pix:
         try:
             arr = overlay.pick_base(pix)[1]
-        except Exception:              # noqa: BLE001 — 沒圖就沒有記號
+        except Exception:  # 沒圖就沒有記號
             return {}
     if arr is None:
         return {}
@@ -801,7 +801,7 @@ class OutputReportStep(_OutputStep):
         """
         try:
             p = cls.validate_params(dict(params or {}))
-        except Exception:  # noqa: BLE001 — 預覽要容錯，壞參數 validate 會講
+        except Exception:  # 預覽要容錯，壞參數 validate 會講
             p = dict(params or {})
         want = set(parse_key_list(str(
             p.get("contents") or ",".join(DEFAULT_CONTENTS))))
@@ -831,7 +831,7 @@ class OutputReportStep(_OutputStep):
     chart_words = False
 
     @classmethod
-    def chart_kinds(cls, params: Dict[str, Any]) -> List[str]:   # noqa: D102
+    def chart_kinds(cls, params: Dict[str, Any]) -> List[str]:
         # ⚠ 勾了跨顆那張圖，設定編輯器就要多一個分頁 —— 不然它的標題與軸名
         # 改不到（同 `Write charts` 的 `charts`）。
         got = parse_key_list(str(params.get("contents", "") or ""))
@@ -1020,7 +1020,7 @@ class OutputReportStep(_OutputStep):
                 # **相對路徑**：報表跟圖一起搬走的時候連結還是通的。
                 images[did] = ("%s/%s" % (self.IMAGE_DIR, name) if nested
                                else name)
-            except Exception:       # noqa: BLE001 — 一顆畫不出來不該殺掉整批
+            except Exception:  # 一顆畫不出來不該殺掉整批
                 skipped += 1
 
         # ---- ② 其餘每一樣**各自寫、各自失敗**（F38）-----------------------
@@ -1079,7 +1079,7 @@ class OutputReportStep(_OutputStep):
                 # 是空的那一句）。包一層「something went wrong」上去的話，
                 # 使用者拿到的是一句沒有下一步的話（推廣鐵則）。
                 said = str(getattr(e, "detail", "") or e)
-            except Exception as e:  # noqa: BLE001 — 一樣失敗不連坐其他樣
+            except Exception as e:  # 一樣失敗不連坐其他樣
                 said = "could not write %s: %s" % (what, e)
             why.append(said)
             bctx.warn("Report folder: %s" % said)
@@ -1514,7 +1514,7 @@ class OutputCharStep(_OutputStep):
                     pair[side] = "%s/%s" % (self.IMAGE_DIR, name)
                 if pair:
                     thumbs[did] = pair
-            except Exception:       # noqa: BLE001 — 一顆畫不出來不該殺掉整批
+            except Exception:  # 一顆畫不出來不該殺掉整批
                 skipped += 1
 
         # ---- ③ 判定：葉子的名字**不在 rows 裡**，要反查一次 ----------------
@@ -1718,7 +1718,7 @@ class OutputUniformityStep(_OutputStep):
         """
         try:
             p = cls.validate_params(dict(params or {}))
-        except Exception:  # noqa: BLE001 — 預覽要容錯，壞參數 validate 會講
+        except Exception:  # 預覽要容錯，壞參數 validate 會講
             p = dict(params or {})
         kinds = [k for k in parse_key_list(str(p.get("charts") or ""))
                  if k in export_unif.CHARTS]
@@ -1763,7 +1763,7 @@ class OutputUniformityStep(_OutputStep):
             # 才發現那個檔案裡是一句「pick x and y」（同上面那條的理由）。
             try:
                 need = chart_spec.missing_roles(params.get("spec", ""))
-            except Exception:      # noqa: BLE001 — 壞掉的值 validate 會講
+            except Exception:  # 壞掉的值 validate 會講
                 need = []
             if need:
                 out.append(
@@ -1798,7 +1798,7 @@ class OutputUniformityStep(_OutputStep):
         return str(got.get("value_name") or "").strip() or str(metric)
 
     @classmethod
-    def chart_kinds(cls, params: Dict[str, Any]) -> List[str]:   # noqa: D102
+    def chart_kinds(cls, params: Dict[str, Any]) -> List[str]:
         got = parse_key_list(str(params.get("charts", "") or ""))
         return [k for k in export_unif.CHARTS if k in got]
 
@@ -1831,7 +1831,7 @@ class OutputUniformityStep(_OutputStep):
             return [], [], None
         try:
             pp = cls.validate_params(params)
-        except Exception:                  # noqa: BLE001 — 顯示用，不能擋畫面
+        except Exception:  # 顯示用，不能擋畫面
             return [], [], None
         if export_unif.CHART_MAP not in parse_key_list(str(pp["charts"])):
             # 沒勾熱圖就不鋪 —— 畫面上的東西要跟「會寫出去什麼」對得起來。
@@ -1908,7 +1908,7 @@ class OutputUniformityStep(_OutputStep):
                 notes = (getattr(ctx, "meta", None) or {}).get("glv_hist") or []
                 series = export_unif.chart_series(
                     notes, metric=str(p["metric"]).strip())
-            except Exception:               # noqa: BLE001 — 鐵則 7 的跨顆版
+            except Exception:  # 鐵則 7 的跨顆版
                 skipped += 1
                 continue
             feats = dict(getattr(r, "features", None) or {})

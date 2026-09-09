@@ -647,7 +647,7 @@ class CellCanvas(QWidget):
         return {k: QRectF(p.x() - d, p.y() - d, d * 2, d * 2)
                 for k, p in pts.items()}
 
-    def mousePressEvent(self, e) -> None:              # noqa: D102 - Qt hook
+    def mousePressEvent(self, e) -> None:  # Qt hook
         pt = _pos(e)
         # 點了畫布就把鍵盤焦點抓過來 —— 不然按了側欄的鈕之後，方向鍵與
         # Del／Ctrl+Z 全部沒反應，而畫面上看起來框明明還選著。
@@ -712,7 +712,7 @@ class CellCanvas(QWidget):
         self._drag = {"mode": "new", "from": (nx, ny), "box": (nx, ny, 0.0, 0.0)}
         self.update()
 
-    def mouseMoveEvent(self, e) -> None:                # noqa: D102 - Qt hook
+    def mouseMoveEvent(self, e) -> None:  # Qt hook
         pt = _pos(e)
         # 還沒按下去就先畫出「按下去會長出什麼」（使用者：方便對齊擺放）
         if self._tool in (TOOL_CLICK, TOOL_ARRAY):
@@ -780,7 +780,7 @@ class CellCanvas(QWidget):
                      self.snap((x, y, min(1.0, w), min(1.0, h))))
         self.update()
 
-    def mouseReleaseEvent(self, e) -> None:             # noqa: D102 - Qt hook
+    def mouseReleaseEvent(self, e) -> None:  # Qt hook
         if self._paint is not None:
             self._commit_paint()
             return
@@ -845,7 +845,7 @@ class CellCanvas(QWidget):
         return (self._box_px[0] / float(w), self._box_px[1] / float(h),
                 self._array_n[0], self._array_n[1])
 
-    def leaveEvent(self, _e) -> None:                   # noqa: D102 - Qt hook
+    def leaveEvent(self, _e) -> None:  # Qt hook
         # 游標離開畫布，那個「下一個框」就不該還留在畫面上（畫布不能說謊）
         if self._hover is not None:
             self._hover = None
@@ -862,7 +862,7 @@ class CellCanvas(QWidget):
         nx, ny = self._hover
         return self.snap((nx - bw / 2.0, ny - bh / 2.0, bw, bh))
 
-    def wheelEvent(self, e) -> None:                    # noqa: D102 - Qt hook
+    def wheelEvent(self, e) -> None:  # Qt hook
         delta = e.angleDelta().y()
         if not delta:
             return
@@ -876,7 +876,7 @@ class CellCanvas(QWidget):
         self._pan += pt - after
         self.update()
 
-    def keyPressEvent(self, e) -> None:                 # noqa: D102 - Qt hook
+    def keyPressEvent(self, e) -> None:  # Qt hook
         step = 1.0 / max(1, self.cell_shape()[1])       # 一格 cell 像素
         keys = {Qt.Key_Left: (-step, 0.0), Qt.Key_Right: (step, 0.0),
                 Qt.Key_Up: (0.0, -step), Qt.Key_Down: (0.0, step)}
@@ -905,7 +905,7 @@ class CellCanvas(QWidget):
         super().keyPressEvent(e)
 
     # ---- 畫 -----------------------------------------------------------------
-    def paintEvent(self, _e) -> None:                   # noqa: D102 - Qt hook
+    def paintEvent(self, _e) -> None:  # Qt hook
         p = QPainter(self)
         p.fillRect(self.rect(), QColor(TOKENS["image_backdrop"]))
         if not self.has_cell():

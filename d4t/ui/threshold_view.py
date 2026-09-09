@@ -89,7 +89,7 @@ class SplitBar(QWidget):
     def counts(self) -> Tuple[int, int]:
         return self._yes, self._no
 
-    def paintEvent(self, event) -> None:  # noqa: N802 — Qt
+    def paintEvent(self, event) -> None:  # Qt
         total = self._yes + self._no
         if total <= 0:
             return
@@ -196,16 +196,16 @@ class ThresholdHistogram(QWidget):
         return rng[0] + frac * (rng[1] - rng[0])
 
     # ---- 互動 --------------------------------------------------------------
-    def mousePressEvent(self, event) -> None:  # noqa: N802 — Qt
+    def mousePressEvent(self, event) -> None:  # Qt
         if event.button() == Qt.LeftButton and self._values:
             self._dragging = True
             self._emit_at(event.position().x())
 
-    def mouseMoveEvent(self, event) -> None:  # noqa: N802 — Qt
+    def mouseMoveEvent(self, event) -> None:  # Qt
         if self._dragging:
             self._emit_at(event.position().x())
 
-    def mouseReleaseEvent(self, event) -> None:  # noqa: N802 — Qt
+    def mouseReleaseEvent(self, event) -> None:  # Qt
         self._dragging = False
 
     def _emit_at(self, x: float) -> None:
@@ -215,7 +215,7 @@ class ThresholdHistogram(QWidget):
         self.threshold_changed.emit(value)
 
     # ---- 畫 ----------------------------------------------------------------
-    def paintEvent(self, event) -> None:  # noqa: N802 — Qt
+    def paintEvent(self, event) -> None:  # Qt
         rng = self.span()
         if rng is None:
             return

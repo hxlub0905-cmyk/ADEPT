@@ -59,7 +59,7 @@ def load_backend():
     tools_dir = str(Path(__file__).resolve().parents[2] / "tools")
     if tools_dir not in sys.path:
         sys.path.insert(0, tools_dir)
-    import make_lot_from_gc as backend      # noqa: E402 — 刻意延遲
+    import make_lot_from_gc as backend
     return backend
 
 
@@ -113,7 +113,7 @@ class _GenWorker(QThread):
     def stop(self) -> None:
         self._stop = True
 
-    def run(self) -> None:               # noqa: D102 - Qt hook
+    def run(self) -> None:  # Qt hook
         def progress(i: int, n: int) -> bool:
             self.tick.emit(int(i), int(n))
             return not self._stop
@@ -121,7 +121,7 @@ class _GenWorker(QThread):
             out = self._backend.generate(progress=progress, **self._kwargs)
         except KeyboardInterrupt:
             self.done.emit(None, "Stopped — nothing was written.")
-        except Exception as e:           # noqa: BLE001 — 講出來，不要吞掉
+        except Exception as e:  # 講出來，不要吞掉
             self.done.emit(None, "Failed: %s" % e)
         else:
             self.done.emit(out, "")
@@ -482,7 +482,7 @@ class GcGeneratorWindow(QMainWindow):
         self._say("The clipboard holds neither an image nor a gc2: string.")
         return False
 
-    def keyPressEvent(self, e) -> None:      # noqa: D102 - Qt hook
+    def keyPressEvent(self, e) -> None:  # Qt hook
         if e.matches(getattr(e, "Paste", None) or 0) or (
                 e.key() == Qt.Key_V and e.modifiers() & Qt.ControlModifier):
             if not self.txt_gc.hasFocus():
@@ -513,7 +513,7 @@ class GcGeneratorWindow(QMainWindow):
         except SystemExit as e:              # load_gc 用 SystemExit 講話
             self._say(str(e))
             return False
-        except Exception as e:               # noqa: BLE001
+        except Exception as e:
             self._say("Could not read that recipe: %s" % e)
             return False
         return self.set_gc(arr, os.path.basename(path))
@@ -697,7 +697,7 @@ class GcGeneratorWindow(QMainWindow):
             b.setEnabled(not busy)
         self.paint.setEnabled(not busy)
 
-    def closeEvent(self, e) -> None:         # noqa: D102 - Qt hook
+    def closeEvent(self, e) -> None:  # Qt hook
         if self._worker is not None:
             self._worker.stop()
             self._worker.wait(3000)

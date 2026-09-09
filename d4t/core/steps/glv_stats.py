@@ -1776,7 +1776,7 @@ class GlvStatsStep(MultiSourceStep):
             idx = int(note.get("box", -1))
             try:
                 rects = list(ctx.roi_norm_rects(name)) if name else []
-            except Exception:          # noqa: BLE001 — 顯示用，不能擋畫面
+            except Exception:  # 顯示用，不能擋畫面
                 continue
             if not (0 <= idx < len(rects)):
                 continue               # 對不上就整組不畫（同 `set_marks` 的規矩）

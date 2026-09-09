@@ -485,7 +485,7 @@ class ParamForm(QWidget):
             try:
                 want = [str(k) for k in
                         get_step(key).chart_kinds(dict(self._values))]
-            except Exception:          # noqa: BLE001 — 顯示用，不能擋畫面
+            except Exception:  # 顯示用，不能擋畫面
                 want = []
         return [k for k in CHARTS if k in want] or list(CHARTS)
 
@@ -499,7 +499,7 @@ class ParamForm(QWidget):
             return True
         try:
             return bool(getattr(get_step(key), "chart_words", True))
-        except Exception:              # noqa: BLE001 — 顯示用，不能擋畫面
+        except Exception:  # 顯示用，不能擋畫面
             return True
 
     def step_key(self) -> Optional[str]:
@@ -658,14 +658,14 @@ class ParamForm(QWidget):
     def _feature_tips(self) -> Dict[str, str]:
         try:
             got = self.number_info_provider() if self.number_info_provider else None
-        except Exception:          # noqa: BLE001 — 說明而已，不能擋畫面
+        except Exception:  # 說明而已，不能擋畫面
             return {}
         return dict((got or ({}, {}))[0])
 
     def _region_colors(self) -> Dict[str, int]:
         try:
             got = self.number_info_provider() if self.number_info_provider else None
-        except Exception:          # noqa: BLE001 — 上色而已，不能擋畫面
+        except Exception:  # 上色而已，不能擋畫面
             return {}
         return dict((got or ({}, {}))[1])
 

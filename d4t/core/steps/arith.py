@@ -133,7 +133,7 @@ class SubtractStep(Step):
             # 記錄永遠不准弄壞跑（同 `Context._record_change` 的形狀）。
             try:
                 self._note_diagnostics(ctx, out, p)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         ctx.set_image(p["out"], out)
         return ctx
