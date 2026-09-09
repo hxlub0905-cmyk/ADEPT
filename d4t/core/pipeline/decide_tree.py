@@ -30,6 +30,7 @@ import ui。bin 0（慣例上的 nuisance）那一格由呼叫端給 —— 那�
 主題的一部分（`theme.TOKENS["seg_disabled"]`），而主題住 UI。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import re
 from typing import Any, Dict, List, Optional, Tuple
@@ -114,6 +115,7 @@ def rows_reaching(tree: Any, rows: Any, path: str) -> List[Dict[str, Any]]:
         try:
             p = _path_of(tree, dict(r.get("features") or {}))
         except Exception:  # 顯示用，走不動就不算
+            swallowed("decide_tree.rows_reaching")
             continue
         if p.startswith(want):
             out.append(r)
@@ -345,6 +347,7 @@ def flow_counts(tree: Any, rows: Any) -> Dict[str, int]:
         try:
             p = _path_of(tree, dict(r.get("features") or {}))
         except Exception:  # 顯示用，走不動就不計
+            swallowed("decide_tree.flow_counts")
             continue
         for i in range(len(p) + 1):
             prefix = p[:i]
@@ -371,6 +374,7 @@ def leaf_stats(tree: Any, rows: Any,
         try:
             p = _path_of(tree, dict(r.get("features") or {}))
         except Exception:
+            swallowed("decide_tree.leaf_stats")
             continue
         real, n = out.get(p, (0, 0))
         out[p] = (real + (1 if gt.get("is_real") else 0), n + 1)
@@ -461,6 +465,7 @@ def features_used(decide: Any) -> List[str]:
         try:
             e = parse_expression(str(text or ""))
         except Exception:  # 壞算式已經有人講過了
+            swallowed("decide_tree.features_used")
             return
         for v in sorted(e.variables):
             if v not in own and v not in order:
@@ -534,6 +539,7 @@ def verdict_rows(decide: Any, results: Any,
             try:
                 p = _path_of(tree, dict(r.get("features") or {}))
             except Exception:  # 顯示用，走不動就不計
+                swallowed("decide_tree.verdict_rows")
                 continue
             by_path.setdefault(p, []).append(str(r.get("defect_id")))
 

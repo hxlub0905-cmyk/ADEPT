@@ -30,6 +30,7 @@ recipe JSON 的結構沒有 ``pos`` 欄位，為了在畫布上存座標而改�
 而不是「拉起來之後整條 pipeline 壞掉、跑的時候才報錯」。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -1989,7 +1990,7 @@ class PipelineCanvas(QGraphicsView):
             try:
                 self._scene.removeItem(it)
             except Exception:  # clear() 先銷毀過就算了
-                pass
+                swallowed("canvas._rebuild_decision")
         self._tree_items = []
         info = getattr(self, "_decision_info", None)
         if not info:
@@ -2060,7 +2061,7 @@ class PipelineCanvas(QGraphicsView):
             try:
                 self._scene.removeItem(it)
             except Exception:  # clear() 先銷毀過就算了
-                pass
+                swallowed("canvas._rebuild_prefilter")
         self._prefilter_items = []
         info = getattr(self, "_prefilter_info", None)
         if not info:
@@ -2161,12 +2162,12 @@ class PipelineCanvas(QGraphicsView):
             try:
                 self._scene.removeItem(it)
             except Exception:  # clear() 先銷毀就算了
-                pass
+                swallowed("canvas.clear_tree_ghosts")
         for card in getattr(self, "_ghost_cards", []) or []:
             try:
                 card.set_hovered(False)
             except Exception:
-                pass
+                swallowed("canvas.clear_tree_ghosts")
         self._ghost_items, self._ghost_cards = [], []
 
     def reveal_cards(self, node_ids: Sequence[str]) -> int:

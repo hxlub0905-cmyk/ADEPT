@@ -18,6 +18,7 @@
 這裡全部是**純函式、顯示層 metadata**：不碰數字、不碰匯出、不進快取簽章。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from dataclasses import dataclass, replace
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Type
@@ -212,6 +213,7 @@ def _regions_in_wiring_order(recipe: Recipe,
             if not is_region_edge(edge, nodes, registry):
                 continue
         except Exception:  # 顯示層，壞了就跳過這條
+            swallowed("verdict_features._regions_in_wiring_order")
             continue
         # 區域線的 ``src_out`` 就是**那個區域的名字**（單數 —— 一條線一個
         # 區域；「一張卡吃好幾個區域」是好幾條線，不是一格逗號清單）。

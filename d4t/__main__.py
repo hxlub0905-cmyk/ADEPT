@@ -117,6 +117,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
     recipe = _load_recipe(args.recipe)
     if recipe is None:
         return 2
+    if getattr(args, "log", None):
+        from d4t.core.log import attach_file
+        attach_file(args.log)
+        print(f"紀錄：{args.log}")
 
     ds = _open_input(args.klarf, args.tiff)
     print(f"資料集：kind={ds.kind}，{len(ds.items)} 顆 defect")
@@ -615,6 +619,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_run.add_argument("--cache", default=None, help="影像段快取資料夾（改算法段參數重跑會大幅加速）")
     p_run.add_argument("--db", default=None, help="存入批次歷史 SQLite（例：~/.d4t/runs.db）")
     p_run.add_argument("--notes", default=None, help="批次備註")
+    p_run.add_argument("--log", default=None, metavar="FILE",
+                       help=("把被接住的例外與每一顆的警告寫進這個檔（UTF-8、append）。"
+                             "出事要回報的時候把這個檔傳回來；⚠ 多 worker 的紀錄只在 "
+                             "--workers 1 時齊全。"))
     p_run.add_argument(
         "--ground-truth", default=None, metavar="JSON",
         help=("ground_truth.json（有的話跑完直接印正確率/抓漏率/誤殺率）。"

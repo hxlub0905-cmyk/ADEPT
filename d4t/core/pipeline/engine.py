@@ -11,6 +11,7 @@ RecipeError / 快取讀寫失敗 / 其他）都收進 :class:`DefectResult` 或
 自動退回全程重算。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import json
 import math
@@ -309,6 +310,7 @@ def _explicit_bindings(recipe: Recipe, registry: Dict[str, Type[Step]]
         try:
             params = step_cls.validate_params(node.params)
         except Exception:  # 壞參數交給 validate 報
+            swallowed("engine._explicit_bindings")
             continue
         ptype = _param_types(step_cls).get(e.dst_in, "")
         if ptype == "image_keys":
@@ -352,6 +354,7 @@ def _implicit_bindings(recipe: Recipe, order: List[str],
         try:
             params = step_cls.validate_params(node.params)
         except Exception:
+            swallowed("engine._implicit_bindings")
             continue
         for name in step_cls.resolve_reads(params):
             if name in last_writer:
@@ -931,6 +934,7 @@ def _roi_snapshot(ctx: Context) -> List[Any]:
         try:
             rect = tuple(float(v) for v in roi.norm_rect)
         except Exception:  # 快取是盡力而為
+            swallowed("engine._roi_snapshot")
             continue
         out.append((str(roi.label), rect))
     return out
@@ -970,6 +974,7 @@ def _streams_needed_across_checkpoint(
         try:
             params = step_cls.validate_params(node.params)
         except Exception:  # 壞參數交給 validate 報
+            swallowed("engine._streams_needed_across_checkpoint")
             continue
         for name in step_cls.resolve_reads(params):
             if (nid, name) not in explicit:
@@ -1105,7 +1110,7 @@ def run_defect_cached(recipe: Recipe, item: Any, kind: str,
                           produced={k: produced[k] for k in (need or ())
                                     if k in produced})
             except Exception:
-                pass  # 快取寫入失敗 → 不影響本次結果
+                swallowed("engine.run_defect_cached")  # 快取寫入失敗 → 不影響本次結果
 
     # 分流的紀錄在**兩條路徑收攏之後**補（冷跑、熱跑同一個值 —— 它是由
     # item.fields 決定的，跟快取無關）。

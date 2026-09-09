@@ -73,6 +73,7 @@ tests/test_ui_studio_m5.py）：
 載入 → 套 die-to-die 範本 → 試跑 → 切到 Gallery。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import json
 import math
@@ -352,7 +353,7 @@ def _save_sizes(key: str, sizes: Sequence[int]) -> None:
     try:
         app_settings().setValue(key, ",".join(str(int(v)) for v in sizes))
     except Exception:
-        pass
+        swallowed("studio._save_sizes")
 
 
 def _load_sizes(key: str, count: int) -> Optional[List[int]]:
@@ -367,6 +368,7 @@ def _load_sizes(key: str, count: int) -> Optional[List[int]]:
         raw = str(app_settings().value(key, "") or "")
         out = [int(x) for x in raw.split(",") if x.strip()]
     except Exception:
+        swallowed("studio._load_sizes")
         return None
     return out if len(out) == count and sum(out) > 0 else None
 
@@ -457,6 +459,7 @@ class ThumbWorker(_ThreadedWorker):
             try:
                 arr = load_thumb(item, int(size))
             except Exception:  # 單顆壞掉不該殺整批
+                swallowed("studio.run_sync")
                 continue
             if arr is not None:
                 out[str(did)] = arr
@@ -2951,6 +2954,7 @@ class StudioWindow(QMainWindow):
                 self.trial_results, self.ground_truth, self.model.bins,
                 threshold=threshold)
         except Exception:  # 顯示用，壞了就不講
+            swallowed("studio._publish_run_snapshot")
             return
         self.results.set_run_snapshot(snap if self.trial_results else None)
 
@@ -5922,6 +5926,7 @@ class StudioWindow(QMainWindow):
             try:
                 got = get_step(node.step).resolve_feature_specs(node.params)
             except Exception:  # 顯示用，壞了就不拆
+                swallowed("studio._feature_specs")
                 continue
             for s in got:
                 out.setdefault(str(s.name), s)
@@ -6765,6 +6770,7 @@ class StudioWindow(QMainWindow):
                 if get_step(node.step).category == CATEGORY_BATCH:
                     n += 1
             except Exception:  # 一句提示不准擋畫面
+                swallowed("studio._enabled_output_cards")
                 continue
         return n
 
@@ -7089,6 +7095,7 @@ class StudioWindow(QMainWindow):
             bound = {b.spec.name: b for b in verdict_features.bound_specs(
                 self.model.to_recipe(), self.model.kind)}
         except Exception:  # 顯示層
+            swallowed("studio._on_why_item")
             return
         b = bound.get(str(name))
         if b is None:
@@ -7711,7 +7718,7 @@ class StudioWindow(QMainWindow):
             try:
                 autosave.offer_restore(self)
             except Exception:  # 一張網不准擋開窗
-                pass
+                swallowed("studio.showEvent")
             # 版面模式自己會去讀那一格 QSettings（U5）—— 這裡以前有一段
             # 「只在設定區攤開時才還原」的判斷，而那個判斷現在住在
             # `set_layout_mode` 裡（Build 模式不吃存下來的比例，它就是滿版）。
@@ -7735,12 +7742,12 @@ class StudioWindow(QMainWindow):
                 if dlg is not None:
                     dlg.close()
             except Exception:  # 關窗不准擋路
-                pass
+                swallowed("studio.closeEvent")
         for worker in (self.preview_worker, self.trial_worker,
                        self.dataset_worker, self.pair_worker,
                        self.thumb_worker, self.output_worker):
             try:
                 worker.stop()
             except Exception:  # 關窗不准擋路
-                pass
+                swallowed("studio.closeEvent")
         super().closeEvent(event)

@@ -32,6 +32,7 @@
    「還沒跑過」，那句話要直接寫在面板上。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import math
 import traceback
@@ -213,7 +214,7 @@ class Inspector(QWidget):
                            "This panel could not be drawn (see the terminal). "
                            "Everything else still works.")
             except Exception:  # 連錯誤都畫不出來
-                pass
+                swallowed("inspectors.paintEvent")
         finally:
             p.end()
 

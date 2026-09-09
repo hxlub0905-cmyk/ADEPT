@@ -42,6 +42,7 @@ Tukey 鬚）—— 它吃的正好是 ``{name, values, colour}``，而盒鬚圖�
 `tests/test_export_uniformity.py`（守的是**色相與順序**，不是逐字相同）。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import math
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -568,6 +569,7 @@ def draw_refs(o: List[str], style: Dict[str, Any], lo: float, hi: float,
     try:
         refs = parse_refs(style.get("ref_lines", ""))
     except Exception:  # 畫圖不准被一格擋下來
+        swallowed("uniformity_charts.draw_refs")
         return
     if not refs or hi <= lo:
         return

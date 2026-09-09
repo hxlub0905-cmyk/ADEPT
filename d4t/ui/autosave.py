@@ -29,6 +29,7 @@
 下次開窗的那句「要救回來嗎」指向一個載不起來的檔案。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import json
 import os
@@ -171,7 +172,7 @@ class AutosaveGuard(QObject):
         try:
             self.window.model.add_listener(self.touch)
         except Exception:  # 網不准擋路
-            pass
+            swallowed("autosave.rebind")
         self.touch()
 
     def write_now(self) -> str:

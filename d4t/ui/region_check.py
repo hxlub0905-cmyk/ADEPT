@@ -20,6 +20,7 @@ patch 裡的位置本來就不一樣。設定對不對，是一個**關於整批
 Qt 的部分只負責把它算出來的東西畫出來。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -81,6 +82,7 @@ def collect_source_images(recipe: Any, items: Sequence[Any], kind: str,
             res = run_defect(recipe, item, kind, keep_context=True,
                              upto_node=node_id, sources=dict(sources or {}))
         except Exception:  # 單顆爆不殺整批
+            swallowed("region_check.collect_source_images")
             continue
         ctx = getattr(res, "context", None)
         images = dict(getattr(ctx, "images", {}) or {}) if ctx is not None else {}

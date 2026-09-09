@@ -7,6 +7,7 @@
 - 直方圖/門檻工具函數：`histogram()`、`rebin()` —— 拖門檻線秒回的純計算部分。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import math
 from contextlib import contextmanager
@@ -1105,6 +1106,7 @@ class RecipeModel:
                 step_cls = get_step(node.step)
                 ws = step_cls.resolve_writes_for_kind(node.params, self.kind)
             except Exception:  # 顯示用，壞了就跳過
+                swallowed("viewmodel.stream_producer")
                 continue
             if want in [str(w) for w in ws]:
                 found = nid
@@ -1342,6 +1344,7 @@ class RecipeModel:
             try:
                 specs = get_step(node.step).region_input_specs()
             except Exception:  # 認不得的卡不管
+                swallowed("viewmodel._hydrate_regions")
                 continue
             if any(sp.name == pname for sp in specs):
                 want.setdefault((nid, pname), "")

@@ -33,6 +33,7 @@ Excel 報表同一份邏輯，不另寫一份會漂的）。這一份只做三�
 橫條的家，`CLAUDE.md` §4「一塊新面板一個新模組」的直接套用。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import json
 import time
@@ -214,7 +215,7 @@ class BaselineStore:
             st.setValue(self._key, raw)
             st.sync()
         except Exception:  # 存不進去不准擋路
-            pass
+            swallowed("baseline.save")
 
     def load(self) -> Optional[Dict[str, Any]]:
         raw = self._memory
@@ -223,7 +224,7 @@ class BaselineStore:
             try:
                 raw = str(st.value(self._key, "") or "") or raw
             except Exception:
-                pass
+                swallowed("baseline.load")
         if not raw:
             return None
         try:

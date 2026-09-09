@@ -17,6 +17,7 @@
 另以 lazy import 的 tifffile 完成。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import os
 import struct
@@ -416,7 +417,7 @@ def _tiff_handle_locked(path):
             try:
                 hit[0].close()
             except Exception:  # 關檔失敗不該擋住讀取
-                pass
+                swallowed("tiff_index._tiff_handle_locked")
             _OPEN.pop(path, None)
         tf = tifffile.TiffFile(path)
         # **開檔的當下就把整份頁面清單建起來，一次。**
@@ -446,7 +447,7 @@ def _tiff_handle_locked(path):
             try:
                 old_tf.close()
             except Exception:
-                pass
+                swallowed("tiff_index._tiff_handle_locked")
         return tf, index
 
 
@@ -457,7 +458,7 @@ def close_cached_tiffs() -> None:
             try:
                 tf.close()
             except Exception:
-                pass
+                swallowed("tiff_index.close_cached_tiffs")
         _OPEN.clear()
 
 

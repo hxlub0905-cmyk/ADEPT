@@ -29,6 +29,7 @@ Recipe JSON 形狀（見 docs/history/plans/F0-master-plan.md §3.4）：
   不是碰到第一個就停。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import heapq
 import json
@@ -733,6 +734,7 @@ def _region_producer(name: str, route: List[str], upto: int,
                         step_cls.validate_params(node.params)):
                     found = nid
             except Exception:  # 壞參數交給 validate
+                swallowed("recipe._region_producer")
                 continue
         return found
 
@@ -2406,6 +2408,7 @@ def _compare_feature_renames(nodes: Dict[str, "RecipeNode"]) -> Dict[str, str]:
         try:
             step_cls = REGISTRY[node.step]
         except Exception:  # 不認得的卡就跳過
+            swallowed("recipe._compare_feature_renames")
             continue
         renames = getattr(step_cls, "legacy_feature_renames", None)
         if renames is None:
@@ -2413,6 +2416,7 @@ def _compare_feature_renames(nodes: Dict[str, "RecipeNode"]) -> Dict[str, str]:
         try:
             out.update(renames(dict(node.params)))
         except Exception:  # 遷移不該讓開檔失敗
+            swallowed("recipe._compare_feature_renames")
             continue
     return out
 
@@ -2471,6 +2475,7 @@ def _rescued_name_renames(nodes: Dict[str, "RecipeNode"],
         try:
             feats = list(step_cls.resolve_features(p))
         except Exception:
+            swallowed("recipe._rescued_name_renames")
             continue
         for f in feats:
             out["%s_%s" % (nid, f)] = "%s_%s" % (prefix, f)

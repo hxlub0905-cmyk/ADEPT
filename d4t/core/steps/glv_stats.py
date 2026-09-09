@@ -97,6 +97,7 @@ compare 算什麼（`algo/glv.compare_pixels`）
 
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import re
 from typing import Any, Dict, List, Optional, Tuple
@@ -1777,6 +1778,7 @@ class GlvStatsStep(MultiSourceStep):
             try:
                 rects = list(ctx.roi_norm_rects(name)) if name else []
             except Exception:  # 顯示用，不能擋畫面
+                swallowed("glv_stats.overlay_marks")
                 continue
             if not (0 <= idx < len(rects)):
                 continue               # 對不上就整組不畫（同 `set_marks` 的規矩）

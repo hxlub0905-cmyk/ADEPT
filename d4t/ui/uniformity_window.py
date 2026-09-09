@@ -21,6 +21,7 @@
 「畫面上的圖跟報表裡的圖不一樣，而兩張都畫得出來」是這個 repo 最貴的那種 bug。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -168,6 +169,7 @@ class ChartView(QWidget):
                 r = QSvgRenderer(bytearray(self.svg(), "utf-8"))
                 r.render(p, fit_into(r.viewBoxF().size(), QRectF(self.rect())))
             except Exception:  # 鐵則 7 的 UI 版
+                swallowed("uniformity_window.paintEvent")
                 return
         finally:
             p.end()

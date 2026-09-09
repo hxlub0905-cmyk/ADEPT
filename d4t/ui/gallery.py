@@ -25,6 +25,7 @@
 """
 
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import math
 from collections import OrderedDict
@@ -412,6 +413,7 @@ class _GridView(QAbstractScrollArea):
                     if fn(self._items[i]):
                         keep.append(i)
                 except Exception:  # 自訂條件炸掉不該殺 UI
+                    swallowed("gallery.refresh")
                     continue
             idx = keep
         if self._sort_key:
@@ -551,6 +553,7 @@ class _GridView(QAbstractScrollArea):
                 u8 = u8[:, :, 0]
             pm = QPixmap.fromImage(_qimage_from_uint8(u8))
         except Exception:  # 壞縮圖不該殺掉整頁
+            swallowed("gallery._pixmap_for")
             return None
         s = self._thumb
         if pm.width() != s or pm.height() != s:

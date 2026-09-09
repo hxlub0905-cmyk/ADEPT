@@ -30,6 +30,7 @@
 show 才套（跟 U5 之前一樣）。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from typing import Callable, List, Optional, Sequence
 
@@ -157,7 +158,7 @@ class WorkbenchLayout:
                 try:
                     self.library.toggle_group(None)
                 except Exception:  # 版面不准擋在卡片庫上
-                    pass
+                    swallowed("workbench.apply")
         return use
 
     def set_open(self, on: bool) -> bool:

@@ -23,6 +23,7 @@ PEAR 那個對話框的價值有一半在排列方式 —— **「刻度上的�
    標題不該被這個對話框安靜地清掉。它們原封不動搬回輸出（`_extra`）。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -654,6 +655,7 @@ class ChartSettingsDialog(QDialog):
         try:
             style = self.value()
         except Exception:  # 見 docstring
+            swallowed("chart_settings.refresh_preview")
             return
         metric = str(self._series.get("metric") or "")
         for kind, view in self.views.items():
@@ -665,6 +667,7 @@ class ChartSettingsDialog(QDialog):
                               chart_style_for(style, kind, self._axis, metric),
                               frame=self._frame, spec=self._spec)
             except Exception:  # 鐵則 7 的 UI 版
+                swallowed("chart_settings.refresh_preview")
                 continue
 
     # -- 版型 ---------------------------------------------------------------

@@ -13,6 +13,7 @@
   cache_dir 有給就照用）。
 """
 from __future__ import annotations
+from d4t.core.log import swallowed
 
 import hashlib
 import multiprocessing as _mp
@@ -63,15 +64,16 @@ def pin_cv2_deterministic() -> None:
     try:
         import cv2
     except Exception:  # pragma: no cover — repo 必裝 cv2；防禦性而已
+        swallowed("batch.pin_cv2_deterministic")
         return
     try:
         cv2.setNumThreads(1)
     except Exception:
-        pass
+        swallowed("batch.pin_cv2_deterministic")
     try:
         cv2.ipp.setUseIPP(False)
     except Exception:
-        pass
+        swallowed("batch.pin_cv2_deterministic")
 
 
 def _init_worker(recipe_json: Dict[str, Any], kind: str,
@@ -261,6 +263,7 @@ def item_filters(recipe: Recipe,
         try:
             got = step_cls.item_filter(dict(node.params or {}))
         except Exception:  # 壞參數由 validate 講
+            swallowed("batch.item_filters")
             continue
         if got:
             out.append((str(nid), str(got[0]), tuple(got[1])))
@@ -294,7 +297,7 @@ def select_items(recipe: Recipe, dataset: Any, items: Sequence[Any],
         try:
             fill_fields(dataset, sorted(have | set(missing)))
         except Exception:  # 補不到就照原值比
-            pass
+            swallowed("batch.select_items")
 
     def keep(it: Any) -> bool:
         fields = getattr(it, "fields", None) or {}
