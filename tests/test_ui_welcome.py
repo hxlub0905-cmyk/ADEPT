@@ -367,7 +367,7 @@ def test_toolbar_has_help_and_examples_entries(window):
 # --------------------------------------------------------------------------- #
 # 兩個入口，兩個旗標（F91 X4 拆開）——「收起來」不是「刪掉」
 # --------------------------------------------------------------------------- #
-def test_the_sample_data_entry_is_hidden_and_the_library_is_not(window):
+def test_both_entries_are_visible_and_the_dialog_agrees(window):
     """**兩顆鈕的死法不一樣，所以它們不是同一個決定。**
 
     範本庫 2026-09-08 回來了（`recipes/` 有東西了）；「用範例資料試一次」
@@ -399,13 +399,14 @@ def test_the_sample_data_entry_is_hidden_and_the_library_is_not(window):
     try:
         dlg.show()
         QApplication.processEvents()
-        assert dlg.btn_demo.isVisible() is False
+        assert dlg.btn_demo.isVisible() is True
         assert dlg.btn_library.isVisible() is True
         assert dlg.btn_open.isVisible() is True, "唯一那條開自己資料的路不能被藏"
-        # 藏起來的不算 —— 畫面上看得到的主要動作要正好一顆
+        # 畫面上看得到的主要動作要正好一顆：三顆都在的時候是「用範例資料試一次」
+        # （`WelcomeDialog` 只在有一顆藏起來時才把 primary 讓給「開自己的資料」）
         primaries = [b for b in (dlg.btn_demo, dlg.btn_open, dlg.btn_library)
                      if b.isVisible() and b.objectName() == "primary"]
-        assert len(primaries) == 1 and primaries[0] is dlg.btn_open
+        assert len(primaries) == 1 and primaries[0] is dlg.btn_demo
     finally:
         dlg.close()
 
@@ -418,7 +419,11 @@ def test_nothing_on_screen_points_at_a_button_that_is_not_there(window):
     看得到分數」。使用者於是去找一顆不在畫面上的鈕，那比沒有提示更糟。
     """
     hint = window.empty_state_hint.text()
-    assert "sample data" not in hint, "空白狀態還在推薦一顆看不到的鈕：%r" % hint
+    # 2026-09-09 那顆鈕回來了，所以這句話**要**提它 —— 判準跟旗標綁在一起，
+    # 兩個方向都問（藏起來時不准提、看得到時要提）。
+    from d4t.ui import scope as _scope
+    assert ("sample data" in hint) is bool(_scope.SHOW_SAMPLE_DATA), \
+        "空白狀態的文案跟旁邊的鈕對不上：%r" % hint
     # 空白狀態現在是**一種 source 一列**（F11 Input-5）—— 那句話不再自己點名
     # 某一條路，而是介紹底下那幾列。所以這裡改成逐列對：畫面上列出來的每一顆，
     # 都要是 `scope.INPUT_SOURCES` 上真的有的入口，而且每一條都要出現。

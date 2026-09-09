@@ -118,20 +118,23 @@ def test_both_entries_are_back_on_the_screen(qapp, window):
 
 
 def test_the_welcome_dialog_agrees_with_the_toolbar(qapp):
-    """導覽是第一次用的人看到的第一個畫面 —— 上面不能有按了撞牆的鈕。"""
+    """導覽是第一次用的人看到的第一個畫面 —— 上面不能有按了撞牆的鈕，
+    而現在兩顆都通了（2026-09-09），兩顆都要看得到。"""
     dlg = welcome_mod.WelcomeDialog()
     try:
         dlg.show()
         qapp.processEvents()
-        assert dlg.btn_library.isVisible() is True
-        assert dlg.btn_demo.isVisible() is False
+        assert dlg.btn_library.isVisible() is scope.SHOW_TEMPLATE_LIBRARY
+        assert dlg.btn_demo.isVisible() is scope.SHOW_SAMPLE_DATA
     finally:
         dlg.close()
 
 
-def test_nothing_on_screen_points_at_a_button_that_is_not_there(window):
-    """空白狀態那句話必須跟旁邊真的看得到的鈕一致。"""
-    assert "sample data" not in window.empty_state_hint.text().lower()
+def test_the_empty_state_only_mentions_a_button_that_is_there(window):
+    """空白狀態那句話必須跟旁邊真的看得到的鈕一致 —— 兩個方向都問：
+    鈕在，話要提；鈕不在，話不准提。"""
+    mentioned = "sample data" in window.empty_state_hint.text().lower()
+    assert mentioned is bool(scope.SHOW_SAMPLE_DATA)
 
 
 def test_every_listed_template_says_what_it_does(window):
