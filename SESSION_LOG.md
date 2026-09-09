@@ -22,6 +22,54 @@
 
 ---
 
+## 體檢與十四件待辦（2026-09-09 第五輪）
+
+使用者：「給這個專案一些建議（各方面）」→「把它整理成待處理事項，列出解決方法」
+→「好 開始修正」。先量再開清單，十四件裡十三件做完，一件做了一半（見末段）。
+
+量到的（都有證據）：`studio.py` 的天花板兩天被調高 17 次（尺變成流水帳）；
+`d4t/` 有 203 個 `except Exception`、59 個直接吞掉、零處 `logging`；文件裡
+「幾張卡／幾份 recipe」四處三種答案；421 條 `noqa` 標的是沒開的規則；
+`test_glv_combinations.py` 在核心批裡開 Qt，沒有 Qt 函式庫的機器核心批紅 34 條；
+`pytest` 與 `python -m pytest` 不是同一個直譯器；`docs/plans/` 八份有七份早已出貨。
+
+做了什麼（一件一個 commit）：
+
+* **尺**：`HARD_CAPS` —— `studio.py` 那三格上限本身不准再調高（凍在 logger 那一刀
+  之後的 7,753／298／437）。`CLAUDE.md` 也進 `FILE_CEILINGS`。
+* **留痕**：`d4t/core/log.py`（一個 logger、預設不寫；`swallowed("模組.函式")`），
+  59 處補一行、`ctx.warn` 送一份、CLI `run --log`、Studio 寫進 `crashlog.log_dir()`。
+  `tests/test_core_log.py` 用 ast 守「寬的 except 不准再安靜吞掉」。
+* **文件對真值**：`tests/test_docs_match_registry.py` 從 registry 與 `recipes/` 數。
+  `tests/test_plan_docs.py`：計畫書前 5 行要有「狀態：」，七份已收斂的搬進 history。
+* **測試分批**：兩支改名 `test_ui_*`；核心批的 lazy Qt import 一律
+  `importorskip("PySide6.QtWidgets", exc_type=ImportError)`（pytest 9 起預設只認
+  `ModuleNotFoundError`；dev extra 的 pytest 底線抬到 8.2）；`test_no_qt.py` 兩條守門。
+* **工具鏈**：`ruff` 加 `RUF100`、清 352 條沒作用的 `noqa`（有說明的留成註解）；
+  `tools/typecheck.py`（pyright basic 掃 core，上限 136）＋ CI job；UI 批只在 3.11 跑；
+  `.gitattributes`（KLARF／fixtures／bundle 標 `-text`）；文件一律 `python -m pytest`。
+* **doctor**：Qt 開不了視窗是 △，結論分「命令列可以、Studio 不行」兩句；指令用
+  `os.sep`。
+* **版本**：bundle 檔頭 `BUILD <sha12> <date>`（= `tools/FILELIST.txt` 的 blob SHA），
+  `python -m d4t --version` 印同一個數 —— 公司機沒有 git，這是它答得出「哪一版」的
+  唯一方式。
+* **第三份出貨 recipe**：`recipes/ebi-die-to-die.json`（ref 借 test 的範圍、
+  |test − ref|、median 3、GLV 讀最亮那一點；三個 seed 各 24 顆：24／22／23 中）。
+  「用範例資料試一次」入口打開（`SHOW_SAMPLE_DATA = True`，`TEMPLATE_RECIPE` 指它）。
+* **`CLAUDE.md` 647 → 319 行**：規則留下，故事逐字封存進
+  `docs/history/CLAUDE-2026-09-09.md`。
+
+**做了一半的那一件**：`studio.py` 的接線搬成 controller 模組
+（`results_wiring` / `decide_wiring` / `canvas_wiring`）。這台容器沒有 Qt 系統函式庫
+（`libEGL.so.1`），UI 測試一條都跑不了，盲搬 7,700 行的 god object 不是一個可以
+驗收的動作 —— 留給家用機。同一個理由：這一輪改到的 UI 測試
+（`test_ui_template_library.py`、`test_ui_welcome.py` 那條「整條路跑到底」、
+`test_ui_glv_combinations.py`、`test_ui_guided_condition.py`）**沒有在這裡跑過**，
+請先 `python tools/run_tests.py`。核心批（`--ignore-glob="*test_ui_*"`）與黃金值
+三份在這裡全綠。
+
+---
+
 ## Results 表：四欄一樣的 min、跟 Tiles 一樣的排序與篩選（2026-09-09 第四輪）
 
 使用者：「results 內 table 會有重名的 column，例如中間會有 4 欄一樣的 min
