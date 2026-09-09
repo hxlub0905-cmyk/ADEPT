@@ -187,3 +187,19 @@ v3
 這也是使用者用了兩個月的排法：我在這裡量的是幾何，他量的是手感，而後者
 在「最好」這件事上分量更重。U8 那條測試改成「兩根 splitter 的下半格水平相
 鄰」，精神沒變。QSettings 多一格 `ui/right_split_f100v3`。
+
+### 8.1 細線（2026-09-09）
+
+使用者看 v3 截圖：「分隔線看起來又怪怪的」。量像素：直向 5px、橫向 **9px**
+的實心灰條 —— v2 那條 QSS（`width: 5px; margin: 0 2px`）想做「看得見 1px、
+抓得到 5px」，Qt 沒照做。離線探針試了 `margin`、`border-left/right`、四邊
+`border`、硬邊漸層四種：Qt 算把手粗細時不分方向、畫的時候才分，
+`:horizontal` 與 `:vertical` 的尺寸互相干擾；漸層則被反鋸齒糊掉。沒有一種在
+兩個方向都給出 5px／1px。
+
+所以把手自己畫：`ui/splitters.py` 的 `HairlineSplitter`，`paintEvent` 在把手
+正中畫 1px 的 `divider`（滑過換 `border_hover`），顏色畫的時候才從
+`theme.TOKENS` 取。QSS 只剩 `background: transparent`。七個呼叫點
+（`studio.py` 四、`results.py` 二、`template_dialog.py` 一）全換；
+`tests/test_ui_splitters.py` 開一支、抓圖、數像素（兩個方向 × 兩個主題），
+並擋住 `d4t/ui` 再出現裸的 `QSplitter(`。

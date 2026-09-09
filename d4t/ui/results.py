@@ -42,7 +42,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QSizePolicy,
-    QSplitter,
     QStatusBar,
     QToolBar,
     QToolButton,
@@ -51,6 +50,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import fit_screen
+from .splitters import HairlineSplitter
 from .baseline import BaselineBar, default_store
 from .gallery import GalleryPanel
 from .results_table import ResultsTablePane
@@ -168,7 +168,7 @@ class ResultsWindow(QMainWindow):
         self.baseline_bar.pin_requested.connect(self.pin_baseline)
         self.baseline_bar.unpin_requested.connect(self.clear_baseline)
 
-        split = QSplitter(Qt.Vertical, self)
+        split = HairlineSplitter(Qt.Vertical, self)
         split.addWidget(self._build_view_switch())
         split.addWidget(spread)
         split.setStretchFactor(0, 4)
@@ -224,7 +224,7 @@ class ResultsWindow(QMainWindow):
                                   "why the failed ones failed")
         rl.addStretch(1)
         lay.addWidget(row)
-        why_split = QSplitter(Qt.Horizontal, host)
+        why_split = HairlineSplitter(Qt.Horizontal, host)
         why_split.addWidget(self.view_stack)
         why_split.addWidget(self.why)
         why_split.setStretchFactor(0, 3)

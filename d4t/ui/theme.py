@@ -1153,13 +1153,13 @@ QScrollArea > QWidget > QWidget { background: transparent; }
 
 /* -- splitter ---------------------------------------------------------- */
 QSplitter { background: $bg_page; }
-/* The thin line between regions is the splitter handle (F100 v2): the
-   visible part is the 1px $divider in the middle, the grabbable part is
-   5px. Before this the handle was 1px, neither visible nor grabbable. */
-QSplitter::handle { background: $divider; }
-QSplitter::handle:hover { background: $border_hover; }
-QSplitter::handle:horizontal { width: 5px; margin: 0 2px; }
-QSplitter::handle:vertical { height: 5px; margin: 2px 0; }
+/* The thin line between regions is painted by `ui/splitters.py` (a 5px handle
+   with a 1px $divider line in the middle). Size and colour deliberately do NOT
+   live here: Qt sizes handles without knowing their orientation, so a QSS
+   `width`/`margin`/`border` on `:horizontal` leaks into `:vertical` and the
+   line comes out as a 5-9px solid bar. `tests/test_ui_splitters.py` counts
+   the pixels. */
+QSplitter::handle { background: transparent; }
 
 /* -- scrollbars -------------------------------------------------------- *
  * The 5px here is deliberately NOT $radius_sm: an 11px-wide bar with a 5px
