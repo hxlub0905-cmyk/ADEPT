@@ -1,6 +1,6 @@
 # d4t 檔案清單 —— tools/get_code.py 用（每行：git blob SHA-1 + 路徑）。
 # 由 tools/make_filelist.py 產生；tests/test_offline_tools.py 會擋住它腐爛。
-95b2fb98984b37106c41dfe7582928aa33616cfa .gitattributes
+afdeefd139fced4a765660e1ac83b2a22899607d .gitattributes
 c298bdb95cbe634f9f39665ad11d88b4014a0b52 .github/workflows/ci.yml
 68a59c98883d1b448c8bbe84dc129883207a341f .gitignore
 e5722c68d4660d2667e8b5a239fc4d24d27ecd43 AGENTS.md
@@ -270,7 +270,7 @@ f74d5228a3ab2e7c1ce81b65b0edeebb470b624d tests/test_make_mgext.py
 ec70dff58c8ebf0192276fca9969a1fedbbedb49 tests/test_no_qt.py
 33071fd9690ad145172ab6a178471283523e3c75 tests/test_no_real_fab_data.py
 3103276cac06035f1a18a7d18cb90bdafd7d2f26 tests/test_normalize.py
-e6ad88796385dff1a57f103988f5b2e679f9a5d2 tests/test_offline_tools.py
+e24904409b99c932bef97a438c5ffe865f940e54 tests/test_offline_tools.py
 2802e2a6ca5d444db495e52fac536e75459df35c tests/test_output_boxplot.py
 4f74d2a8abbd9e061d7c0763dc3e7aadee07bbb0 tests/test_output_bundle.py
 eca4222d11bfb3e3f2d94b7741090179ee59cdb5 tests/test_output_char.py
@@ -425,7 +425,7 @@ f300097e06459c1c41b3d1bcf8f29b253012b83f tests/test_ui_truth_marks.py
 22c115f5589638e8fbd2aba22766103122c69f5c tests/test_ui_undo_close_and_stop.py
 3ff2e7c8a9d2c87f730e7b733b9a1017bda4f23c tests/test_ui_verdict_band.py
 ce19c6162b1e129d5dfb7d1edf75f047f12d5c49 tests/test_ui_verdict_wording.py
-6059594f28d65941938f718abd5ba7e5e84954d3 tests/test_ui_welcome.py
+0bfcad0765242bbf5088091f51dd46a65397056c tests/test_ui_welcome.py
 957bee5d677405fc028ce51bd38a005e33225f97 tests/test_ui_why_panel.py
 fc87f4ae3847bb7c2379b9d9a2c2a8eb862b7a2b tests/test_ui_widgets.py
 4338ded027e1b11c4d84ac7e08bbd63544464159 tests/test_ui_window_policy.py
@@ -461,6 +461,6 @@ c014ee1513db1e8c05f976734ea127c7fda95ad3 tools/make_text_bundle.py
 6808d8d4d25095c0454a1ee8dc88c4dd0319b40d tools/pair_probe.py
 dcfa017306f0a8f5ecef349fca942a8c5eead803 tools/release.py
 b7fac7ce6d155baf0730915557f86ad718526cd3 tools/run_tests.py
-7efab33f37acf834cffbe9a0f5a321d6235f3bd4 tools/show_template.py
+5a1bf9809f587b7fe293f9195aea00c22d11a626 tools/show_template.py
 04597a58902866d019761a6b825dbddc4eea6cdc tools/typecheck.py
 f4ee3956c51bf63e22c90eaa2401229f3281028e tools/validate_mgepi.py

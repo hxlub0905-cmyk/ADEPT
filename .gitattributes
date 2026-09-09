@@ -7,7 +7,12 @@
 # 一份被 autocrlf 安靜改過的 fixture 會讓那兩道關同時說謊：測試照樣綠，
 # 而它比的是被改過的那一份。
 
-* text=auto
+# ⚠ `eol=lf` 不能省（2026-09-09 家用機踩到）：只寫 `text=auto` 的話，Windows 上
+# checkout 會照 core.eol（預設 native）換成 CRLF —— 整個工作樹的每一個文字檔。
+# 而 `make_text_bundle.collect()` 對含 CR 的檔案是直接拒絕（搬運包的鐵則），
+# `make_filelist` 算的 blob SHA 也跟 index 對不上：18 條 offline 測試一起紅。
+# 這個 repo 的工具鏈假設工作樹是 LF，所以兩個平台都釘 LF。
+* text=auto eol=lf
 
 # KLARF：無損寫回的參照物，位元組就是規格。
 *.klarf -text

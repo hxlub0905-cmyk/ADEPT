@@ -495,7 +495,10 @@ def _stdlib_names(force_probe=False):
 
     out = set(sys.builtin_module_names)           # zlib / binascii 常在這裡
     stdlib = sysconfig.get_paths().get("stdlib") or ""
-    for base in (stdlib, os.path.join(stdlib, "lib-dynload")):
+    # Windows 把 C 寫的標準模組（unicodedata / _lzma …）放在 `DLLs\`，
+    # 不在 `Lib\` 也沒有 `lib-dynload`（2026-09-09 家用機踩到）。
+    for base in (stdlib, os.path.join(stdlib, "lib-dynload"),
+                 os.path.join(os.path.dirname(stdlib), "DLLs")):
         if not os.path.isdir(base):
             continue
         for entry in os.listdir(base):

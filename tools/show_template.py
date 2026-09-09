@@ -157,6 +157,12 @@ def _describe(pixels: bytes, w: int, h: int, self_period: Tuple[int, int]) -> st
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    # 廠內的 console 是 cp950，印 ✓ 會炸 UnicodeEncodeError（同 doctor.py）。
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass    # 不是真的 console 就算了
     ap = argparse.ArgumentParser(
         description="把 recipe 裡的模板影像存成 PNG（只用標準函式庫）")
     ap.add_argument("recipe", help="recipe JSON 的路徑")

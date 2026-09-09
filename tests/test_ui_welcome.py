@@ -437,8 +437,9 @@ def test_nothing_on_screen_points_at_a_button_that_is_not_there(window):
     dlg = window.show_welcome(force=True)
     try:
         footer = dlg.footer_hint.text()
-        assert "in about a minute" not in footer, \
-            "導覽底下還在承諾一顆看不到的鈕會給的結果：%r" % footer
+        # 那顆鈕在的時候這句保證是對的；不在的時候它是在替一顆看不到的鈕背書。
+        assert ("in about a minute" in footer) is bool(scope.SHOW_SAMPLE_DATA), \
+            "導覽底下的那句話跟那顆鈕對不上：%r" % footer
         assert footer.strip()
     finally:
         dlg.close()
