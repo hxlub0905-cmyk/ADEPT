@@ -994,6 +994,50 @@ class RecipeModel:
                 for b in bound_specs(recipe, self.kind)
                 if getattr(b.spec, "region", "")}
 
+    #: 「插入數字 ▾」裡 working numbers 那一組的標題。**跟判定面板那一段的
+    #: 標題同一個字** —— 使用者在兩個地方看到的是同一件事。
+    DECISION_LABEL = "Working numbers"
+
+    def decision_features(self, upto_let: Optional[int] = None) -> List[str]:
+        """判定段自己算出來的數字（``let`` 那幾行），``"名字\tWorking numbers"``。
+
+        2026-09-09 使用者：「working numbers 設的 attribute QAA 在後面 tree 上也
+        找不到」—— 樹上那一步的「pick a number」與「插入數字 ▾」以前只列
+        `labelled_features`（卡片宣告的），而引擎與 lint 早就認得 let 的名字
+        （`engine._eval_decision` 先算 let 再走樹）。清單少列的那一半正是
+        使用者自己剛取的名字。
+
+        ``upto_let``：**第 n 行只看得到前 n−1 行**（引擎照順序算，
+        `recipe._decide_unknown` 講的是同一句話）。``None`` = 全部 —— 樹上的
+        問題與 score 算式在每一行 let 之後才跑。
+
+        名字、``<名字>_missing``（有 fill）、``<名字>_raw``（有 scale）**不在這裡
+        再抄一份規則**：它們由 `verdict_features.bound_specs` 宣告（family
+        ``engine``、``base`` 是 let 的名字），這裡只按行序過濾。
+        """
+        d = getattr(self, "decide", None)
+        if d is None:
+            return []
+        from d4t.core.pipeline.verdict_features import bound_specs
+
+        lets = list(d.let)
+        if upto_let is not None:
+            lets = lets[:max(0, int(upto_let))]
+        allowed = [str(x.name).strip() for x in lets
+                   if not x.is_blank and str(x.name).strip()]
+        if not allowed:
+            return []
+        try:
+            recipe = self.to_recipe()
+        except Exception:              # noqa: BLE001 — 顯示層，壞了就不列
+            return []
+        out: List[str] = []
+        for b in bound_specs(recipe, self.kind):
+            s = b.spec
+            if s.family == "engine" and not s.metric and s.base in allowed:
+                out.append(s.name + self.FEATURE_LABEL_SEP + self.DECISION_LABEL)
+        return out
+
     def nm_per_px_is_known(self) -> bool:
         """有沒有任何一張卡填了 nm/px（`_util.nm_per_px_spec`）。"""
         for node in self.nodes.values():

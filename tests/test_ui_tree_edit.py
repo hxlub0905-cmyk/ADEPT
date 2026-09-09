@@ -553,3 +553,92 @@ def _all_bins(node):
     if isinstance(node, TreeLeaf):
         return [int(node.bin)]
     return _all_bins(node.yes) + _all_bins(node.no)
+
+
+# --------------------------------------------------------------------------- #
+# working numbers 在樹上找得到（2026-09-09）
+#
+# 使用者：「working numbers 設的 attribute QAA 在後面 tree 上也找不到」。
+# 引擎先算 let 再走樹（`engine._eval_decision`），lint 也認得那些名字 ——
+# 只有這個面板的兩個下拉沒列。
+# --------------------------------------------------------------------------- #
+def _model_with_a_working_number() -> RecipeModel:
+    m = RecipeModel()
+    m.add_step("glv_stats")
+    m.decide = DecideSpec(
+        let=[Let(name="QAA", expr="glv_max * 2", fill="0")],
+        tree=TreeStep(when="", yes=TreeLeaf(bin=1), no=TreeLeaf(bin=0)))
+    m.clear_history()
+    return m
+
+
+def _picker(panel):
+    """導引式問題的第一格（「pick a number」那一個）。"""
+    from PySide6.QtWidgets import QComboBox
+    return next(c for c in panel.findChildren(QComboBox)
+                if c.findData("QAA") >= 0 or c.itemText(0).startswith("(pick"))
+
+
+def test_the_guided_question_offers_the_working_numbers(qapp):
+    m = _model_with_a_working_number()
+    panel = TreePanel()
+    panel.set_model(m)
+    panel.set_features(m.labelled_features())
+    panel.show_path("")
+    which = _picker(panel)
+    assert which.findData("QAA") >= 0, [which.itemText(i) for i in range(which.count())]
+    assert which.findData("QAA_missing") >= 0, "有 fill 的行多寫的那個旗標也要列"
+
+
+def test_picking_a_working_number_writes_the_question(qapp):
+    m = _model_with_a_working_number()
+    panel = TreePanel()
+    panel.set_model(m)
+    panel.set_features(m.labelled_features())
+    panel.show_path("")
+    which = _picker(panel)
+    i = which.findData("QAA_missing")
+    which.setCurrentIndex(i)
+    which.activated.emit(i)
+    assert m.tree_node("").when.startswith("QAA_missing "), m.tree_node("").when
+
+
+def test_the_formula_picker_offers_the_working_numbers_too(qapp):
+    from PySide6.QtWidgets import QComboBox
+
+    m = _model_with_a_working_number()
+    m.set_tree_when("", "(glv_max > 5) * (glv_min < 2)")   # 複合 → 算式框
+    panel = TreePanel()
+    panel.set_model(m)
+    panel.set_features(m.labelled_features())
+    panel.show_path("")
+    pick = next(c for c in panel.findChildren(QComboBox)
+                if c.itemText(0).startswith("Insert a number"))
+    assert pick.findData("QAA") >= 0
+
+
+def test_the_number_picker_is_grouped_by_who_computes_it(qapp):
+    """一張卡一組、組名點不到、working numbers 第一組（使用者 2026-09-09：
+    「ADC 下拉選單分類可以再做更好一點嗎」）。"""
+    from PySide6.QtCore import Qt
+
+    m = _model_with_a_working_number()
+    panel = TreePanel()
+    panel.set_model(m)
+    panel.set_features(m.labelled_features())
+    panel.show_path("")
+    which = _picker(panel)
+    model = which.model()
+    texts = [which.itemText(i) for i in range(which.count())]
+    heads = [i for i in range(which.count())
+             if not (model.flags(model.index(i, 0)) & Qt.ItemIsSelectable)
+             and i > 0]
+    assert heads, "沒有任何一列是組名"
+    assert texts[heads[0]] == RecipeModel.DECISION_LABEL, texts
+    assert texts[heads[0] + 1] == "QAA"                 # 名字齊頭排在組名底下
+    from d4t.core.pipeline.step import get_step
+    assert texts[heads[1]] == get_step("glv_stats").label, texts   # 卡片名當組名
+    # 組名本身沒有值 —— `activated` 永遠只帶回一個真的名字
+    assert all(not which.itemData(h) for h in heads)
+    # 名字裡不再重複「— 誰算的」
+    assert not any("—" in t for t in texts), texts

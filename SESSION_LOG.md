@@ -22,6 +22,41 @@
 
 ---
 
+## 判定樹上找得到 working numbers；「插入數字 ▾」一張卡一組（2026-09-09）
+
+使用者拿一份 recipe 來問「為何我沒法執行，working numbers 設的 attribute QAA
+在後面 tree 上也找不到」。兩件事，一件是 recipe 自己的（樹上有一步 `when` 是
+空的 → `bad-rule`；ROI 卡沒模板 → `not-configured`），一件是 Studio 的缺口：
+
+* **樹那一步的「pick a number」與「插入數字 ▾」只列卡片宣告的名字**
+  （`labelled_features` 走的是 `_declared_specs`），而引擎（`_eval_decision`
+  先算 let 再走樹）與 lint（`_decide_unknown`）早就認得 let 的名字。清單少列
+  的那一半正好是使用者自己剛取的。⚠ 這一輪先講錯過一次：「下拉會標成
+  from Decision」—— 那是畫布上幽靈線的字，不是下拉的。**答一個 UI 問題之前
+  把那一格的來源讀完。**
+
+  補在 `RecipeModel.decision_features(upto_let=None)`：名字、`_missing`、
+  `_raw` **不再抄一份規則**，由 `verdict_features.bound_specs` 宣告（family
+  `engine`、`base` 是 let 名），這裡只按行序過濾 —— 第 n 行 let 只看得到前
+  n−1 行（引擎順序，lint 講的同一句話）；樹的問題與 score 看得到全部。
+  卡片的 `labelled_features` **不動**：讓一張卡看到判定段的名字就是 F21-B
+  那個 `x = x`。
+* **「ADC 下拉選單分類可以再做更好一點嗎」** → `decide_panel.fill_number_picker`
+  一支填三個下拉（let 行、score、樹那一步的兩種編法）：一張卡一組、組名是
+  卡片的 `label`、組名 disabled 點不到、working numbers 永遠第一組；名字裡
+  不再重複「— 誰算的」（`glv_stats` 開 each box 一張卡 55 個名字，那半邊
+  重複 55 次）。`itemData` / `findData` 仍是裸名，呼叫端一個字沒改。
+
+順手答掉的三句（寫在對話裡，不進 docs）：算式的空格可有可無（tokenizer
+跳過空白）；`_typical` 是逐框值的中位數（含自己）、`_outlier` 是離它最遠那格
+的值（跟著 `direction`）、`_outlier_box` 是那一格的序號（0 起算）。
+
+尺：`test_viewmodel.py` 三條（列得出、只看上面幾行、沒判定就空）、
+`test_ui_tree_edit.py` 四條（導引式列得出、點了寫進 model、算式框那個也列、
+分組長相）、`test_ui_f22_decide_panel.py` 一條（第 n 行只看前 n−1 行）。
+
+---
+
 ## F99／F100：一份 UI/UX 評審，與它的二十一件修正（2026-09-08）
 
 一份以 UI/UX 設計師角度做的評審（實際開起 Studio、載出貨 recipe、選卡、試跑、

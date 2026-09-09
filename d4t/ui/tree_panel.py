@@ -27,13 +27,14 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.pipeline.recipe import TreeLeaf, TreeStep
-from .decide_panel import _feature_combo, _insert_at_cursor
+from .decide_panel import (_feature_combo, _insert_at_cursor,
+                           fill_number_picker)
 from .tree_scene import (
     OPS, count_yes, display_tree, format_condition, parse_simple_condition,
     rows_reaching, suggest_condition,
 )
 from .threshold_view import SplitBar, ThresholdHistogram
-from .widgets import (clear_layout_parked, glyph_icon, region_dot_icon,
+from .widgets import (clear_layout_parked, glyph_icon,
                       small_button, split_labelled)
 from .viewmodel import MAX_BIN, is_a_constant_expression
 
@@ -266,10 +267,32 @@ class TreePanel(QWidget):
         self.body_lay.addWidget(row3)
 
     # ---- 導引式的問題（F25）------------------------------------------------
+    def _numbers(self) -> List[str]:
+        """可以拿來問的數字，``"名字\\t誰算的"``：卡片算的（Studio 餵進來的
+        `labelled_features`）＋ 判定段自己算的（`RecipeModel.decision_features`
+        —— 樹在每一行 let 之後才走，所以全部列得進來）。
+
+        2026-09-09 使用者：「working numbers 設的 attribute QAA 在後面 tree 上
+        也找不到」—— 以前這裡只有前一半。
+        """
+        getter = getattr(self._model, "decision_features", None)
+        extra = list(getter()) if callable(getter) else []
+        return list(self._features) + extra
+
+    def _region_colors(self) -> Dict[str, int]:
+        """特徵名 → 區域序（顏色點用）。上色而已，壞了就不上色，不能擋畫面。"""
+        getter = getattr(self._model, "feature_regions", None)
+        if not callable(getter):
+            return {}
+        try:
+            return dict(getter())
+        except Exception:          # noqa: BLE001 — 上色而已
+            return {}
+
     def _feature_names(self) -> List[str]:
-        """可以拿來問的數字（`labelled_features` 的前半）。"""
+        """`_numbers` 的前半（裸名）—— 滑桿範圍那種只認名字的地方用。"""
         out: List[str] = []
-        for item in self._features:
+        for item in self._numbers():
             name, _owner = split_labelled(item)
             if name and name not in out:
                 out.append(name)
@@ -319,9 +342,9 @@ class TreePanel(QWidget):
     def _build_guided(self, simple) -> None:
         """``[哪個數字 ▾] [比什麼 ▾] [多少] + 滑桿`` —— 打不出算式也問得出問題。"""
         name, op, value = simple or ("", ">", 0.0)
-        names = self._feature_names()
-        if name and name not in names:
-            names.insert(0, name)       # recipe 裡指到的數字永遠留著
+        items = self._numbers()
+        if name and name not in self._feature_names():
+            items.insert(0, name)       # recipe 裡指到的數字永遠留著（沒有來歷）
 
         row = QWidget(self)
         lay = QHBoxLayout(row)
@@ -329,23 +352,12 @@ class TreePanel(QWidget):
         lay.setSpacing(4)
 
         which = QComboBox()
-        which.addItem("(pick a number…)", "")
         # 每一項前面一顆**那個區域的顏色**（2026-09-01）—— 跟 Feature 表的
         # 上標、影像上那個框同一個顏色。接了兩三個區域之後這張清單上一半的
-        # 名字只差前綴那一段，而顏色比字先被看到。
-        regions = {}
-        getter = getattr(self._model, "feature_regions", None)
-        if callable(getter):
-            try:
-                regions = dict(getter())
-            except Exception:          # noqa: BLE001 — 上色而已，不能擋畫面
-                regions = {}
-        for n in names:
-            idx = int(regions.get(n, -1))
-            if idx >= 0:
-                which.addItem(region_dot_icon(idx), n, n)
-            else:
-                which.addItem(n, n)
+        # 名字只差前綴那一段，而顏色比字先被看到。分組（一張卡一組、working
+        # numbers 第一組）跟「插入數字 ▾」同一支：`fill_number_picker`。
+        fill_number_picker(which, items, self._region_colors(),
+                           "(pick a number…)")
         i = which.findData(name)
         which.setCurrentIndex(max(0, i))
         which.setToolTip("Which of the measured numbers this step asks about.")
@@ -504,9 +516,10 @@ class TreePanel(QWidget):
                         "to hold.")
         when.textEdited.connect(
             lambda t, p=self._path: m.set_tree_when(p, str(t)))
-        pick = _feature_combo(self._features,
+        pick = _feature_combo(self._numbers(),
                               lambda tok, e=when, p=self._path:
-                              m.set_tree_when(p, _insert_at_cursor(e, tok)))
+                              m.set_tree_when(p, _insert_at_cursor(e, tok)),
+                              regions=self._region_colors())
         row = QWidget(self)
         lay = QHBoxLayout(row)
         lay.setContentsMargins(0, 0, 0, 0)

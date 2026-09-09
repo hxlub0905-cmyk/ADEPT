@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
 
 from .widgets import (ChoiceChips, clear_layout_parked, glyph_icon,
                       region_dot_icon, small_button, split_labelled)
-from .viewmodel import MAX_BIN
+from .viewmodel import MAX_BIN, RecipeModel
 
 __all__ = ["DecidePanel"]
 
@@ -66,33 +66,80 @@ SCALES = (
 #: 「插入數字 ▾」那一列的標題（沒有東西可插的時候換一句話）。
 _PICK_PLACEHOLDER = "Insert a number…"
 _PICK_EMPTY = "No numbers upstream yet"
+#: working numbers 那一組的標題 —— 跟 `RecipeModel.DECISION_LABEL` 同一個字。
+_DECISION_GROUP = RecipeModel.DECISION_LABEL
+
+
+def fill_number_picker(combo: QComboBox, items: Sequence[str],
+                       regions: Optional[Dict[str, int]] = None,
+                       placeholder: str = "") -> None:
+    """把「可以拿來用的數字」填進一個下拉 —— **一張卡一組，組名不能點**。
+
+    2026-09-09 使用者：「ADC 下拉選單分類可以再做更好一點嗎」。在這之前它是
+    一條平的清單，每一項寫「名字 — 誰算的」：`glv_stats` 開 each box 之後
+    一張卡就吐 55 個名字，於是「誰算的」那半邊在 55 列上重複 55 次，而真正
+    要掃的那半邊（名字）被推到不同的起點。現在「誰算的」只出現一次，當那一
+    組的標題；名字齊頭排在它底下。
+
+    * 組的順序＝清單上第一次出現的順序（卡片的執行順序）；**working numbers
+      永遠第一組** —— 那是使用者自己剛取的名字，找它的人最多。
+    * 標題列 **disabled**：滑鼠點不到、鍵盤跳過它，`activated` 永遠只帶回
+      一個真的名字。
+    * 沒有「誰算的」的項目（recipe 裡指到、但清單上沒有的舊名字）不掛標題，
+      排在最前面 —— 它是使用者的東西，不是我們知道來歷的東西。
+    * 每一項的 ``UserRole`` 就是要插進算式的裸名，所以 ``combo.itemData`` /
+      ``findData`` 跟以前一字不差；區域的顏色點也還在。
+    """
+    from PySide6.QtGui import QStandardItem, QStandardItemModel
+
+    regions = dict(regions or {})
+    model = QStandardItemModel(combo)
+    head = QStandardItem(str(placeholder))
+    head.setData("", Qt.UserRole)
+    model.appendRow(head)
+
+    groups: Dict[str, List[str]] = {}
+    order: List[str] = []
+    for it in items:
+        name, owner = split_labelled(it)
+        if not name:
+            continue
+        if owner not in groups:
+            groups[owner] = []
+            order.append(owner)
+        if name not in groups[owner]:
+            groups[owner].append(name)
+    # 沒有來歷的排最前，working numbers 次之，其餘照出現順序。
+    front = [o for o in ("", _DECISION_GROUP) if o in groups]
+    order = front + [o for o in order if o not in front]
+
+    for owner in order:
+        if owner:
+            title = QStandardItem(str(owner))
+            title.setFlags(Qt.NoItemFlags)
+            title.setData("", Qt.UserRole)
+            model.appendRow(title)
+        for name in groups[owner]:
+            idx = regions.get(name, -1)
+            item = (QStandardItem(region_dot_icon(idx), name) if idx >= 0
+                    else QStandardItem(name))
+            item.setData(name, Qt.UserRole)
+            model.appendRow(item)
+    combo.setModel(model)
+    combo.setCurrentIndex(0)
 
 
 def _feature_combo(items: Sequence[str], on_pick,
                    regions: Optional[Dict[str, int]] = None) -> QComboBox:
     """共用的「插入數字 ▾」（F21-B 的那一支，這裡是它的第三個使用者）。
 
-    顯示的是「名字 — 誰算的」，**送出去的只有名字** —— 插錯半邊的話使用者會
-    得到一個永遠指不到的變數名，而錯誤要等跑起來才出現。
-
-    ``regions`` 有的名字前面點一顆**那個區域的顏色**（2026-09-01）——
-    跟 Feature 表的上標、影像上那個框同一個顏色。一份 recipe 接了兩三個區域
-    之後，這張清單上一半的名字只差前綴那一段，而顏色比字先被看到。
+    **送出去的只有名字** —— 插錯半邊的話使用者會得到一個永遠指不到的變數名，
+    而錯誤要等跑起來才出現。分組的長相在 :func:`fill_number_picker`。
     """
-    regions = dict(regions or {})
     combo = QComboBox()
-    combo.addItem(_PICK_PLACEHOLDER if items else _PICK_EMPTY, "")
+    fill_number_picker(combo, items, regions,
+                       _PICK_PLACEHOLDER if items else _PICK_EMPTY)
     combo.setEnabled(bool(items))
-    for it in items:
-        name, owner = split_labelled(it)
-        if not name:
-            continue
-        text = "%s   —   %s" % (name, owner) if owner else name
-        idx = regions.get(name, -1)
-        if idx >= 0:
-            combo.addItem(region_dot_icon(idx), text, name)
-        else:
-            combo.addItem(text, name)
     combo.setToolTip("Pick one of the numbers the cards above work out - "
                      "it is put in at the cursor.")
 
@@ -250,6 +297,12 @@ class DecidePanel(QWidget):
         self._model = model
         self.refresh()
 
+    def _numbers(self, upto_let: Optional[int] = None) -> List[str]:
+        """卡片算出來的 ＋ 判定段自己算出來的（`RecipeModel.decision_features`）。"""
+        getter = getattr(self._model, "decision_features", None)
+        extra = list(getter(upto_let)) if callable(getter) else []
+        return list(self._features) + extra
+
     def set_features(self, labelled: Sequence[str]) -> None:
         """「插入數字 ▾」的清單（``"名字\\t誰算的"``）。"""
         new = [str(x) for x in (labelled or [])]
@@ -389,8 +442,9 @@ class DecidePanel(QWidget):
         sc = QLineEdit(str(d.score or ""))
         sc.setPlaceholderText("empty = the score is 0")
         sc.textEdited.connect(lambda t: m.set_decide_score(str(t)))
+        # score 在每一行 let 之後才算，所以 working numbers 全部列得進來。
         self.body_lay.addWidget(self._labelled(
-            "", sc, _feature_combo(self._features,
+            "", sc, _feature_combo(self._numbers(),
                                    lambda tok: m.set_decide_score(
                                        _insert_at_cursor(sc, tok)),
                                    regions=self._regions)))
@@ -423,7 +477,9 @@ class DecidePanel(QWidget):
         expr.setPlaceholderText("e.g. cmp_delta_median * cd_deq")
         expr.setMinimumWidth(140)
         expr.textEdited.connect(lambda t, k=i: m.set_let(k, expr=str(t)))
-        pick = _feature_combo(self._features,
+        # 第 i 行只看得到前 i−1 行的 working numbers（引擎照順序算）——
+        # 列出自己或後面那一行，點下去就是一份每一顆都失敗的 recipe。
+        pick = _feature_combo(self._numbers(upto_let=i),
                               lambda tok, e=expr, k=i:
                               m.set_let(k, expr=_insert_at_cursor(e, tok)),
                               regions=self._regions)

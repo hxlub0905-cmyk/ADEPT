@@ -131,3 +131,49 @@ def test_a_card_does_not_offer_its_own_output():
     assert mine, "前提：第二張卡真的會寫出 mine_* 這幾個名字"
     assert not [x for x in exclusive if x.startswith("mine_")], exclusive
     assert set(exclusive) < set(inclusive), "上游的那些還是要在"
+
+
+# --------------------------------------------------------------------------- #
+# 判定段自己算出來的數字也要列得出來（2026-09-09）
+#
+# 使用者：「working numbers 設的 attribute QAA 在後面 tree 上也找不到」——
+# 引擎與 lint 早就認得 let 的名字，只有下拉沒列。
+# --------------------------------------------------------------------------- #
+def _model_with_lets() -> RecipeModel:
+    from d4t.core.pipeline.recipe import DecideSpec, Let, TreeLeaf
+    m = RecipeModel()
+    m.add_step("glv_stats")
+    m.decide = DecideSpec(
+        let=[Let(name="QAA", expr="glv_max * 2", fill="0"),
+             Let(name="", expr=""),                   # 整行空白＝不存在
+             Let(name="z", expr="QAA", scale="z")],
+        tree=TreeLeaf(bin=0))
+    return m
+
+
+def _names(items):
+    return [x.split("\t", 1)[0] for x in items]
+
+
+def test_decision_features_lists_every_name_the_lets_write():
+    m = _model_with_lets()
+    got = m.decision_features()
+    assert _names(got) == ["QAA", "QAA_missing", "z", "z_raw"]
+    assert {x.split("\t", 1)[1] for x in got} == {RecipeModel.DECISION_LABEL}
+
+
+def test_a_let_line_only_sees_the_lines_above_it():
+    """第 n 行只看得到前 n−1 行 —— 引擎照順序算，lint 講的也是同一句話。"""
+    m = _model_with_lets()
+    assert m.decision_features(upto_let=0) == []
+    assert _names(m.decision_features(upto_let=1)) == ["QAA", "QAA_missing"]
+    assert _names(m.decision_features(upto_let=2)) == ["QAA", "QAA_missing"]
+    assert _names(m.decision_features(upto_let=3)) == _names(m.decision_features())
+
+
+def test_decision_features_is_empty_without_a_decision():
+    m = RecipeModel()
+    m.add_step("glv_stats")
+    assert m.decision_features() == []
+    # 卡片的清單**不**跟著變：讓一張卡看到判定段的名字就是 `x = x` 那個 bug
+    assert "QAA" not in _names(_model_with_lets().labelled_features())
