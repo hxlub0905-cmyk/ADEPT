@@ -26,6 +26,19 @@ jobs:
       # `[tool.ruff]` 那一段，這裡刻意不重複一份（會漂）。
       - run: ruff check --output-format=github
 
+  # pyright（basic）只掃 d4t/core，錯誤數不准超過 tools/typecheck.py 的上限。
+  # 跟 lint 一樣是一份答案、自己一個 job；它要 numpy/cv2 的 stub 才認得型別，
+  # 所以裝執行時相依（不裝 Qt —— 只掃 core）。
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install numpy opencv-python-headless tifffile openpyxl pyright==1.1.408
+      - run: python tools/typecheck.py
+
   test:
     runs-on: ubuntu-latest
     strategy:

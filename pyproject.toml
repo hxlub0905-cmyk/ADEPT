@@ -20,7 +20,9 @@ dependencies = ["numpy>=1.24", "opencv-python>=4.8", "tifffile>=2023.7", "openpy
 [project.optional-dependencies]
 # ruff 釘死版本，理由同 `.github/workflows/ci.yml` 的 lint job：
 # 浮動版本 = 某天 CI 自己紅了，而沒有人改過任何一行。
-dev = ["pytest>=8.2", "ruff==0.15.8"]
+# pyright 同理釘住：它每一版都會多認得幾種錯，浮動版本＝某天 CI 自己紅。
+# 上限與為什麼只掃 core 在 `tools/typecheck.py`。
+dev = ["pytest>=8.2", "ruff==0.15.8", "pyright==1.1.408"]
 # Studio（PySide6）**刻意不在 dependencies 裡**：CLI 那條路
 # （`python -m d4t run`）不需要 Qt，而公司機上有「只要跑批次」的情境。
 # 但這件事以前是隱性的 —— `pip install .` 裝出來的東西 CLI 跑得動、
@@ -89,3 +91,14 @@ ignore = ["E702"]
 # Qt 的 model API 簽章就是 `def rowCount(self, parent=QModelIndex())` ——
 # 那是 PySide6 要求的形狀，不是 B008 想抓的「可變預設值」。
 extend-immutable-calls = ["PySide6.QtCore.QModelIndex"]
+
+# --------------------------------------------------------------------------- #
+# pyright —— 型別檢查（2026-09-09 加，只掃 core）
+# --------------------------------------------------------------------------- #
+# 上限、為什麼不是零、為什麼只掃 core：全部在 `tools/typecheck.py` 的檔頭，
+# 這裡只放 pyright 自己要讀的設定。`basic` 不是 `strict`：這個 repo 的型別
+# 註記是一路補上來的，strict 會把「沒寫型別」也算成錯，那不是要抓的東西。
+[tool.pyright]
+include = ["d4t/core"]
+pythonVersion = "3.9"
+typeCheckingMode = "basic"
