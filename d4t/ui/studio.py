@@ -2,7 +2,7 @@
 """``StudioWindow`` —— 把 M3 的元件、view-model 與背景工作接成一台可用的機器。
 
 版面（全部用 QSplitter，使用者拉得動；F100 v3，
-`docs/plans/F100-workbench-layout.md` §8）::
+`docs/history/plans/F100-workbench-layout.md` §8）::
 
     ┌ 工具列：開啟 Recipe／存檔／範本 ｜ 復原／重做 ｜ Results／說明▾／主題
     │         ｜ 試跑筆數 ▶試跑 ▶全跑                                      ┐

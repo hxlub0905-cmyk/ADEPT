@@ -1,7 +1,7 @@
 # 版面模式：畫布在上、工作台在下 — authored 2026-09-08 (F100).
 """``WorkbenchLayout`` —— Build / Tune 兩種版面的**狀態與幾何**，不建 widget。
 
-主視窗的版面（F100 v3，`docs/plans/F100-workbench-layout.md` §8）::
+主視窗的版面（F100 v3，`docs/history/plans/F100-workbench-layout.md` §8）::
 
     ┌─庫─┬──────── 畫布（導覽，一排卡的高度）────────┬── 預覽影像 ─────────┐
     │rail│                                           │  Verdict · score    │
