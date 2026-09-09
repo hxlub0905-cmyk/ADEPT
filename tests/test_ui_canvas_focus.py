@@ -230,7 +230,7 @@ def test_zoomed_out_a_card_keeps_its_title_and_drops_the_rest(window):
     drawn = []
     real = canvas_mod._draw_elided
 
-    def spy(p, rect, text, align=None):
+    def spy(p, rect, text, align=None, **_kw):   # `mode=`（F99 收尾：埠標籤切中間）不是這條測試的事
         drawn.append(str(text))
         return real(p, rect, text) if align is None else real(p, rect, text, align)
 
