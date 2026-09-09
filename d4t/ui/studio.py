@@ -225,12 +225,12 @@ _SCORE_LIBRARY_ENTRY = {
 #: 說「Built-in template not found」並回 ``False``，不會炸。路徑刻意留著：
 #: ⚠ **這一份跟範本庫是兩件事**（F91 X4）：範本庫 2026-09-08 回來了
 #: （`recipes/`，`scope.SHOW_TEMPLATE_LIBRARY`），而**這一支還是死的** ——
-#: 它是「用範例資料試一次」那條路的後半段，而那條路產的是一批合成的
-#: ``ebi_patch`` lot，出貨的兩份 recipe 沒有 ``ebi_patch`` route。
-#: 所以 `scope.SHOW_SAMPLE_DATA` 仍然是 ``False``：**要打開它得先有一份
-#: 出貨的 ebi_patch recipe**，不是翻一個旗標。
-TEMPLATE_RECIPE = Path(__file__).resolve().parents[2] / "examples" / "recipes" \
-    / "cross_regions.json"
+#: 它是「用範例資料試一次」那條路的後半段：那條路產的是一批合成的
+#: ``ebi_patch`` lot，而這一份就是出貨的 ebi_patch recipe（2026-09-09 之前
+#: 指著一個 2026-08-16 刪掉的路徑，所以 `scope.SHOW_SAMPLE_DATA` 一直關著）。
+#: `tests/test_shipped_recipes.py` 守著「這一份的 route 是 ebi_patch」。
+TEMPLATE_RECIPE = Path(__file__).resolve().parents[2] / "recipes" \
+    / "ebi-die-to-die.json"
 
 #: 試跑用的影像段快取位置（跨次試跑重用，第二次調參會明顯變快）。
 DEFAULT_CACHE_DIR = os.path.join(os.path.expanduser("~"), ".d4t", "cache")

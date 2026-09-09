@@ -371,8 +371,8 @@ def test_the_sample_data_entry_is_hidden_and_the_library_is_not(window):
     """**兩顆鈕的死法不一樣，所以它們不是同一個決定。**
 
     範本庫 2026-09-08 回來了（`recipes/` 有東西了）；「用範例資料試一次」
-    仍然收著 —— 它產得出資料，但 `load_template` 指著一份不存在的
-    ``ebi_patch`` recipe，所以按完是一批資料配一張空白畫布。
+    2026-09-09 也回來了 —— 以前它產得出資料，但 `load_template` 指著一份不
+    存在的 ``ebi_patch`` recipe；現在指 `recipes/ebi-die-to-die.json`。
 
     為什麼需要這條：那兩顆鈕**按下去仍然會做事**（訊號還在、方法還在），
     所以「壞了沒有」從程式碼看不出來 —— 壞的是使用者按了之後撞牆。
@@ -386,9 +386,9 @@ def test_the_sample_data_entry_is_hidden_and_the_library_is_not(window):
     from d4t.ui import scope
 
     assert scope.SHOW_TEMPLATE_LIBRARY is True
-    assert scope.SHOW_SAMPLE_DATA is False
-    assert window.btn_empty_sample.isHidden() is True, \
-        "「用範例資料試一次」那條路還少一半，不該出現"
+    assert scope.SHOW_SAMPLE_DATA is True
+    assert window.btn_empty_sample.isHidden() is False, \
+        "「用範例資料試一次」整條路通了，要看得到"
 
     window.show()
     QApplication.processEvents()
@@ -512,30 +512,22 @@ def test_welcome_demo_button_is_wired_to_studio_run_demo(window, monkeypatch):
         dlg.close()
 
 
-def test_demo_stops_at_the_missing_template_and_says_so(window, demo_lot):
-    """範本拿掉之後，``run_demo`` 走到「載入範本」那一步就停 —— 而且講得出原因。
+def test_demo_runs_the_whole_way_now_that_the_recipe_is_back(window, demo_lot):
+    """``run_demo`` 整條路：產資料 → 載入 → 載範本 → 試跑 → Gallery。
 
-    這條測試以前斷言的是「跑完有資料集、有流程、有直方圖、有 Gallery」。
-    那個結果現在做不到了（沒有 recipe 可載），所以斷言換成**現在真正發生的事**：
-
-    1. 資料還是產得出來、載得進來（那一段沒有壞）；
-    2. 停在載範本，回 ``False``；
-    3. 狀態列講得出是「找不到範本」，不是丟一個 traceback 或安靜地什麼都不做。
-
-    這條路目前**從 GUI 上按不到**（入口收起來了）。留著它是因為範例 recipe
-    回來的那一天，它會立刻告訴我們整條路通不通。
+    2026-08-16 到 2026-09-09 之間這條測試斷言的是「停在載範本、講得出找不到
+    哪個檔案」—— 因為範本指著一個刪掉的路徑。範例 recipe 回來了
+    （`recipes/ebi-die-to-die.json`），這一條就是「那一天它會立刻告訴我們整條
+    路通不通」的那一條。
     """
-    before = list(window.model.node_order)   # 這個 window 是 module-scope 共用的
-    assert window.run_demo(out_dir=str(demo_lot), n=6, sync=True) is False
-
-    assert window.dataset is not None, "產資料與載入那一段不該受影響"
-    assert len(window.dataset.items) == 6
-    assert list(window.model.node_order) == before, \
-        "沒有範本可載就不該動到使用者手上的流程"
+    assert window.run_demo(out_dir=str(demo_lot), n=6, sync=True) is True, \
+        window.status_text()
+    assert window.dataset is not None and len(window.dataset.items) == 6
+    assert window.dataset.kind == "ebi_patch"
+    assert window.model.recipe_id == "ebi_die_to_die"
+    assert window.model.node_order, "範本載進來了，流程不該是空的"
     status = window.status_text()
-    assert "template not found" in status.lower(), status
-    assert studio_mod.TEMPLATE_RECIPE.name in status, \
-        "要講得出找不到的是哪一個檔案"
+    assert "sample run finished" in status.lower(), status
 
 
 def test_demo_lot_generation_is_reused_not_regenerated(demo_lot):

@@ -79,8 +79,10 @@ Phase 1（讓數字可信）已於 2026-08-16 收斂，現階段依
 **先把引擎做對，再回頭做產品化**，因此以下這件事**目前刻意不支援**，
 不是遺漏：
 
-- **Studio 的「用範例資料試一次」與「Templates…」入口收起來**（範本庫還是空的）。
-  出貨的 recipe 走 [`recipes/`](recipes/) ＋ `Open recipe…` 那條路，不走範本庫。
+- ~~**Studio 的「用範例資料試一次」與「Templates…」入口收起來**~~ —— 兩個都
+  回來了（2026-09-08／09-09）。出貨的 recipe 在 [`recipes/`](recipes/)，
+  `Templates…` 與 `Open recipe…` 都到得了；「用範例資料試一次」載的是
+  `ebi-die-to-die.json`。
 
 開關集中在 `d4t/ui/scope.py`，這也是「暫時不給看」的唯一去處。
 

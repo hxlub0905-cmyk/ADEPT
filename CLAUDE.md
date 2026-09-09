@@ -73,14 +73,16 @@ engine 還在做（**Phase 1「讓數字可信」已於 2026-08-16 收斂**，�
 Phase 2），使用者定調**先把引擎做對，再回頭做產品化**（見
 [`docs/ROADMAP.md`](docs/ROADMAP.md)）：
 
-- **範本庫是空的**（`examples/` 已移除），Studio 的「用範例資料試一次」與
-  「Templates…」兩個入口收起來了 —— 開關在 `ui/scope.py`。
+- ~~**範本庫是空的**（`examples/` 已移除），Studio 的「用範例資料試一次」與
+  「Templates…」兩個入口收起來了~~ —— **兩個都回來了**（Templates… 於
+  2026-09-08、範例資料於 2026-09-09），開關仍在 `ui/scope.py`。
 
 **出貨的 recipe 在 [`recipes/`](recipes/)**（2026-08-26），走 `Open recipe…`
 不走範本庫，而且**每一份都有測試真的跑一次**
 （`tests/test_shipped_recipes.py`）—— 舊的 `examples/` 就是因為沒人測而爛掉的。
-加一份新的就在那支測試裡加一段。**目前兩份**：RSEM 逐框挑最異常的那一格
-（F73）與一張影像的均勻度（F85）。EBI↔API characterization 與 patch 的 dSNR 分布（F36）2026-09-02 由
+加一份新的就在那支測試裡加一段。**目前三份**：RSEM 逐框挑最異常的那一格
+（F73）、一張影像的均勻度（F85）、EBI die-to-die（2026-09-09，也是「用範例
+資料試一次」背後那份）。EBI↔API characterization 與 patch 的 dSNR 分布（F36）2026-09-02 由
 使用者指定刪掉 —— 卡片（`pair_source` / `output_char` / GLV 的 compare）
 一個都沒有動，走的是那條路的人自己拉線。
 
@@ -553,7 +555,7 @@ HIDDEN_STEPS = ("align",)        # 收起來（引擎照認、舊 recipe 照跑�
                                  # 先收起來、使用者確定之後再刪，那張對照表
                                  # 第一次跑完全程
 SHOW_TEMPLATE_LIBRARY = True     # 工具列的 Templates…（F91 X4 打開）
-SHOW_SAMPLE_DATA = False         # 「用範例資料試一次」（仍是死路，見下）
+SHOW_SAMPLE_DATA = True          # 「用範例資料試一次」（2026-09-09 打開，見下）
 INPUT_SOURCES = (...)            # 三顆 Open 的字、圖示、一句白話說明
 ATTACHMENTS = (...)              # 掛在已載入 lot 上的附加檔（GLAS 匯出）
 ```
@@ -571,10 +573,11 @@ ATTACHMENTS = (...)              # 掛在已載入 lot 上的附加檔（GLAS �
   理由是「庫是空的」，而那是真的有機制：`welcome.RECIPES_DIR` 指的是
   ``examples/recipes``，一個同一天刪掉的路徑。現在它指 `recipes/`，那裡有出貨
   的 recipe 而且 `test_shipped_recipes.py` 逐份跑過 —— 理由到期，入口回來。
-* **「用範例資料試一次」（`SHOW_SAMPLE_DATA = False`）** —— 仍然是死路，
-  而且**修不掉旗標**：`run_demo` 產的是合成的 `ebi_patch` lot，而
-  `TEMPLATE_RECIPE` 指的那份不存在、出貨的兩份是 `rsem` 與 `folder` route。
-  要打開它得先有一份出貨的 ebi_patch recipe。有一支反向測試守著這句話。
+* **「用範例資料試一次」（`SHOW_SAMPLE_DATA = True`）** —— 2026-09-09 打開。
+  它以前是死路而且**修不掉旗標**：`run_demo` 產的是合成的 `ebi_patch` lot，
+  而 `TEMPLATE_RECIPE` 指的那份不存在。現在指 `recipes/ebi-die-to-die.json`，
+  `test_shipped_recipes.py` 逐 seed 跑過。`test_ui_template_library.py` 兩個
+  方向都守：關著要有理由（那份不在）、開著那份要在而且 route 是 `ebi_patch`。
 
 `run_demo` / `RecipeLibraryDialog` 一行都沒動 —— 收起來的是入口不是能力。
 

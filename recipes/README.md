@@ -13,6 +13,30 @@
 
 ---
 
+## `ebi-die-to-die.json`
+
+**EBI patch，一顆兩張**：test 是這一顆、ref 是另一片 die 上同一個位置。兩張先拉到
+同一個亮度（ref 借 test 的範圍，兩張才比得起來），相減、把差異圖用小 median
+壓掉雜訊，然後 GLV 讀差異圖裡**最亮的那一點**。真缺陷是兩片 die 唯一不共有的
+東西，所以它是相減之後留下來的；雜訊與輕微的圖案漂移到不了同一個高度。
+判定只問一句：那個峰有沒有高過「安靜」的水位（`quiet`，預設 32）。
+
+```
+Load images ──test─┬──> Normalize (test)           ──test──┐
+                   ├──> Normalize (ref, range from test) ──ref──┤
+            ──ref──┘                                            ▼
+                                                    Subtract |test − ref| ──diff──> Denoise (median 3) ──diff──> GLV (glv_max)
+        ┌ OUTPUT ─────────────────────────────────┐
+        │ Write report (report+table+images+recipe)│   ← 不接線
+        └──────────────────────────────────────────┘
+```
+
+這一份也是 Studio「用範例資料試一次」背後那份 recipe（`tools/make_sample.py`
+產的合成 lot 就是 `ebi_patch`）。合成資料上實測三個 seed 各 24 顆：22–24 中，
+真缺陷的峰是雜訊最高值的 4 倍以上（`tests/test_shipped_recipes.py`）。
+
+---
+
 ## `rsem-worst-box.json`
 
 **RSEM 單張、沒有參照影像**：一顆 defect 一張圖，圖上鋪滿框，讓 GLV 挑出

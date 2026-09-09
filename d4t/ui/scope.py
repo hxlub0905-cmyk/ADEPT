@@ -141,20 +141,16 @@ SHOW_TEMPLATE_LIBRARY: bool = True
 
 #: 「用範例資料試一次」那個入口（導覽上那顆、空白狀態上那顆）。
 #:
-#: **仍然收著**，而且跟上面那一個**是兩件事** —— 這一格 2026-09-08 才拆開，
-#: 因為在那之前一個旗標管兩顆鈕，而它們的死法不一樣：
+#: **2026-09-09 打開了。** 它跟上面那一個**是兩件事** —— 2026-09-08 才拆成
+#: 兩個旗標，因為它們的死法不一樣：範本庫是「庫空了」，`recipes/` 填回來就活；
+#: 這一條是 ``run_demo()`` 產得出一批合成的 ``ebi_patch`` lot，**卻沒有一份
+#: 出貨的 ebi_patch recipe 可以載** —— 使用者按完看到的是一批資料配一張
+#: 空白畫布。修不掉旗標，要先有那份 recipe。
 #:
-#: * 範本庫：庫是空的 → **`recipes/` 填回來就活了**（上面那一格）。
-#: * 範例資料：``run_demo()`` 產得出一批合成資料，**但它不載 pipeline** ——
-#:   使用者按完看到的是一批資料配一張空白畫布，而畫面上沒有下一步。
-#:   那不是「庫空了」，是這條路本來就少一半。
-#:
-#: 混在一個旗標裡的代價是具體的：X4 那一輪要把範本庫打開，而翻那個旗標會
-#: 順手把一顆仍然撞牆的鈕一起放回畫面上。**一個旗標描述一個決定。**
-#:
-#: 收起來的是入口不是能力：``StudioWindow.run_demo()`` / ``generate_demo_lot()``
-#: 一行都沒動，測試照樣直接呼叫得到。
-SHOW_SAMPLE_DATA: bool = False
+#: 現在有了：`recipes/ebi-die-to-die.json`（`studio.TEMPLATE_RECIPE` 指著它，
+#: `tests/test_shipped_recipes.py` 逐 seed 真的跑）。理由到期，入口回來 ——
+#: 「收起來的成本是零、回復的成本是改一個字串」第四次被驗證。
+SHOW_SAMPLE_DATA: bool = True
 
 #: `route_by`（「分流／pre-filter」）的畫布徽章與編輯器入口要不要出現。
 #:
@@ -202,19 +198,19 @@ SHOW_ROUTE_BY: bool = False
 PROFILES: Dict[str, Dict[str, Any]] = {
     "fab": {
         "SHOW_TEMPLATE_LIBRARY": True,
-        "SHOW_SAMPLE_DATA": False,
+        "SHOW_SAMPLE_DATA": True,
         "SHOW_ROUTE_BY": False,
         "HIDDEN_STEPS": _DEFAULT_HIDDEN,
     },
     "dev": {
         "SHOW_TEMPLATE_LIBRARY": True,
-        "SHOW_SAMPLE_DATA": False,
+        "SHOW_SAMPLE_DATA": True,
         "SHOW_ROUTE_BY": True,
         "HIDDEN_STEPS": (),
     },
     "demo": {
         "SHOW_TEMPLATE_LIBRARY": True,
-        "SHOW_SAMPLE_DATA": False,
+        "SHOW_SAMPLE_DATA": True,
         "SHOW_ROUTE_BY": False,
         "HIDDEN_STEPS": _DEFAULT_HIDDEN,
     },
