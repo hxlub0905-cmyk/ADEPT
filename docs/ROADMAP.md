@@ -23,7 +23,6 @@
   `Templates…` 2026-09-08、「用範例資料試一次」2026-09-09 打開，也走 `Open recipe…`
   那條路。它跟舊的 `examples/` 差在**有測試守著**
   （`tests/test_shipped_recipes.py`）—— 舊的那批就是因為沒人測而爛掉的。
-  範本庫那個入口仍然關著。
 - ~~**存檔 recipe 的功能拿掉了**（2026-08-16）~~ →
   **2026-08-26 做回來了**（F34）。`Recipe.save()`、工具列的「Save recipe…」、
   `Ctrl+S`（存回原檔）與 `Ctrl+Shift+S`（另存）都在，標題列的星號是「還沒存」

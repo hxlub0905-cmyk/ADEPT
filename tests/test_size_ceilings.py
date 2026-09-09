@@ -210,6 +210,11 @@ FILE_CEILINGS = {
     # （使用者：「X img/s 而不是 total time」）—— 多的是那句「為什麼加總的 ms
     # 不是牆上時鐘」的說明。
     "d4t/ui/canvas.py": 3070,
+    # `CLAUDE.md` **每個 session 都會被讀進去**。2026-09-09 之前它是 647 行，
+    # 一半是「某年某月使用者說了什麼」的故事 —— 規則留下、故事搬進
+    # `docs/history/CLAUDE-2026-09-09.md`，瘦到 319 行。這一格擋它長回去：
+    # 要加一條規矩可以，要加一段故事去 SESSION_LOG／history。
+    "CLAUDE.md": 323,
 }
 
 #: 沒被列名的檔案共用的上限。

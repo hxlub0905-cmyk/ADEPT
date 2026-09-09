@@ -337,6 +337,7 @@ d4t/
 │   │   │                     #   兩套，相似度 0.01；家具早就共用了）—— 見計畫書 §14
 │   │   └── overlay.py        #   缺陷疊圖：把「機器看到什麼」畫成人看得懂的圖
 │   ├── store/results.py      # SQLite 批次歷史 ＋ rescore
+│   ├── log.py                # 唯一的 logger：被吃掉的例外留痕（swallowed）、run --log
 │   └── calibration.py        # nm/px 校正 profile
 └── ui/                       # PySide6 Studio（**唯一允許 Qt 的地方**）
     ├── scope.py              #   產品範圍開關：支援哪些輸入、哪些卡片收起來、入口長什麼樣
