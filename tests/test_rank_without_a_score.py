@@ -148,7 +148,7 @@ def test_the_gallery_caption_leaves_a_missing_score_blank():
 
     判定樹是一個分類器 —— 沒有分數表達式的時候**每一格**都會是它。
     """
-    pytest.importorskip("PySide6")
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
     from d4t.ui.gallery import _fmt_score, caption_lines_of
     assert _fmt_score(None) == ""
     top, sub = caption_lines_of({"defect_id": "7", "score": None, "bin": 2},
@@ -160,7 +160,7 @@ def test_the_gallery_caption_leaves_a_missing_score_blank():
 
 def test_the_results_table_leaves_a_missing_score_blank():
     """表格那一邊本來就對（F19 的「留白，不是 0」）—— 鎖住它別退化。"""
-    pytest.importorskip("PySide6")
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
     from d4t.ui.results_table import ResultsTableModel

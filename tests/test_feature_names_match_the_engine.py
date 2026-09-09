@@ -157,7 +157,7 @@ def test_feature_owners_is_a_projection_of_bound_specs(lot):
     34 個，差的 11 個是救援名與引擎特徵（`score`、`decide_unanswered`）。
     於是最常見的那一條淡線 —— 報表照 `score` 排序 —— **一條都畫不出來**。
     """
-    pytest.importorskip("PySide6")
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
     from d4t.ui.viewmodel import RecipeModel
 
     recipe = _both("glv")

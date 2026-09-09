@@ -20,7 +20,7 @@ dependencies = ["numpy>=1.24", "opencv-python>=4.8", "tifffile>=2023.7", "openpy
 [project.optional-dependencies]
 # ruff 釘死版本，理由同 `.github/workflows/ci.yml` 的 lint job：
 # 浮動版本 = 某天 CI 自己紅了，而沒有人改過任何一行。
-dev = ["pytest>=7", "ruff==0.15.8"]
+dev = ["pytest>=8.2", "ruff==0.15.8"]
 # Studio（PySide6）**刻意不在 dependencies 裡**：CLI 那條路
 # （`python -m d4t run`）不需要 Qt，而公司機上有「只要跑批次」的情境。
 # 但這件事以前是隱性的 —— `pip install .` 裝出來的東西 CLI 跑得動、
