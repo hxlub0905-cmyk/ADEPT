@@ -184,7 +184,7 @@ FILE_CEILINGS = {
     # （`_stop_anim` / `_forget_anim`，P0-1 那個 RuntimeError）、空白處右鍵與
     # 拖線到空白的兩個訊號（P1-1）、Region 卡標題帶區域名（P1-3）、每張卡的
     # 執行狀態（`run_status_from` / `run_text`，P1-5）。
-    "d4t/ui/canvas.py": 3051,
+    "d4t/ui/canvas.py": 3058,
 }
 
 #: 沒被列名的檔案共用的上限。

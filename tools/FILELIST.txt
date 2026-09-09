@@ -97,7 +97,7 @@ a2bef1c5504ba66b2165727e27800c5d72de791b d4t/ui/assets/d4t.svg
 dd49f8008abcc34384db9000781bdf9ccb1f5e12 d4t/ui/baseline.py
 87bce11608d08f4302947e917b2b24d076571775 d4t/ui/branding.py
 c8486175a525e1bf1ec5b7ac141e480f7febfecc d4t/ui/buttons.py
-984bccff0773f9c7894bc29293ca439d7b6b35ad d4t/ui/canvas.py
+a1cf94cf87a362fc6e9a13c1dc1921e669f65920 d4t/ui/canvas.py
 f95b2bd90c5936c688e9d929dc63ac22a9598877 d4t/ui/card_menu.py
 3b58b7e078d58ad84a8939734b65952a75a029f3 d4t/ui/cell_canvas.py
 7336030f6ad2c9dfc39288991695f871f276a26c d4t/ui/chart_settings.py
@@ -173,7 +173,7 @@ cd9b6800b5941de35efed2464b7c0a0db05e4a49 docs/plans/F79-grid-tells-the-truth.md
 3fdf5c58d00f59984d59c705c9d1516967c66766 docs/plans/F80-focus-visible-and-motion.md
 66963820c4b69d360394697ecd9d3ab2a8f2a46d docs/plans/F81-flat-for-real.md
 5f93bd942e201992944b1ba7359ffde449b14bbb docs/plans/F82-drag-magnet.md
-681e61b0a29f6a670f20b9d0be8b8744b0d289aa docs/plans/F99-ui-review-fixes.md
+1bc98efdad3df2f96222d52b884c8bd675511453 docs/plans/F99-ui-review-fixes.md
 81236a2c24b1a65f3021e5f578777644484fa874 fab_probe/README.md
 de08d63cbd4c1415acb2e0737c5b99db6ff57d54 fab_probe/probe_klarf.py
 368cc8e63736446813cc47ccc1fcc49b11abeec6 fab_probe/probe_stats.py
@@ -313,7 +313,7 @@ e742fafb0360528be033f527192756ce0f52afc9 tests/test_sampling.py
 d4970b4251f7710ec2dc51413496330f07a1c2bf tests/test_scale.py
 f0e07cf8dc9ac1245b12e9ef2937c3428f012334 tests/test_shipped_recipes.py
 cfc99c167d84014f55bd0516ca45eb8704237d48 tests/test_show_template.py
-50a54f50007a1f76084e6f77ef1533d35df9c6a7 tests/test_size_ceilings.py
+17c78c9bffb9e70f3c674d368bdad1a55fb3265a tests/test_size_ceilings.py
 b916e62bdadbb86a8bcec464b3c5dc3669db66be tests/test_snr.py
 77d7c1c131126bc0c2205f77fbdf22caaa6f7a17 tests/test_steps.py
 8205dbdf48a2b5cd1a111738039020b6ddb65cc9 tests/test_subpixel.py

@@ -326,8 +326,8 @@ def layout_columns(node_ids: Sequence[str],
 
 
 def _draw_elided(p: QPainter, rect: QRectF, text: str,
-                 align=Qt.AlignLeft) -> None:
-    """畫一行文字，太長就切成 ``像這樣…``。
+                 align=Qt.AlignLeft, mode=Qt.ElideRight) -> None:
+    """畫一行文字，太長就切成 ``像這樣…``（``mode`` 決定切哪一頭）。
 
     直接 ``drawText`` 到一個放不下的矩形，Qt 會**硬切在字的中間**，看起來像
     畫面壞掉；``參數摘要=diff · metri`` 這種殘句還會讓人以為值真的是那樣。
@@ -337,7 +337,7 @@ def _draw_elided(p: QPainter, rect: QRectF, text: str,
     s = str(text)
     fm = p.fontMetrics()
     if fm.horizontalAdvance(s) > rect.width():
-        s = fm.elidedText(s, Qt.ElideRight, int(rect.width()))
+        s = fm.elidedText(s, mode, int(rect.width()))
     p.drawText(rect, Qt.AlignVCenter | align, s)
 
 
@@ -985,7 +985,10 @@ class _NodeItem(QGraphicsItem):
         # 右上角、標題那一行。跑完一批之前畫布跟跑之前長得一模一樣，而 traces
         # 裡早就有每張卡的成敗與耗時 —— n8n 在每個節點上標「✓ 24 items」
         # 就是這一格。縮到 terse 時不畫（那時候連副標都收掉了）。
+        # 它畫在**副標那一行**的右邊，不搶標題的寬度：標題是身分（F99 P1-3 才
+        # 讓 Region 卡帶上區域名），56% 縮放下被它擠成 `ROI · o…` 等於白做。
         run = "" if terse else run_text(self.canvas.run_status_of(self.node_id))
+        run_w = 0.0
         if run:
             p.save()
             rf = QFont(p.font())
@@ -995,10 +998,9 @@ class _NodeItem(QGraphicsItem):
             run_w = QFontMetricsF(rf).horizontalAdvance(run) + 4.0
             ok_run = "failed" not in run
             p.setPen(QColor(TOKENS["success_text" if ok_run else "danger_text"]))
-            p.drawText(QRectF(text_x + text_w - run_w, 11, run_w, 16),
+            p.drawText(QRectF(text_x + text_w - run_w, 28, run_w, 14),
                        int(Qt.AlignRight | Qt.AlignVCenter), run)
             p.restore()
-            text_w -= run_w + 4.0
 
         fg = TOKENS["text_primary"] if enabled else TOKENS["text_disabled"]
         p.setPen(QColor(fg))
@@ -1020,7 +1022,8 @@ class _NodeItem(QGraphicsItem):
             p.setFont(f)
             p.setPen(QColor(TOKENS["text_secondary"] if enabled
                             else TOKENS["text_disabled"]))
-            _draw_elided(p, QRectF(text_x, 28, text_w, 14), self.subtitle())
+            _draw_elided(p, QRectF(text_x, 28, text_w - (run_w + 4.0 if run_w else 0.0), 14),
+                         self.subtitle())
             parts = self.summary_parts()
             if parts:
                 _draw_parts(p, QRectF(text_x, 43, text_w, 14), parts)
@@ -1050,9 +1053,12 @@ class _NodeItem(QGraphicsItem):
             # **放不下就切在後面加省略號**（F13-⑤）。以前是直接 drawText 進一個
             # 52px 的框，Qt 對靠右對齊的字是**從左邊硬切**的 —— `Borrow range
             # from` 於是畫成 `nge from`，讀起來像另一個欄位的名字。
+            # **切中間**（F99 收尾）：`between_columns` 與 `between_rows` 從
+            # 後面切都是 `betwee…`，兩顆埠在畫布上分不出來；切中間是
+            # `betw…mns` 與 `betw…ows`——角色前綴（`ref `）與名字的尾巴都留著。
             _draw_elided(p, QRectF(anchor.x() - _PORT_LABEL_W - 4,
                                    anchor.y() - 7, _PORT_LABEL_W, 14),
-                         text, align=Qt.AlignRight)
+                         text, align=Qt.AlignRight, mode=Qt.ElideMiddle)
 
         for spec, anchor in zip(self.out_specs(), self.out_anchors_local()):
             name, kind = spec["name"], spec["kind"]
@@ -1067,7 +1073,8 @@ class _NodeItem(QGraphicsItem):
             # 同左邊那一側：放不下要看得出來被切了（`layout_label` 以前畫成
             # `layout_`，讀起來像一條真的叫那個名字的流）。
             _draw_elided(p, QRectF(anchor.x() + 4, anchor.y() - 7,
-                                   _PORT_LABEL_W - 10, 14), name)
+                                   _PORT_LABEL_W - 10, 14), name,
+                         mode=Qt.ElideMiddle)
 
     def _paint_lot_strip(self, p: QPainter, body: QRectF,
                          col: QColor, enabled: bool) -> None:
