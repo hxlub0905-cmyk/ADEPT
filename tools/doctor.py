@@ -50,6 +50,19 @@ DEPENDENCIES: Tuple[Tuple[str, str, bool], ...] = (
 
 OK, WARN, BAD = "ok", "warn", "bad"
 
+
+def _tool(name: str) -> str:
+    """``python tools/<name>`` 這句話，用**這台機器**的分隔符。
+
+    以前寫死反斜線 —— 在 Linux／macOS 上印出來的那句指令貼回去跑不動
+    （2026-09-09 在容器裡看到）。訊息裡的指令是給人照抄的，所以它要在印出它
+    的那台機器上成立。
+    """
+    return "python tools%s%s" % (os.sep, name)
+
+
+DOCTOR_CMD = _tool("doctor.py")
+
 _MARKS = {OK: "✓", WARN: "△", BAD: "✗"}
 _MARKS_ASCII = {OK: "[OK]", WARN: "[!!]", BAD: "[XX]"}
 
@@ -255,8 +268,8 @@ def check_dependencies(rep: Report, verbose: bool = False) -> bool:
             if essential:
                 all_ok = False
                 rep.add(BAD, "套件 %s" % pip_name, detail,
-                        hint="離線安裝：python tools\\install_offline.py --wheels wheels"
-                             "（或有網路時 pip install %s）" % pip_name,
+                        hint="離線安裝：%s --wheels wheels（或有網路時 pip install %s）"
+                             % (_tool("install_offline.py"), pip_name),
                         extra="%s: %s" % (type(exc).__name__, exc))
             else:
                 rep.add(WARN, "套件 %s" % pip_name, detail + "（選用）", essential=False,
@@ -291,34 +304,49 @@ def check_d4t_importable(rep: Report) -> bool:
         else:
             hint = ("你跑錯資料夾了。請先 cd 到「裡面看得到 d4t\\ 這個資料夾」的地方"
                     "（解壓後通常是 d4t-main\\），再執行一次："
-                    "cd C:\\...\\d4t-main 然後 python tools\\doctor.py")
+                    "cd C:\\...\\d4t-main 然後 %s" % DOCTOR_CMD)
         rep.add(BAD, "d4t 套件", "在目前資料夾 %s 載入不到（%s）" % (cwd, type(exc).__name__),
                 hint=hint, extra="%s: %s" % (type(exc).__name__, exc))
         return False
 
 
+CLI_STILL_WORKS = ("命令列模式不受影響（python -m d4t run …），只有 Studio"
+                   "（python -m d4t gui）開不起來")
+
+
 def check_qt(rep: Report) -> None:
+    """Qt 開不開得了視窗 —— **非必要**（2026-09-09 起）。
+
+    以前這一項是必要的，於是「PySide6 裝了但開不了視窗」會讓結論寫成
+    「d4t 目前還不能跑」—— 而同一行的修正建議自己承認命令列模式跑得動。
+    一句話說兩件相反的事，讀的人不知道該信哪一句。現在：套件裝沒裝是
+    :data:`DEPENDENCIES` 那一列在管（PySide6 仍是必要套件，廠內那台要開
+    Studio）；**開不開得了視窗**是這一項，過不了就降成 △，結論分成兩句：
+    命令列可以、Studio 不行。
+    """
     data, raw = _run_child(_QT_CHILD, [], QT_TIMEOUT_S)
     if data is None:
-        rep.add(BAD, "Qt 圖形介面", "PySide6 檢查子行程沒有正常結束（可能是直接當掉）",
+        rep.add(WARN, "Qt 圖形介面",
+                "PySide6 檢查子行程沒有正常結束（可能是直接當掉）；" + CLI_STILL_WORKS,
                 hint="PySide6 裝壞了或缺系統元件：請重裝 PySide6，"
                      "Windows 上多半還要裝「Microsoft Visual C++ Redistributable 2015-2022 (x64)」。",
-                extra=raw)
+                essential=False, extra=raw)
         return
     if not data.get("import_ok"):
-        rep.add(BAD, "Qt 圖形介面", "PySide6 import 不起來",
-                hint="離線安裝：python tools\\install_offline.py --wheels wheels；"
+        rep.add(WARN, "Qt 圖形介面", "PySide6 import 不起來；" + CLI_STILL_WORKS,
+                hint="離線安裝：%s --wheels wheels；" % _tool("install_offline.py") +
                      "若已安裝仍失敗，多半缺 VC++ Redistributable (x64)。",
-                extra=data.get("error") or raw)
+                essential=False, extra=data.get("error") or raw)
         return
     ver = data.get("version") or "（版本不明）"
     if data.get("app_ok"):
         rep.add(OK, "Qt 圖形介面", "PySide6 %s，QApplication 建得起來" % ver)
     else:
-        rep.add(BAD, "Qt 圖形介面", "PySide6 %s 裝了，但開不了視窗" % ver,
+        rep.add(WARN, "Qt 圖形介面",
+                "PySide6 %s 裝了，但開不了視窗；%s" % (ver, CLI_STILL_WORKS),
                 hint="請確認有裝 VC++ Redistributable (x64)；遠端桌面/無桌面環境可先設定"
                      " QT_QPA_PLATFORM=offscreen 只跑命令列模式（python -m d4t run ...）。",
-                extra=data.get("error") or raw)
+                essential=False, extra=data.get("error") or raw)
 
 
 def _probe_write(path: str) -> Optional[str]:
@@ -358,7 +386,7 @@ def check_write_permissions(rep: Report) -> None:
 def check_smoke(rep: Report, skip: bool = False, reason: str = "") -> None:
     if skip:
         rep.add(WARN, "端到端試跑", "略過（%s）" % (reason or "使用者指定"), essential=False,
-                hint="上面的問題修好後，再跑一次 python tools\\doctor.py 就會做這項。")
+                hint="上面的問題修好後，再跑一次 %s 就會做這項。" % DOCTOR_CMD)
         return
     t0 = time.time()
     data, raw = _run_child(_SMOKE_CHILD,
@@ -490,12 +518,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print("")
     if fails:
         print("結論：有 %d 項必要檢查沒過（%s），d4t 目前還不能跑；"
-              "請照上面每一行的『修正建議』處理後，再執行一次 python tools\\doctor.py。"
-              % (len(fails), "、".join(r["name"] for r in fails)))
+              "請照上面每一行的『修正建議』處理後，再執行一次 %s。"
+              % (len(fails), "、".join(r["name"] for r in fails), DOCTOR_CMD))
         if not args.verbose:
-            print("（想看完整錯誤訊息：python tools\\doctor.py --verbose）")
+            print("（想看完整錯誤訊息：%s --verbose）" % DOCTOR_CMD)
         return 1
-    if warns:
+    qt_down = [r for r in warns if r["name"] == "Qt 圖形介面"]
+    others = len(warns) - len(qt_down)
+    if qt_down:
+        print("結論：命令列可以跑（python -m d4t run …），Studio 開不起來"
+              "（照 Qt 圖形介面那一行的『修正建議』處理）%s。"
+              % ("；另有 %d 項非必要提醒，見上面的 △" % others if others else ""))
+    elif warns:
         print("結論：必要項目全部通過，d4t 可以跑（有 %d 項非必要提醒，見上面的 △）。"
               "下一步：python -m d4t gui" % len(warns))
     else:

@@ -438,6 +438,24 @@ def test_doctor_survives_ascii_console():
     assert "[OK]" in out                # 自動退回純 ASCII 標記
 
 
+def test_doctor_says_the_cli_still_works_when_qt_cannot_open_a_window():
+    """**Qt 開不了視窗是 △ 不是 ✗**（2026-09-09）。
+
+    以前這一項是必要的，於是結論寫「d4t 目前還不能跑」，而同一行的修正建議
+    自己承認命令列跑得動 —— 一句話說兩件相反的事。用一個不存在的 Qt platform
+    逼子行程開不了視窗：離開碼要是 0、結論要把「命令列可以」與「Studio 不行」
+    分成兩句講，而且指令裡的路徑分隔符要是**這台機器**的。
+    """
+    rc, out = _run([DOCTOR, "--skip-smoke"],
+                   env_extra={"QT_QPA_PLATFORM": "d4t-no-such-platform"})
+    assert rc == 0, out
+    assert "Traceback" not in out
+    assert "Studio" in out and "命令列" in out, out
+    last = out.strip().splitlines()[-1]
+    assert last.startswith("結論") and "還不能跑" not in last, last
+    assert "python tools%sdoctor.py" % os.sep in out or "doctor.py" not in out, out
+
+
 def test_explain_venv_failure_suggests_no_venv():
     tips = install_offline.explain_venv_failure(
         "Error: Command '['...', '-m', 'ensurepip', ...]' returned non-zero exit status 1.",
