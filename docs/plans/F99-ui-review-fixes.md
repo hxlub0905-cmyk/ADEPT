@@ -29,7 +29,7 @@
 | P1-5 | 試跑完每張卡右上角 `24 ok · 0.3 s` 或 `3 failed`（traces 折成每卡一行） | `canvas.run_status_from` / `run_text` / `set_run_status` | `test_ui_f99_gestures.py` |
 | P1-7 | 選到判定樹的一步時儀表板淡掉並寫「showing “glv” — the card picked last」 | `studio.gauge_note` | `test_ui_f99_gestures.py` |
 | P1-8 | Ctrl+C / Ctrl+V / Ctrl+D。設定帶走、接線不帶；貼在原位右下 40 px；一步復原；掛在畫布上（同 Delete） | `ui/clipboard.py`、`edit_plan.copyable_params` | `test_ui_f99_gestures.py` |
-| F100 | 畫布橫躺全寬在上、工作台三格在下、Verdict 常駐列 | `ui/workbench.py`，計畫書 F100 | `test_ui_workbench.py` ＋ 重寫的四支版面測試 |
+| F100 | 版面重排（第一版是畫布全寬在上、工作台三格在下；經 v2、v3 後定案為**畫布在中欄上、設定區在中欄下、右欄上影像下儀表**，見 F100 §7–§8）、Verdict 常駐列 | `ui/workbench.py`，計畫書 F100 | `test_ui_workbench.py` ＋ 重寫的四支版面測試 |
 
 ## P2
 

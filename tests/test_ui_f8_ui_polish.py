@@ -186,17 +186,17 @@ def test_the_canvas_is_the_top_block_and_settings_get_the_rest(window, qapp):
     qapp.processEvents()
     col = window.canvas_column
     assert col.widget(0) is window.pipeline, "畫布要在中欄的上面"
-    # ⚠ U8（2026-09-08）：下半從「就是 `stack`」變成「`stack` ＋ 這張卡的
-    # 儀表併排在同一個框裡」—— 調參數的迴圈是「改一個數字 → 看那個數字怎麼
-    # 變」，而那兩件事以前隔著整張影像。
+    # ⚠ U8（2026-09-08）曾把儀表併進這一格；F100 v3 把它搬回右欄（影像下面），
+    # 所以下半現在**只有** `stack` —— 設定區拿整個中欄的寬度。
     assert col.widget(1) is window.params_row, "設定在下面"
     assert window.params_row.widget(0) is window.stack
-    assert window.params_row.widget(1) is window.gauge_pane
+    assert window.params_row.count() == 1, "v3：儀表不在工作台裡"
+    assert window.right_column.widget(1) is window.gauge_pane, "v3：儀表在影像下面"
 
     # F100（2026-09-08）：影像住進工作台的第三格，所以**工作台開窗就攤開**
     # —— 收掉它等於把影像藏起來。F13-1 那條「沒選卡片時收起來」的理由（那塊
     # 空白壓到畫布）在新版面上不成立：畫布現在吃滿寬度、高度有保底。
-    assert window.root_splitter.widget(2) is window.preview_pane   # v2：右欄全高
+    assert window.right_column.widget(0) is window.preview_pane   # v3：右欄上影像下儀表
     assert window.params_open() is True, "F100：工作台開窗就攤開（影像在裡面）"
     top, bottom = col.sizes()
     assert top > 0 and bottom > 0

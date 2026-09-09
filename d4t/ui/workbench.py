@@ -1,16 +1,18 @@
 # 版面模式：畫布在上、工作台在下 — authored 2026-09-08 (F100).
 """``WorkbenchLayout`` —— Build / Tune 兩種版面的**狀態與幾何**，不建 widget。
 
-主視窗的版面（F100 v2，`docs/plans/F100-workbench-layout.md` §7）::
+主視窗的版面（F100 v3，`docs/plans/F100-workbench-layout.md` §8）::
 
-    ┌─庫─┬──────── 畫布（導覽，一排卡的高度）────────┬── 預覽影像（全高）──┐
-    │rail├───────────────────┬───────────────────────┤  ImageView          │
-    │    │ 設定區             │ 儀表板                 │  Verdict · score    │
-    └────┴───────────────────┴───────────────────────┴─────────────────────┘
+    ┌─庫─┬──────── 畫布（導覽，一排卡的高度）────────┬── 預覽影像 ─────────┐
+    │rail│                                           │  Verdict · score    │
+    │    ├───────────────────────────────────────────┼─────────────────────┤
+    │    │ 設定區（吃滿中欄）                          │  儀表板             │
+    └────┴───────────────────────────────────────────┴─────────────────────┘
 
 * **Build** —— 工作台與右欄都收到 0，畫布吃滿。看全貌、接線、排版。
 * **Tune** —— 工作台開著（**開窗就開著**）、右欄開著，畫布保底
-  :data:`CANVAS_MIN_PX`、預設 :data:`CANVAS_SHARE_TUNE`。調參數、看影像。
+  :data:`CANVAS_MIN_PX`、預設 :data:`CANVAS_SHARE_TUNE`；右欄上下的比例
+  預設 :data:`IMAGE_SHARE_TUNE`，拖過記得住。調參數、看影像、看圖。
 
 ⚠ **第一版（同一天早上）畫布是吃滿全寬的**，影像跟設定區、儀表板擠在下面
 同一列。1366×768 上那一列三格都小（影像 330×250）—— 調參數是最高頻的迴圈，
@@ -34,7 +36,7 @@ from typing import Callable, List, Optional, Sequence
 __all__ = [
     "WorkbenchLayout", "MODES", "CANVAS_MIN_PX", "CANVAS_SHARE_TUNE",
     "COLUMN_STRETCH", "SPLIT_KEYS", "WORKBENCH_COLUMNS_KEY",
-    "PREVIEW_SHARE_TUNE", "ROOT_COLUMNS_KEY",
+    "PREVIEW_SHARE_TUNE", "ROOT_COLUMNS_KEY", "IMAGE_SHARE_TUNE", "RIGHT_SPLIT_KEY",
 ]
 
 #: 兩種版面。`tune` 是預設——開窗看到的就是它。
@@ -52,6 +54,10 @@ COLUMN_STRETCH = (3, 2)
 PREVIEW_SHARE_TUNE = 0.34
 #: root 三欄的寬度存在哪一格（只在 Tune 存：Build 的右欄是 0，不是使用者調的）。
 ROOT_COLUMNS_KEY = "ui/columns_f100v2"
+#: 右欄「影像／儀表」預設影像佔幾成（v3）；拖過之後記在 :data:`RIGHT_SPLIT_KEY`。
+#: 影像要的是高度、直方圖要的是寬度——右欄的寬度兩個都拿得到，高度給影像多一點。
+IMAGE_SHARE_TUNE = 0.50
+RIGHT_SPLIT_KEY = "ui/right_split_f100v3"
 #: 兩種模式各自的「畫布 / 工作台」比例存在哪一格 QSettings。
 #:
 #: **兩格而不是一格**（U5 的理由沒變）：使用者在 Build 裡把畫布拉高、在 Tune 裡把
@@ -75,7 +81,7 @@ class WorkbenchLayout:
     """
 
     def __init__(self, column, workbench, pipeline, library=None, *,
-                 root=None, preview_index: int = 2,
+                 root=None, preview_index: int = 2, right=None,
                  load: Optional[Callable[[str, int], Optional[List[int]]]] = None,
                  save: Optional[Callable[[str, Sequence[int]], None]] = None):
         self.column = column
@@ -86,6 +92,9 @@ class WorkbenchLayout:
         #: 沒給就不管右欄（純幾何測試）。
         self.root = root
         self.preview_index = int(preview_index)
+        #: 右欄那根直向 splitter（``[影像, 儀表]``）；沒給就不管（v2 以前、純幾何測試）。
+        self.right = right
+        self._right_applied = False
         self._load = load or (lambda _key, _n: None)
         self._save = save or (lambda _key, _sizes: None)
         self.mode: str = "tune"
@@ -141,6 +150,7 @@ class WorkbenchLayout:
             self.open = True
             self._open_workbench()
             self._open_preview()
+            self._open_right()
             # 從 Build 切過來：卡片區收成 rail，那 200 px 給工作台。**只在切換
             # 的時候**——開窗時卡片清單是空白狀態下第一眼要看的東西。
             if was == "build" and self.library is not None:
@@ -177,6 +187,10 @@ class WorkbenchLayout:
                 rs = list(self.root.sizes())
                 if sum(rs):
                     self._save(ROOT_COLUMNS_KEY, rs)
+            if self.right is not None:
+                rr = list(self.right.sizes())
+                if sum(rr):
+                    self._save(RIGHT_SPLIT_KEY, rr)
         cols = list(self.workbench.sizes())
         if sum(cols):
             self._save(WORKBENCH_COLUMNS_KEY, cols)
@@ -265,6 +279,22 @@ class WorkbenchLayout:
         if was_hidden:
             total = sum(self.root.sizes())
             self._set_preview(self._preview_w or total * PREVIEW_SHARE_TUNE)
+
+    def _open_right(self) -> None:
+        """右欄上下（影像／儀表）的出廠比例，show 之後套一次；存過就用存的。"""
+        if self.right is None or self._right_applied:
+            return
+        sizes = list(self.right.sizes())
+        total = sum(sizes) or int(self.right.height())
+        if total <= 0:
+            return
+        self._right_applied = True
+        saved = self._load(RIGHT_SPLIT_KEY, self.right.count())
+        if saved and sum(saved) and min(saved) >= 60:
+            self.right.setSizes(saved)
+            return
+        top = int(total * IMAGE_SHARE_TUNE)
+        self.right.setSizes([top, max(0, total - top)])
 
     # ---- internals ---------------------------------------------------------
     def _open_workbench(self) -> None:

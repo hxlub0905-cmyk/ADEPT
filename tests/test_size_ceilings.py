@@ -158,7 +158,10 @@ FILE_CEILINGS = {
     # 兩支（內容在 `ui/card_menu.py`）、Ctrl+C/V/D 三支轉呼叫（內容在
     # `ui/clipboard.py`）、Windows 下拉一支（`ui/windows_menu.py`）、Verdict
     # 常駐列與「為什麼是破折號」那一句、儀表板淡掉那兩行、執行狀態一行。
-    "d4t/ui/studio.py": 7582,
+    # 2026-09-08（F100 v3）：7,582 → 7,592（+10）。右欄變成一支直向 splitter
+    # （影像在上、儀表在下）而它的建立與 stretch 住在這裡；工作台那一列只剩
+    # `stack`。幾何本身（開合、比例、記住尺寸）仍在 `ui/workbench.py`。
+    "d4t/ui/studio.py": 7592,
     # 19 道 `_migrate_*` 住在這裡（見下面 `recipe_migrations`）。它會用跟
     # `studio.py` 完全一樣的機制長成第二個 `studio.py`。
     #

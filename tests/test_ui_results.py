@@ -61,7 +61,7 @@ def test_main_window_keeps_only_the_editing_surface(window):
     # 直方圖與 Gallery 仍然住在 Results 視窗。
     root = window.root_splitter
     assert [root.widget(i) for i in range(root.count())] == [
-        window.library, window.main_column, window.preview_pane]
+        window.library, window.main_column, window.right_column]
     assert window.canvas_column.widget(0) is window.pipeline
     assert window.canvas_column.widget(1) is window.workbench
     assert window.histogram.parent() is not window

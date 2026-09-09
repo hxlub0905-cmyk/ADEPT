@@ -130,7 +130,8 @@ def test_results_live_in_their_own_window(window):
     root = window.root_splitter
     assert root.count() == 3
     assert root.widget(0) is window.library
-    assert root.widget(2) is window.preview_pane
+    assert root.widget(2) is window.right_column       # v3：影像在上、儀表在下
+    assert window.right_column.widget(0) is window.preview_pane
 
 
 def test_gallery_populates_after_trial(ran):

@@ -198,15 +198,25 @@ def test_the_studio_fits_the_fab_pc_after_loading_and_picking_a_card(
         # 而且高度有保底（Tune 模式）
         assert win.layout_mode() == "tune"
         assert win.canvas_column.sizes()[0] >= wb.CANVAS_MIN_PX
-        # 設定區與儀表併排（垂直範圍重疊）；影像在右欄，**全高**：它的垂直
-        # 範圍同時蓋到畫布與工作台（v2 的整個理由：調參數那一刻影像是主角）
-        a, b = win.stack.geometry(), win.gauge_pane.geometry()
+        # v3：設定區（中欄下半）與儀表（右欄下半）**左右相鄰**、垂直範圍重疊
+        # —— U8「儀表挨著參數」；影像在儀表上面，寬度跟儀表一樣（直方圖要的
+        # 是寬度，影像要的是高度，右欄兩個都給得起）。
+        # ⚠ geometry() 是各自父元件的座標；三塊住在不同的 splitter 裡，要先
+        # 換到視窗座標才比得了。
+        from PySide6.QtCore import QPoint, QRect
+
+        def on_window(widget) -> QRect:
+            return QRect(widget.mapTo(win, QPoint(0, 0)), widget.size())
+
+        a, b = on_window(win.stack), on_window(win.gauge_pane)
         assert a.width() > 0 and b.width() > 0, (a, b)
-        assert min(a.bottom(), b.bottom()) > max(a.top(), b.top()), "設定區與儀表沒有併排"
-        pv = win.preview_pane.geometry()
+        assert min(a.bottom(), b.bottom()) > max(a.top(), b.top()), \
+            "設定區與儀表沒有併排：%s vs %s" % (a, b)
+        assert a.width() >= 500, "設定區要拿到整個中欄的寬：%s" % a
+        pv = on_window(win.preview_pane)
         assert pv.width() >= 300, "右欄太窄：%s" % pv
-        assert pv.top() <= win.pipeline.geometry().top() + 8
-        assert pv.bottom() >= a.bottom() - 8, "影像那一欄要全高：%s vs %s" % (pv, a)
+        assert b.width() >= 300, "儀表要拿到右欄的寬：%s" % b
+        assert pv.bottom() <= b.top() + 12, "影像在儀表上面：%s vs %s" % (pv, b)
         assert win.verdict_strip.isVisibleTo(win)
         # Build：工作台與右欄都收掉，畫布吃滿
         win.set_layout_mode("build")
@@ -232,7 +242,9 @@ def test_the_verdict_strip_sits_under_the_image(qapp):
         assert not win.canvas_column.isAncestorOf(win.verdict_strip)
         root = win.root_splitter
         assert [root.widget(i) for i in range(root.count())] == [
-            win.library, win.main_column, win.preview_pane]
+            win.library, win.main_column, win.right_column]
+        assert [win.right_column.widget(i) for i in range(2)] == [
+            win.preview_pane, win.gauge_pane]
     finally:
         win.close()
 

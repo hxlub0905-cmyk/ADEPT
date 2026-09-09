@@ -1,25 +1,26 @@
 # d4t Studio 主視窗 — authored 2026-07-28 (M3 收尾).
 """``StudioWindow`` —— 把 M3 的元件、view-model 與背景工作接成一台可用的機器。
 
-版面（全部用 QSplitter，使用者拉得動；F100 v2，
-`docs/plans/F100-workbench-layout.md` §7）::
+版面（全部用 QSplitter，使用者拉得動；F100 v3，
+`docs/plans/F100-workbench-layout.md` §8）::
 
     ┌ 工具列：開啟 Recipe／存檔／範本 ｜ 復原／重做 ｜ Results／說明▾／主題
     │         ｜ 試跑筆數 ▶試跑 ▶全跑                                      ┐
     ├──────────┬──────────────────────────────────┬──────────────────────┤
     │ 卡片庫    │ 流程（PipelineCanvas）—— 導覽，一排卡 │ 單顆預覽：◀ ▶ 影像流   │
-    │ Library  ├────────────────┬─────────────────┤        ImageView     │
-    │ rail+    │ 參數表單 /      │ 這張卡的儀表     │        （全高）       │
-    │ panel    │ 分數編輯 /      │ （Card /        │  Verdict · score ·   │
-    │          │ 判定樹一步      │  Features）     │  Path                │
-    ├──────────┴────────────────┴─────────────────┴──────────────────────┤
+    │ Library  │                                  │        ImageView     │
+    │ rail+    │                                  │  Verdict · score     │
+    │ panel    ├──────────────────────────────────┼──────────────────────┤
+    │          │ 參數表單 / 分數編輯 / 判定樹一步     │ 這張卡的儀表          │
+    │          │ （吃滿中欄的寬）                   │ （Card / Features）  │
+    ├──────────┴──────────────────────────────────┴──────────────────────┤
     │ Problems 列（為什麼還不能跑）／ 狀態列：進度 / 訊息                     │
     └─────────────────────────────────────────────────────────────────────┘
 
-    Build 模式把工作台（設定區｜儀表）與右欄都收掉，畫布吃滿；Tune（預設）
-    全開。第一版（同一天早上）曾讓畫布吃滿全寬、影像擠在下面一列 —— 調參數
-    那一刻影像是主角，所以 v2 把它還給右欄。Gallery 與分數分佈直方圖住在
-    Results 視窗（F7-5）。
+    Build 模式把工作台（設定區）與右欄都收掉，畫布吃滿；Tune（預設）全開。
+    右欄上下是一根 splitter。同一天走過三版（F100 §2／§7／§8），使用者定的
+    是這一版：設定區與直方圖要的都是寬度，各給一整欄。Gallery 與分數分佈
+    直方圖住在 Results 視窗（F7-5）。
 
 五條資料流（別搞混）
 --------------------
@@ -256,7 +257,7 @@ PREVIEW_DEBOUNCE_MS = 300
 #: 主視窗三欄的出廠寬度：卡片庫 | 主欄（畫布在上、設定區與儀表在下）| 單顆預覽。
 #: F100 v2（`ui/workbench.py`）：影像回到右欄、全高——調參數的迴圈是
 #: 「改一格 → 看影像」，那一刻影像是主角；畫布在 Tune 裡是導覽，要全貌有 Build。
-COLUMN_SIZES = (256, 700, 410)
+COLUMN_SIZES = (256, 660, 450)
 
 #: 「試跑筆數」的出廠值。載入資料集時會再夾成 ``min(這個值, 資料集顆數)`` ——
 #: 對一份只有 24 顆的 lot 顯示 200 沒有任何意義，只會讓人以為自己看錯了。
@@ -1255,10 +1256,17 @@ class StudioWindow(QMainWindow):
         self.results.run_all_requested.connect(self.run_all)
         self.results.class_selected.connect(self._on_verdict_class)
 
+        # 右欄：影像在上、儀表在下（F100 v3），一根直向 splitter，比例記得住。
+        self.right_column = QSplitter(Qt.Vertical, self)
+        self.right_column.addWidget(self.preview_pane)
+        self.right_column.addWidget(self.gauge_pane)
+        self.right_column.setStretchFactor(0, 3)
+        self.right_column.setStretchFactor(1, 2)
+        self.right_column.setCollapsible(0, False)
         root = QSplitter(Qt.Horizontal, self)
         root.addWidget(self.library)
         root.addWidget(self.main_column)
-        root.addWidget(self.preview_pane)
+        root.addWidget(self.right_column)
         root.setStretchFactor(0, 0)
         root.setStretchFactor(1, 3)
         root.setStretchFactor(2, 2)
@@ -1269,7 +1277,8 @@ class StudioWindow(QMainWindow):
         # 版面模式的狀態與幾何（F100）—— 邏輯在 `ui/workbench.py`，這裡只接。
         self.layout_modes = WorkbenchLayout(
             middle, self.params_row, self.pipeline, self.library,
-            root=root, preview_index=2, load=_load_sizes, save=_save_sizes)
+            root=root, preview_index=2, right=self.right_column,
+            load=_load_sizes, save=_save_sizes)
         self.top_splitter = root
         self.root_splitter = root
 
@@ -1342,9 +1351,10 @@ class StudioWindow(QMainWindow):
         """
         row = QSplitter(Qt.Horizontal, self)
         row.addWidget(self.stack)
-        row.addWidget(self.gauge_pane)
-        # F100 第一版把影像放進這一列當第三格；v2 把它還給右欄（全高）——
-        # 調參數那一刻影像是主角，擠在這一列裡只有 330×250。
+        # F100 v3：儀表搬到**右欄影像下面**（使用者：「最一開始的排版最好，儀表
+        # 換到影像下方」）。設定區於是拿到整個中欄的寬度，儀表拿到右欄的寬度
+        # ——兩個要寬的東西各一整欄，只有影像付出高度。「儀表挨著參數」（U8）
+        # 沒有破：中欄下半與右欄下半左右相鄰，同一條視線。
         self.workbench = row
         # 參數那一邊寬一點：它裝的是一排排可以拖的滑桿（F7-8），而儀表是
         # 讀的東西。3:2 是量出來的 —— 再窄一點，`Borrow range from` 那種
