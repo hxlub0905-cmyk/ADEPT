@@ -152,7 +152,7 @@ d4t 是 **public**。
 最後三列（`pytest` / `ruff` / `pyright`）是 `dev` extra —— **只裝在開發機、不隨任何一條
 搬運路徑進廠**（bundle 裝的是原始碼、`fetch_wheels.py` 抓的是
 `requirements.txt` 那幾個）。所以它們不在 `LICENSE` 的第三方 carve-out 裡：
-那一段講的是「執行時相依」，而這兩個一次都不執行。
+那一段講的是「執行時相依」，而這三個一次都不執行。
 
 ### PySide6 的 LGPL 值得看一眼
 
