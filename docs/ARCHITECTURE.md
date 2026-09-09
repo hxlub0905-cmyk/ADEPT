@@ -351,6 +351,7 @@ d4t/
     ├── cell_canvas.py        #   一格 cell 鋪成一片，區域的框畫在上面、拖得動
     ├── tree_scene.py tree_panel.py     #   判定樹住在畫布上／點一步就編輯那一步（F24）
     ├── decide_panel.py route_panel.py route_badge.py  #   判定段編輯器／`route_by` 編輯器與徽章
+    ├── number_picker.py      #   「插入數字 ▾」：一張卡一組、每項帶說明，三個地方同一支（2026-09-09）
     ├── verdict_band.py       #   判定段的橫幅（一列一類）
     │                         #   ⚠ 這裡以前還有 output_band.py（Output 段的虛線框），
     │                         #     F50 拿掉了：「整批跑一次」變成卡片自己的一條腳帶
