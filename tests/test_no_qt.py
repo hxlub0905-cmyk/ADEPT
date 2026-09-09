@@ -106,8 +106,8 @@ def test_core_tests_guard_lazy_qt_imports_with_the_right_importorskip():
         for i, line in enumerate(py.read_text(encoding="utf-8").splitlines(), 1):
             if line.lstrip().startswith("#") or "importorskip(" not in line:
                 continue
-            if "PySide6" in line and not (
-                    '"PySide6.QtWidgets", exc_type=ImportError' in line):
+            if ("PySide6" in line
+                    and '"PySide6.QtWidgets", exc_type=ImportError' not in line):
                 bad.append("%s:%d" % (py.name, i))
     assert not bad, (
         "請改成 importorskip('PySide6.QtWidgets', exc_type=ImportError)：%s" % bad)

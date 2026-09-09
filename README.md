@@ -129,13 +129,13 @@ python -m d4t export  <run_id> --db /tmp/runs.db --mode annotate \
 
 ```bash
 pip install pytest
-QT_QPA_PLATFORM=offscreen pytest -q tests --ignore-glob="*test_ui_*"   # 核心，約 25 秒
+QT_QPA_PLATFORM=offscreen python -m pytest -q tests --ignore-glob="*test_ui_*"   # 核心，約 25 秒
 ```
 
 UI 測試**逐檔各起一個行程**（整套塞進同一個行程會因 Qt 記憶體累積而慢到跑不完）：
 
 ```bash
-for f in tests/test_ui_*.py; do QT_QPA_PLATFORM=offscreen pytest -q "$f"; done
+for f in tests/test_ui_*.py; do QT_QPA_PLATFORM=offscreen python -m pytest -q "$f"; done
 ```
 
 每次改動之後（於具備 git 的機器）：

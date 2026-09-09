@@ -323,7 +323,7 @@ python -m venv .venv && .venv\Scripts\activate      # Windows
 pip install -r requirements.txt && pip install pytest ruff
 
 ruff check                                         # 靜態檢查（幾秒，先跑這個）
-QT_QPA_PLATFORM=offscreen pytest -q                # 全部測試（Windows 不用設）
+QT_QPA_PLATFORM=offscreen python -m pytest -q      # 全部測試（Windows 不用設）
 python tools/make_sample.py /tmp/lot --n 100       # 產合成資料
 python -m d4t gui                                # 開 Studio
 python -m d4t run <recipe>.json /tmp/lot/LOT_SYN.001 \
@@ -344,7 +344,7 @@ CI 有一個獨立的 lint job）。它幾秒就有答案，而測試要三分�
 
 **跑測試的方式很重要**（不照做會浪費很多時間）：
 
-- 開發迴圈**只跑改到的測試檔**：`pytest -q tests/test_xxx.py`。
+- 開發迴圈**只跑改到的測試檔**：`python -m pytest -q tests/test_xxx.py`。
 - 核心（`--ignore-glob="*test_ui_*"`）約 3 分半，隨時可以跑。
 - **UI 測試不要用一個行程跑整套** —— Qt 物件不會因為測試結束就消失，於是後面
   每開一個視窗都要跟愈來愈多的殘留物一起做版面計算，時間是**超線性**的。
