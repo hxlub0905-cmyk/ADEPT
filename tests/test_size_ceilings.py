@@ -413,6 +413,25 @@ COUNT_CEILINGS = {
 }
 
 
+#: **只准往下的那幾格。** 2026-09-09 在 `git log -p` 上量到的：`studio.py` 那一格
+#: 從 09-08 到 09-09 兩天被調高 **17 次**（6,942 → 7,750），`StudioWindow`
+#: 的方法數 261 → 298。「調高要簽名」的機制是對的，但每一次簽的都是同一個
+#: 理由（「這幾支都是接線」），尺就量不到東西了 —— 它變成一本流水帳。
+#:
+#: 所以這三格從今天起**不再往上**：要往 `studio.py` 加東西，先從它手上拿走
+#: 等量的東西（`CLAUDE.md` §4「一塊新的面板／畫布元件＝一個新模組」）。
+#: 這張表不是另一個上限 —— 它是「上面那張表裡這幾格的上限本身不准動」。
+#: 要改這張表的數字，commit 訊息裡要寫的不是「為什麼多了 40 行」，而是
+#: 「為什麼這條規矩今天要廢」。
+#: 數字凍在 2026-09-09 `d4t/core/log.py` 那一刀落地之後（每個被吃掉的例外
+#: 多一行 `swallowed(...)`，那是整個 repo 一起做的機械改動，不是 Studio 長了）。
+HARD_CAPS = {
+    "d4t/ui/studio.py": 7753,
+    "studio_window_methods": 298,
+    "studio_window_attributes": 437,
+}
+
+
 def _slack(ceiling: int) -> int:
     """反向測試的門檻：掉到 ``上限 - slack`` 以下就要求把上限降下來。
 
@@ -495,6 +514,28 @@ def test_a_shrunk_count_lowers_its_ceiling(name):
         "  這一格量的是：%s\n"
         "  把 COUNT_CEILINGS 那一格改成 %d，把成果鎖住。"
         % (name, actual, ceiling, why, actual))
+
+
+# --------------------------------------------------------------------------- #
+# 只准往下：god object 的三格上限本身不准調高
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("name", sorted(HARD_CAPS))
+def test_the_god_object_ceilings_only_go_down(name):
+    """`FILE_CEILINGS` / `COUNT_CEILINGS` 裡 `studio.py` 那三格，上限不准高過
+    `HARD_CAPS`。兩天 17 次調高之後，「簽名」已經不是煞車 —— 這一條才是。"""
+    if name in FILE_CEILINGS:
+        ceiling = FILE_CEILINGS[name]
+    else:
+        ceiling = COUNT_CEILINGS[name][0]
+    assert ceiling <= HARD_CAPS[name], (
+        "%s 的上限被調高到 %d，超過 HARD_CAPS 的 %d。這一格不再往上：要往 "
+        "studio.py 加東西，先從它手上搬走等量的東西（開新模組），再回來。"
+        % (name, ceiling, HARD_CAPS[name]))
+
+
+def test_the_hard_caps_name_real_ceilings():
+    for name in HARD_CAPS:
+        assert name in FILE_CEILINGS or name in COUNT_CEILINGS, name
 
 
 # --------------------------------------------------------------------------- #
