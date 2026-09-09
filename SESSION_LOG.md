@@ -6,7 +6,7 @@
 
 | 期間 | 在哪 |
 |---|---|
-| **2026-09-01 起** | 這個檔案（下面）—— F67 GLV 的「跟誰比」由線決定、F68 GLV 是抓 defect 的主力卡、F69–F72 設定欄／Feature 表／ADC 那一頁／報表打得開、F73 把 F68 的驗收真的跑完、F74 Region 段只剩一張卡、F83 使用者回報的三個 UI bug、F84 ruff 那道關／`align_off` 的症狀／bundle 不再壓縮／救回兩份沒併進來的東西、F85 PEAR 的均勻度（一格參數、四張圖、三個「我原本說錯了」）、F86 使用者拿去用回來的四件（試跑不寫要說出來／Golden Cell 130 s→17 s／recipe 少了 CSV／手冊漏了那排快捷鈕） |
+| **2026-09-01 起** | 這個檔案（下面）—— F67 GLV 的「跟誰比」由線決定、F68 GLV 是抓 defect 的主力卡、F69–F72 設定欄／Feature 表／ADC 那一頁／報表打得開、F73 把 F68 的驗收真的跑完、F74 Region 段只剩一張卡、F83 使用者回報的三個 UI bug、F84 ruff 那道關／`align_off` 的症狀／bundle 不再壓縮／救回兩份沒併進來的東西、F85 PEAR 的均勻度（一格參數、四張圖、三個「我原本說錯了」）、F86 使用者拿去用回來的四件（試跑不寫要說出來／Golden Cell 130 s→17 s／recipe 少了 CSV／手冊漏了那排快捷鈕）、F99／F100 UI 評審的二十一件、**2026-09-09 四輪**（working numbers 到處找得到、下拉一張卡一組帶說明、跑與寫拆開＋Re-run、Results 單擊帶主畫面、Output／判定樹的預覽跑到底、卡片寫 img/s、表頭四個變體四種字、縮圖與表格同一份排序／篩選） |
 | 2026-08-19 ～ 08-28 | [`docs/history/2026-08b.md`](docs/history/2026-08b.md) —— F42 區域線走 edges、F43–F45 結果表分層／區域接線／FeatureSpec、F46/F47 檔案架構與授權、F48 六個決定、F50 畫布上只剩卡片和線、F51/F52 特徵名與數字只有一種寫法、F53–F57 五件小事、F58–F66 合成資料長成真的那種 layout |
 | 2026-08-07 ～ 08-18 | [`docs/history/2026-08.md`](docs/history/2026-08.md) —— F8 純規則 ROI、畫布 n8n 化、Phase 1 收斂、F10、Phase 2 的 Input／Enhance／Region 三段 |
 | 2026-07 | [`docs/history/2026-07.md`](docs/history/2026-07.md) —— M0–M7、F7-9…F7-24 前半、兩台機器與搬運通道的成形 |

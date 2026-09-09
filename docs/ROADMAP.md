@@ -323,6 +323,13 @@ F38 折進 `output_report`，遷移鏈一段一段接）：它的七格參數
      重跑 pipeline，在 GUI 執行緒做會僵住幾十秒。
    * 工具列那一格從「Export…」變成「**Run all & write**」（同一個位子、同一件
      事），前提改成跟 Run trial 一樣（有資料、流程跑得動）——它自己就是那一次跑。
+
+   ⚠ **2026-09-09 改了**（使用者：「跑完後可以檢查結果再按一個鍵 output」）：
+   `run_all` **只跑不寫**，寫是 `write_outputs()`（Results 視窗的
+   「Write outputs」），inplace 的確認搬到寫的時候問；Results 那顆
+   「Run all & write」拆成 **Re-run**（`batch.rerun_decision`，量測沒改就只
+   重判）與 **Write outputs**。上面三條的道理不變（停掉的不寫、寫走背景
+   執行緒），只是「什麼時候寫」從跑完自動變成使用者按。CLAUDE.md 鐵則 11。
 2. **`output_klarf` 的寫回前預覽** ✅ —— `WriteBackInspector`（F7-17 的機制）。
    精靈的做法是把「寫出」鈕鎖住直到按過預覽；乾跑（`plan_writeback`）一個
    位元組都不寫，所以它不需要那顆鈕：選到那張卡就看得到會改幾列、寫去哪、

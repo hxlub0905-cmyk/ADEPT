@@ -142,6 +142,16 @@ UI 層遷移（門檻 → 判定樹）現在會被存回磁碟。那是對的（
 
     見 `docs/history/plans/F42-region-edges-plan-b.md`（F12 §3 於該輪推翻，
     其他部分 —— 埠、虛線、唯讀參數格、同進同出 —— 全部保留）。
+11. **Studio 跑不寫，寫是另一個動作**（2026-09-09，使用者：「跑完後可以檢查
+    結果再按一個鍵 output」）。`run_trial` 與 `run_all` 都不叫
+    `run_batch_steps`；寫是 `write_outputs()`（Results 視窗的「Write outputs」），
+    KLARF `inplace` 的確認在**寫的時候**問，被停掉的部分結果拒寫並講出來。
+    Results 的「Re-run」走 `batch.rerun_decision`（只重判、影像不碰），而
+    `batch.measurement_signature` 決定能不能這樣走 —— 量測那一段改了就整批
+    重跑，**不拿舊數字配新量測卡**。守門人：
+    `tests/test_ui_write_only_on_run_all.py`、`tests/test_rerun_decision.py`。
+    （這條取代了 F16 Stage 5c 的「試跑不寫，只有整批才寫」—— 那條也是使用者
+    定的，這次也是使用者改的。）
 
 ---
 
@@ -222,6 +232,16 @@ param 相依 I/O（例如輸出流名稱由參數決定）覆寫 `resolve_reads/
 > 區域**產出**的名字不走參數，由 `resolve_regions_out` 宣告
 > （`<name>_center` 那種是算出來的，不是某一格填的字）。
 >
+> **吃「一個數字的名字」的參數用 `feature_key`，一串用 `feature_keys`**
+> （2026-09-09）。兩個型別都會拿到「插入數字 ▾」（`ui/number_picker.py`）——
+> 用 `str` 的話它是一個要使用者自己拼對名字的文字框（`rank_by` 就這樣過了
+> 兩週，因為 `param_form` 那一行只認 `feature_keys`）。清單上有什麼由
+> `studio._dynamic_choices_for` 決定：**到這張卡為止**上游算得出來的；
+> **整批一次的卡**（`scale == SCALE_LOT`，Output 段）多列判定段的 working
+> numbers —— 它們在每一顆判定完之後才跑，那時候 `let` 的名字真的在 features
+> 裡；逐顆的卡不列，列了就是一份跑起來每一顆都失敗的 recipe。lint 那一半
+> 是 `recipe.let_names_written`（let 會寫的名字**唯一的家**）。
+
 > **單數／複數的意思跟影像流一字不差**（F13-⑥）：`region_keys`（一串）是
 > 「同一件事做在好幾個區域上」，第二條線**累加**，而每個數字會自動帶上
 > 區域名前綴（`epi_glv_mean` / `mg_glv_mean`；只接一個時名字跟以前逐字相同）；
@@ -410,7 +430,11 @@ F44 的 `ui/region_words.py` 已經都是這樣做的 —— 這一段只是把�
 `ui/windows_menu.py`（Help 鈕的小箭頭列出開著的視窗）。**2026-09-09 再一支**：
 `ui/splitters.py`（區域之間的細線 —— 把手 5px 抓得到、中間 1px 看得見；QSS 對
 splitter 把手算尺寸不分方向，四種寫法都做不到，所以把手自己畫；`d4t/ui` 裡
-不准再直接 `QSplitter(`，有測試數像素）。
+不准再直接 `QSplitter(`，有測試數像素）。**同日再一支**：`ui/number_picker.py`
+（「插入數字 ▾」—— 一張卡一組、組名點不到、每一項帶一句它是什麼；判定面板、
+判定樹那一步、設定區的 `feature_key` / `feature_keys` 三個地方**同一支**。
+它獨立成模組是因為 `param_form` 也要用，而從 `param_form` 反過來 import
+`decide_panel` 是一個圈）。
 
 > ⚠ 這張清單上以前還有 **F30 的 `ui/output_band.py`**，而它 2026-08-28 被
 > **刪掉**了（F50）。規矩沒有變 —— 變的是那一塊該不該存在：那個框畫的是
