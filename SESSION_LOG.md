@@ -51,9 +51,28 @@
 跳過空白）；`_typical` 是逐框值的中位數（含自己）、`_outlier` 是離它最遠那格
 的值（跟著 `direction`）、`_outlier_box` 是那一格的序號（0 起算）。
 
+**第二輪（同日）：「你覺得 user 會不會混淆 or 看不懂」—— 會。** 證據不是
+猜的：作者自己問了三次才分清 `_outlier` 與 `_worst`，而 `glv_stats.py` 的
+`FEATURE_HELP` 註解記著 2026-09-02 有人問過一模一樣的「typical 跟 outliner、
+worst、score 是指什麼」。四個提案（補說明／`across_boxes` 那格講兩族／
+`_outlier` 一族預設收起來／不改名），使用者：「1 跟 2 先做」。
+
+* **每個下拉項目帶 tooltip**（`decide_panel.number_tips`）：卡片算的走
+  `feature_gloss` ＋ `feature_unit`（**跟 Feature 表那一欄同一支**，說明只有
+  一個家）；working number 講它的算式、fill、scale，`_missing` / `_raw` 各一
+  句。`RecipeModel.bound_feature_specs` 是 `bound_specs` 的投影（同
+  `feature_owners` / `feature_regions`）。
+* **`across_boxes` 的 help 多一段**：兩族常常指到不同格；`_worst` 一族全部來
+  自 judge 挑的那一格，`_typical` / `_outlier` / `_outlier_box` 是每個統計量
+  各自的。使用者是在那一格決定開 each box 的，那裡是他唯一會讀說明的時候。
+* 第 3 項（收起 `_outlier`）**沒做**，等使用者點頭：出貨 recipe 只用
+  `_worst`，但使用者手上那份用了 `_outlier`。
+
 尺：`test_viewmodel.py` 三條（列得出、只看上面幾行、沒判定就空）、
 `test_ui_tree_edit.py` 四條（導引式列得出、點了寫進 model、算式框那個也列、
-分組長相）、`test_ui_f22_decide_panel.py` 一條（第 n 行只看前 n−1 行）。
+分組長相）、`test_ui_f22_decide_panel.py` 一條（第 n 行只看前 n−1 行）；第二輪再加
+`test_glv.py` 一條（那一格的 help 兩族都在）、`test_ui_tree_edit.py` 一條
+（每一項都有 tooltip，`_outlier_box` 標成 box）。
 
 ---
 

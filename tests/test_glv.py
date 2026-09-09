@@ -244,3 +244,18 @@ def test_robust_spread_matches_its_formula():
     assert robust_spread(v) == pytest.approx(
         1.4826 * np.median(np.abs(v - med)))
     assert robust_spread([7.0]) == 0.0
+
+
+def test_the_each_box_help_names_both_families():
+    """2026-09-09 使用者：「user 會不會混淆 or 看不懂」—— 會。`_outlier` 跟
+    `_worst` 常常不是同一格（2026-09-02 實測 24 顆只有 2–5 顆相同），而名字上
+    沒有那件事。使用者是在「Boxes in the region」那一格決定開 each box 的，
+    那裡是他唯一會讀說明的時候 —— 兩族都要在那一句裡。"""
+    import d4t.core.steps  # noqa: F401 — 觸發卡片註冊
+    from d4t.core.pipeline.step import get_step
+
+    spec = next(p for p in get_step("glv_stats").params
+                if p.name == "across_boxes")
+    for word in ("_worst", "_typical", "_outlier", "_outlier_box",
+                 "different boxes"):
+        assert word in spec.help, word

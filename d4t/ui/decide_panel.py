@@ -70,9 +70,59 @@ _PICK_EMPTY = "No numbers upstream yet"
 _DECISION_GROUP = RecipeModel.DECISION_LABEL
 
 
+def number_tips(model: Any) -> Dict[str, str]:
+    """名字 → 滑鼠停上去那一句（2026-09-09，使用者：「user 會不會混淆 or
+    看不懂」—— 會，而且 `glv_stats.py` 記著 2026-09-02 有人問過一模一樣的
+    「typical 跟 outliner、worst、score 是指什麼」）。
+
+    卡片算的那些走 `feature_gloss`（**跟 Feature 表那一欄同一支**，說明只有
+    一個家）＋ `feature_unit`；判定段自己算的（let）講它的算式、fill 與
+    scale —— 那三件事 spec 上沒有，只有 model 的 `decide.let` 知道。
+    查不到的留白：少一句話，不會是錯的一句話。
+    """
+    from .feature_text import feature_gloss, feature_unit
+
+    out: Dict[str, str] = {}
+    if model is None:
+        return out
+    lets: Dict[str, Any] = {}
+    d = getattr(model, "decide", None)
+    for item in (d.let if d is not None else []):
+        if not item.is_blank and str(item.name).strip():
+            lets[str(item.name).strip()] = item
+    getter = getattr(model, "bound_feature_specs", None)
+    for b in (getter() if callable(getter) else []):
+        spec = b.spec
+        name = str(spec.name)
+        if spec.family == "engine" and spec.base in lets:
+            let = lets[spec.base]
+            var = str(spec.variant or "")
+            if var == "missing":
+                tip = ("1 when '%s' could not be worked out on this defect "
+                       "and used its fallback (%s); 0 otherwise"
+                       % (spec.base, let.fill))
+            elif var == "raw":
+                tip = ("'%s' as measured on this defect, before it was "
+                       "scaled against the batch" % spec.base)
+            else:
+                tip = "= %s" % let.expr
+                if str(let.fill or ""):
+                    tip += "\nif missing \u2192 %s" % let.fill
+                if str(let.scale or ""):
+                    tip += "\nscaled against the batch (%s)" % let.scale
+            out[name] = tip
+            continue
+        _kind, text = feature_gloss(name, spec=spec)
+        unit = feature_unit(spec)
+        if text:
+            out[name] = ("%s  [%s]" % (text, unit)) if unit else text
+    return out
+
+
 def fill_number_picker(combo: QComboBox, items: Sequence[str],
                        regions: Optional[Dict[str, int]] = None,
-                       placeholder: str = "") -> None:
+                       placeholder: str = "",
+                       tips: Optional[Dict[str, str]] = None) -> None:
     """把「可以拿來用的數字」填進一個下拉 —— **一張卡一組，組名不能點**。
 
     2026-09-09 使用者：「ADC 下拉選單分類可以再做更好一點嗎」。在這之前它是
@@ -124,13 +174,19 @@ def fill_number_picker(combo: QComboBox, items: Sequence[str],
             item = (QStandardItem(region_dot_icon(idx), name) if idx >= 0
                     else QStandardItem(name))
             item.setData(name, Qt.UserRole)
+            # 滑鼠停上去講它是什麼（`number_tips`）—— 名字本身講不出
+            # 「_outlier 跟 _worst 常常不是同一格」那種事。
+            tip = str((tips or {}).get(name, "") or "")
+            if tip:
+                item.setData(tip, Qt.ToolTipRole)
             model.appendRow(item)
     combo.setModel(model)
     combo.setCurrentIndex(0)
 
 
 def _feature_combo(items: Sequence[str], on_pick,
-                   regions: Optional[Dict[str, int]] = None) -> QComboBox:
+                   regions: Optional[Dict[str, int]] = None,
+                   tips: Optional[Dict[str, str]] = None) -> QComboBox:
     """共用的「插入數字 ▾」（F21-B 的那一支，這裡是它的第三個使用者）。
 
     **送出去的只有名字** —— 插錯半邊的話使用者會得到一個永遠指不到的變數名，
@@ -138,7 +194,7 @@ def _feature_combo(items: Sequence[str], on_pick,
     """
     combo = QComboBox()
     fill_number_picker(combo, items, regions,
-                       _PICK_PLACEHOLDER if items else _PICK_EMPTY)
+                       _PICK_PLACEHOLDER if items else _PICK_EMPTY, tips)
     combo.setEnabled(bool(items))
     combo.setToolTip("Pick one of the numbers the cards above work out - "
                      "it is put in at the cursor.")
@@ -247,6 +303,7 @@ class DecidePanel(QWidget):
         self._features: List[str] = []
         #: 特徵名 → 第幾個區域（下拉上那顆顏色點）。`refresh` 更新。
         self._regions: Dict[str, int] = {}
+        self._tips: Dict[str, str] = {}
         self._counts: Dict[int, int] = {}
         self._purity: Dict[int, Any] = {}
         self._building = False
@@ -367,6 +424,7 @@ class DecidePanel(QWidget):
         # 因為接了／剪了一條區域線之後那張表就變了。
         getter = getattr(m, "feature_regions", None)
         self._regions = dict(getter()) if callable(getter) else {}
+        self._tips = number_tips(m)
         on = getattr(m, "decide", None) is not None
         if on:
             tree = getattr(m.decide, "tree", None) is not None
@@ -447,7 +505,7 @@ class DecidePanel(QWidget):
             "", sc, _feature_combo(self._numbers(),
                                    lambda tok: m.set_decide_score(
                                        _insert_at_cursor(sc, tok)),
-                                   regions=self._regions)))
+                                   regions=self._regions, tips=self._tips)))
 
     def _let_row(self, i: int, item: Any) -> QWidget:
         """一行 working number ＝ 面板上的**兩行**。
@@ -482,7 +540,7 @@ class DecidePanel(QWidget):
         pick = _feature_combo(self._numbers(upto_let=i),
                               lambda tok, e=expr, k=i:
                               m.set_let(k, expr=_insert_at_cursor(e, tok)),
-                              regions=self._regions)
+                              regions=self._regions, tips=self._tips)
         pick.setFixedWidth(140)
         rm = _tight(small_button("✕"), 24)
         rm.setToolTip("Take this line out")

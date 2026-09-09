@@ -972,6 +972,20 @@ class RecipeModel:
         return {b.spec.name: b.node_id
                 for b in bound_specs(recipe, self.kind)}
 
+    def bound_feature_specs(self) -> List[Any]:
+        """這條 route 上每一個會出現的名字的完整身分（`bound_specs` 的投影）。
+
+        給「插入數字 ▾」的 tooltip 用（2026-09-09）：一個名字一句話是什麼，
+        由 `ui.feature_text.feature_gloss` 從 spec 組出來 —— 跟 Feature 表那一欄
+        **同一支**，所以下拉講的跟表上講的不會漂。壞了就空的（顯示層）。
+        """
+        from d4t.core.pipeline.verdict_features import bound_specs
+
+        try:
+            return list(bound_specs(self.to_recipe(), self.kind))
+        except Exception:              # noqa: BLE001 — 顯示層，壞了就沒有說明
+            return []
+
     def feature_regions(self) -> Dict[str, int]:
         """特徵名 → **它屬於第幾個具名區域**（-1 = 不屬於任何一個）。
 

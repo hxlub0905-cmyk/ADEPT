@@ -642,3 +642,37 @@ def test_the_number_picker_is_grouped_by_who_computes_it(qapp):
     assert all(not which.itemData(h) for h in heads)
     # 名字裡不再重複「— 誰算的」
     assert not any("—" in t for t in texts), texts
+
+
+def test_every_number_in_the_picker_says_what_it_is(qapp):
+    """滑鼠停上去講它是什麼（2026-09-09）。卡片算的走 `feature_gloss`（跟
+    Feature 表那一欄同一支），working number 講它的算式 —— 名字本身講不出
+    「_outlier 跟 _worst 常常不是同一格」那種事。"""
+    from PySide6.QtCore import Qt
+
+    m = _model_with_a_working_number()
+    node = list(m.nodes)[0]
+    m.set_param(node, "across_boxes", "each box")
+    m.set_param(node, "output_prefix", "N")
+    panel = TreePanel()
+    panel.set_model(m)
+    panel.set_features(m.labelled_features())
+    panel.show_path("")
+    which = _picker(panel)
+    model = which.model()
+
+    def tip(name):
+        i = which.findData(name)
+        assert i >= 0, name
+        return str(model.data(model.index(i, 0), Qt.ToolTipRole) or "")
+
+    assert tip("QAA") == "= glv_max * 2\nif missing → 0"
+    assert "fallback" in tip("QAA_missing")
+    assert "judge picked" in tip("N_glv_median_worst")
+    assert "furthest out on this statistic alone" in tip("N_glv_median_outlier")
+    assert "[box]" in tip("N_glv_median_outlier_box"), "它是框號不是灰階"
+    # 每一個卡片算的名字都有一句話 —— 一格空白讀起來像「這個沒什麼」
+    blank = [which.itemText(i) for i in range(1, which.count())
+             if which.itemData(i) and not
+             str(model.data(model.index(i, 0), Qt.ToolTipRole) or "")]
+    assert not blank, blank

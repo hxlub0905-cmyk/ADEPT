@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 
 from ..core.pipeline.recipe import TreeLeaf, TreeStep
 from .decide_panel import (_feature_combo, _insert_at_cursor,
-                           fill_number_picker)
+                           fill_number_picker, number_tips)
 from .tree_scene import (
     OPS, count_yes, display_tree, format_condition, parse_simple_condition,
     rows_reaching, suggest_condition,
@@ -357,7 +357,7 @@ class TreePanel(QWidget):
         # 名字只差前綴那一段，而顏色比字先被看到。分組（一張卡一組、working
         # numbers 第一組）跟「插入數字 ▾」同一支：`fill_number_picker`。
         fill_number_picker(which, items, self._region_colors(),
-                           "(pick a number…)")
+                           "(pick a number…)", number_tips(self._model))
         i = which.findData(name)
         which.setCurrentIndex(max(0, i))
         which.setToolTip("Which of the measured numbers this step asks about.")
@@ -519,7 +519,8 @@ class TreePanel(QWidget):
         pick = _feature_combo(self._numbers(),
                               lambda tok, e=when, p=self._path:
                               m.set_tree_when(p, _insert_at_cursor(e, tok)),
-                              regions=self._region_colors())
+                              regions=self._region_colors(),
+                              tips=number_tips(m))
         row = QWidget(self)
         lay = QHBoxLayout(row)
         lay.setContentsMargins(0, 0, 0, 0)
