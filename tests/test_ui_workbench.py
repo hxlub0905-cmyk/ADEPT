@@ -193,40 +193,78 @@ def test_the_studio_fits_the_fab_pc_after_loading_and_picking_a_card(
         assert hint.width() <= w, \
             "載入之後最小寬度 %d 超過 %d" % (hint.width(), w)
         assert win.width() <= w and win.height() <= h, win.size()
-        # 畫布吃滿卡片庫右邊的整個寬度（F100 §2）
+        # 畫布吃滿中欄的寬度（v2：中欄 ＝ 卡片庫與右欄之間的整塊）
         assert win.pipeline.width() >= win.main_column.width() - 2
         # 而且高度有保底（Tune 模式）
         assert win.layout_mode() == "tune"
         assert win.canvas_column.sizes()[0] >= wb.CANVAS_MIN_PX
-        # 三格並排：設定區、儀表、影像的垂直範圍重疊
-        a, b, c = (win.stack.geometry(), win.gauge_pane.geometry(),
-                   win.preview_pane.geometry())
-        assert all(r.width() > 0 for r in (a, b, c)), (a, b, c)
-        assert min(r.bottom() for r in (a, b, c)) > \
-            max(r.top() for r in (a, b, c)), "工作台三格沒有併排"
-        # Verdict 那一列常駐：Build 收掉工作台之後它還在
+        # 設定區與儀表併排（垂直範圍重疊）；影像在右欄，**全高**：它的垂直
+        # 範圍同時蓋到畫布與工作台（v2 的整個理由：調參數那一刻影像是主角）
+        a, b = win.stack.geometry(), win.gauge_pane.geometry()
+        assert a.width() > 0 and b.width() > 0, (a, b)
+        assert min(a.bottom(), b.bottom()) > max(a.top(), b.top()), "設定區與儀表沒有併排"
+        pv = win.preview_pane.geometry()
+        assert pv.width() >= 300, "右欄太窄：%s" % pv
+        assert pv.top() <= win.pipeline.geometry().top() + 8
+        assert pv.bottom() >= a.bottom() - 8, "影像那一欄要全高：%s vs %s" % (pv, a)
+        assert win.verdict_strip.isVisibleTo(win)
+        # Build：工作台與右欄都收掉，畫布吃滿
         win.set_layout_mode("build")
         qapp.processEvents()
         assert win.canvas_column.sizes()[1] == 0
-        assert win.verdict_strip.isVisibleTo(win)
+        assert win.layout_modes.preview_width() == 0
+        assert win.pipeline.width() >= win.width() - win.library.width() - 24
+        win.set_layout_mode("tune")
+        qapp.processEvents()
+        assert win.layout_modes.preview_width() > 0
     finally:
         win.close()
 
 
-def test_the_verdict_strip_is_outside_the_splitter(qapp):
-    """Verdict 是一條常駐的結論列，不在任何一根 splitter 裡。"""
-    from PySide6.QtWidgets import QSplitter
-
+def test_the_verdict_strip_sits_under_the_image(qapp):
+    """Verdict 跟這一顆的圖挨著（v2）：住在右欄影像下面，不在工作台裡。"""
     from d4t.ui.studio import StudioWindow
     win = StudioWindow(show_welcome_on_start=False)
     win.PROMPT_ON_CLOSE = False
     try:
-        # 主欄本身是 root splitter 的一格，那沒關係 —— 不准的是住在**畫布／
-        # 工作台那根**（Build 模式會把它收到 0）或工作台的某一格裡。
-        assert isinstance(win.canvas_column, QSplitter)
-        assert not win.canvas_column.isAncestorOf(win.verdict_strip), \
-            "Verdict 列被收進畫布／工作台那根 splitter 了"
+        assert win.preview_pane.isAncestorOf(win.verdict_strip)
         assert not win.workbench.isAncestorOf(win.verdict_strip)
-        assert win.main_column.layout().indexOf(win.verdict_strip) >= 0
+        assert not win.canvas_column.isAncestorOf(win.verdict_strip)
+        root = win.root_splitter
+        assert [root.widget(i) for i in range(root.count())] == [
+            win.library, win.main_column, win.preview_pane]
     finally:
         win.close()
+
+
+def test_build_folds_the_preview_column_and_tune_brings_it_back(qapp):
+    """純幾何：右欄在 Build 收到 0、Tune 回來；只在 Tune 記寬度。"""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QSplitter, QWidget
+
+    from d4t.ui import workbench as wb
+    host, column, bench, canvas = _splitters(qapp)
+    root = QSplitter(Qt.Horizontal, host)
+    lib = QWidget(root)
+    preview = QWidget(root)
+    root.addWidget(lib)
+    root.addWidget(column)
+    root.addWidget(preview)
+    root.resize(1300, 700)
+    root.show()
+    qapp.processEvents()
+    saved = {}
+    lay = wb.WorkbenchLayout(column, bench, canvas, root=root, preview_index=2,
+                             save=lambda k, v: saved.__setitem__(k, list(v)))
+    lay.apply("tune", remember=False)
+    qapp.processEvents()
+    assert lay.preview_width() > 0
+    lay.apply("build")
+    qapp.processEvents()
+    assert lay.preview_width() == 0
+    lay.apply("tune")
+    qapp.processEvents()
+    assert lay.preview_width() > 0
+    lay.remember()
+    assert wb.ROOT_COLUMNS_KEY in saved
+    host.close()

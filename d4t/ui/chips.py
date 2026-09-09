@@ -377,6 +377,13 @@ class _ChipFlow(QWidget):
         self._items.append(item)
         self._relayout()
 
+    def remove(self, item: QWidget) -> None:
+        """拿掉一顆（呼叫端自己 `deleteLater`）。"""
+        if item in self._items:
+            self._items.remove(item)
+            item.setParent(None)
+            self._relayout()
+
     def chips(self) -> List["_ChipBase"]:
         return [c for c in self._items if isinstance(c, _ChipBase)]
 

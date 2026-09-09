@@ -126,12 +126,11 @@ def test_results_live_in_their_own_window(window):
     assert window.histogram is window.results.histogram
     assert window.results_visible() is False, "還沒跑就不該有結果視窗"
 
-    # 主視窗的中央區：卡片庫 | 主欄（F100：畫布在上、工作台在下，
-    # 單顆預覽是工作台的第三格）
+    # 主視窗的中央區三欄：卡片庫 | 主欄（畫布在上、設定區與儀表在下）| 單顆預覽
     root = window.root_splitter
-    assert root.count() == 2
+    assert root.count() == 3
     assert root.widget(0) is window.library
-    assert window.workbench.widget(2) is window.preview_pane
+    assert root.widget(2) is window.preview_pane
 
 
 def test_gallery_populates_after_trial(ran):

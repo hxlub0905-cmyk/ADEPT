@@ -94,6 +94,12 @@ _LIGHT: Dict[str, Any] = {
     "statusbar": "#f7f8fa",
     # -- borders ------------------------------------------------------------
     "border_default": "#e3e6eb",
+    #: 區域之間的分隔線（QSplitter 的握把）。**不是 `border_default`**：F81 把
+    #: `bg_page` 壓到 #e6e9ee 之後，那條線跟底色只差 ΔL* 1，畫布區、影像區、
+    #: 卡片區之間等於沒有線（使用者 2026-09-09：「建議加入細線去區分區域」——
+    #: 線一直在，只是看不見）。這一格要跟 `bg_page` 拉得開，又不能搶過卡片
+    #: 邊框：取畫布點陣那一級的深度。
+    "divider": "#c9d0da",
     "border_input": "#cbd1d9",
     "border_hover": "#9aa3ae",
     "border_focus": "#3574d6",
@@ -298,6 +304,7 @@ _DARK: Dict[str, Any] = dict(_LIGHT, **{
     "statusbar": "#1b1e24",
 
     "border_default": "#333842",
+    "divider": "#3a404b",
     "border_input": "#3d434f",
     "border_hover": "#5c6474",
     "border_focus": "#4b8bf5",
@@ -1146,10 +1153,12 @@ QScrollArea > QWidget > QWidget { background: transparent; }
 
 /* -- splitter ---------------------------------------------------------- */
 QSplitter { background: $bg_page; }
-QSplitter::handle { background: $border_default; }
+/* 區域之間的細線就是握把（F100 v2）：看得見的是中間 1px 的 $divider，
+   抓得到的是 5px —— 以前握把只有 1px，既看不見也抓不到。 */
+QSplitter::handle { background: $divider; }
 QSplitter::handle:hover { background: $border_hover; }
-QSplitter::handle:horizontal { width: 1px; }
-QSplitter::handle:vertical { height: 1px; }
+QSplitter::handle:horizontal { width: 5px; margin: 0 2px; }
+QSplitter::handle:vertical { height: 5px; margin: 2px 0; }
 
 /* -- scrollbars -------------------------------------------------------- *
  * The 5px here is deliberately NOT $radius_sm: an 11px-wide bar with a 5px

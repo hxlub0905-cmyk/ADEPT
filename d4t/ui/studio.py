@@ -1,25 +1,25 @@
 # d4t Studio 主視窗 — authored 2026-07-28 (M3 收尾).
 """``StudioWindow`` —— 把 M3 的元件、view-model 與背景工作接成一台可用的機器。
 
-版面（全部用 QSplitter，使用者拉得動；F100 起畫布橫躺在上面，
-`docs/plans/F100-workbench-layout.md`）::
+版面（全部用 QSplitter，使用者拉得動；F100 v2，
+`docs/plans/F100-workbench-layout.md` §7）::
 
     ┌ 工具列：開啟 Recipe／存檔／範本 ｜ 復原／重做 ｜ Results／說明▾／主題
     │         ｜ 試跑筆數 ▶試跑 ▶全跑                                      ┐
-    ├──────────┬──────────────────────────────────────────────────────┤
-    │ 卡片庫    │ 流程（PipelineCanvas）—— 吃滿右邊整個寬度、高度保底     │
-    │ Library  ├───────────────┬────────────────┬─────────────────────┤
-    │ rail+    │ 參數表單 /     │ 這張卡的儀表   │ 單顆預覽：◀ ▶ 影像流  │
-    │ panel    │ 分數編輯 /     │ （Card /       │        ImageView    │
-    │          │ 判定樹一步     │  Features）    │                     │
-    │          ├───────────────┴────────────────┴─────────────────────┤
-    │          │ Verdict：類別 · score · Path（常駐，不在 splitter 裡）  │
-    ├──────────┴──────────────────────────────────────────────────────┤
-    │ Problems 列（為什麼還不能跑）／ 狀態列：進度 / 訊息                 │
-    └─────────────────────────────────────────────────────────────────┘
+    ├──────────┬──────────────────────────────────┬──────────────────────┤
+    │ 卡片庫    │ 流程（PipelineCanvas）—— 導覽，一排卡 │ 單顆預覽：◀ ▶ 影像流   │
+    │ Library  ├────────────────┬─────────────────┤        ImageView     │
+    │ rail+    │ 參數表單 /      │ 這張卡的儀表     │        （全高）       │
+    │ panel    │ 分數編輯 /      │ （Card /        │  Verdict · score ·   │
+    │          │ 判定樹一步      │  Features）     │  Path                │
+    ├──────────┴────────────────┴─────────────────┴──────────────────────┤
+    │ Problems 列（為什麼還不能跑）／ 狀態列：進度 / 訊息                     │
+    └─────────────────────────────────────────────────────────────────────┘
 
-    Build 模式把工作台（中間那三格）收到 0；Tune 模式（預設）開著。
-    Gallery 與分數分佈直方圖住在 Results 視窗（F7-5）。
+    Build 模式把工作台（設定區｜儀表）與右欄都收掉，畫布吃滿；Tune（預設）
+    全開。第一版（同一天早上）曾讓畫布吃滿全寬、影像擠在下面一列 —— 調參數
+    那一刻影像是主角，所以 v2 把它還給右欄。Gallery 與分數分佈直方圖住在
+    Results 視窗（F7-5）。
 
 五條資料流（別搞混）
 --------------------
@@ -253,10 +253,10 @@ TRIAL_WORKERS = None
 #: model 變動 → 重算預覽 的去抖動間隔（毫秒）。拖 spinbox 不會每格都重算。
 PREVIEW_DEBOUNCE_MS = 300
 
-#: 主視窗兩欄的出廠寬度：卡片庫 | 主欄（畫布在上、工作台在下）。
-#: F100 之前是三欄（卡片庫 | 流程+參數 | 單顆預覽），預覽影像現在住在工作台的
-#: 第三格（`ui/workbench.py`）——右邊整塊都是主欄。
-COLUMN_SIZES = (256, 1144)
+#: 主視窗三欄的出廠寬度：卡片庫 | 主欄（畫布在上、設定區與儀表在下）| 單顆預覽。
+#: F100 v2（`ui/workbench.py`）：影像回到右欄、全高——調參數的迴圈是
+#: 「改一格 → 看影像」，那一刻影像是主角；畫布在 Tune 裡是導覽，要全貌有 Build。
+COLUMN_SIZES = (256, 700, 410)
 
 #: 「試跑筆數」的出廠值。載入資料集時會再夾成 ``min(這個值, 資料集顆數)`` ——
 #: 對一份只有 24 顆的 lot 顯示 200 沒有任何意義，只會讓人以為自己看錯了。
@@ -337,7 +337,16 @@ CANVAS_SPLIT_KEY = "ui/canvas_split"
 
 
 def _save_sizes(key: str, sizes: Sequence[int]) -> None:
-    """把一組分隔線位置寫進 QSettings（寫不進去就算了，不准擋關窗）。"""
+    """把一組分隔線位置寫進 QSettings（寫不進去就算了，不准擋關窗）。
+
+    ⚠ **跑測試時不寫**（F100 v2 抓到的）：`_load_sizes` 在 pytest 裡不讀，
+    但這一支照寫 —— 於是每一條會關窗的測試都把它那個 1,229 px 視窗的欄寬寫進
+    開發者真正的 QSettings，下一次手動開 Studio 看到的是一個他從來沒調成那樣
+    的版面（右欄 607、中欄 348）。跟 `autosave` 那條同一句話：測試不准寫進
+    使用者真正的那幾個檔案。
+    """
+    if _running_under_pytest():
+        return
     try:
         app_settings().setValue(key, ",".join(str(int(v)) for v in sizes))
     except Exception:                   # noqa: BLE001
@@ -1235,17 +1244,8 @@ class StudioWindow(QMainWindow):
         middle.setStretchFactor(0, 2)
         middle.setStretchFactor(1, 3)
         # 版面模式的狀態與幾何（F100）—— 邏輯在 `ui/workbench.py`，這裡只接。
-        self.layout_modes = WorkbenchLayout(
-            middle, self.params_row, self.pipeline, self.library,
-            load=_load_sizes, save=_save_sizes)
-        # 主欄 = 畫布/工作台那根 splitter ＋ 常駐的 Verdict 列（F100）。
-        # Verdict 不在 splitter 裡：Build 模式把工作台收到 0 之後它還在。
-        self.main_column = QWidget(self)
-        mcol = QVBoxLayout(self.main_column)
-        mcol.setContentsMargins(0, 0, 0, 0)
-        mcol.setSpacing(0)
-        mcol.addWidget(middle, 1)
-        mcol.addWidget(self.verdict_strip)
+        # 主欄 = 畫布/工作台那根 splitter（F100 v2：Verdict 列搬進右欄影像下面）。
+        self.main_column = middle
 
         # Results 視窗（跑完才 show；先建好讓 histogram / gallery 一直有實體，
         # 這樣所有既有接線與測試都不用管它現在開著沒有）
@@ -1258,13 +1258,18 @@ class StudioWindow(QMainWindow):
         root = QSplitter(Qt.Horizontal, self)
         root.addWidget(self.library)
         root.addWidget(self.main_column)
+        root.addWidget(self.preview_pane)
         root.setStretchFactor(0, 0)
-        root.setStretchFactor(1, 1)
+        root.setStretchFactor(1, 3)
+        root.setStretchFactor(2, 2)
         root.setCollapsible(1, False)
-        # 上一次關窗時的欄寬（F13-1）—— 拖過的分隔線在下一次開窗還在。
-        # 沒存過（或在跑測試）就用出廠值。F100 之前這裡是三個值，舊的設定
-        # 長度對不上會自己退回出廠值（`_load_sizes` 的規矩）。
-        root.setSizes(_load_sizes(COLUMNS_KEY, 2) or list(COLUMN_SIZES))
+        # 出廠欄寬；上一次關窗的欄寬由 `WorkbenchLayout`（F100 v2）在 showEvent
+        # 套（只記 Tune 的：Build 的右欄是 0，不是使用者調出來的）。
+        root.setSizes(list(COLUMN_SIZES))
+        # 版面模式的狀態與幾何（F100）—— 邏輯在 `ui/workbench.py`，這裡只接。
+        self.layout_modes = WorkbenchLayout(
+            middle, self.params_row, self.pipeline, self.library,
+            root=root, preview_index=2, load=_load_sizes, save=_save_sizes)
         self.top_splitter = root
         self.root_splitter = root
 
@@ -1338,9 +1343,8 @@ class StudioWindow(QMainWindow):
         row = QSplitter(Qt.Horizontal, self)
         row.addWidget(self.stack)
         row.addWidget(self.gauge_pane)
-        # F100：影像是工作台的第三格。它以前是右邊獨立的一欄，而那一欄的硬
-        # 最小寬度讓整個視窗在 1366 上裝不下（`docs/plans/F100-workbench-layout.md`）。
-        row.addWidget(self.preview_pane)
+        # F100 第一版把影像放進這一列當第三格；v2 把它還給右欄（全高）——
+        # 調參數那一刻影像是主角，擠在這一列裡只有 330×250。
         self.workbench = row
         # 參數那一邊寬一點：它裝的是一排排可以拖的滑桿（F7-8），而儀表是
         # 讀的東西。3:2 是量出來的 —— 再窄一點，`Borrow range from` 那種
@@ -1640,40 +1644,52 @@ class StudioWindow(QMainWindow):
         strip.setContentsMargins(8, 4, 8, 4)
         strip.setSpacing(0)
         self.verdict_live = QWidget(self.verdict_strip)
-        vrow = QHBoxLayout(self.verdict_live)
+        # **兩行，不是一行**（F100 v2）：這一塊住在右欄（1366 上約 460 px），
+        # 一行排「Verdict ＋ 膠囊 ＋ score ＋ 那句為什麼 ＋ 路徑」的最小寬度是
+        # 五百多 px，整欄被它撐開。膠囊（類別名）跟 Verdict 一行、數字與說明
+        # 第二行、路徑第三行（會換行）。
+        vcol = QVBoxLayout(self.verdict_live)
+        vcol.setContentsMargins(0, 0, 0, 0)
+        vcol.setSpacing(2)
+        vrow = QHBoxLayout()
         vrow.setContentsMargins(0, 0, 0, 0)
         vrow.setSpacing(8)
         self.verdict = VerdictChip(self.verdict_live)
         vrow.addWidget(QLabel("Verdict", self.verdict_live))
         vrow.addWidget(self.verdict)
-        # 這一顆走過的路（F24 §8）：`missing? no → contrast > 120 ? yes`。
-        # 沒有判定樹（或還沒預覽）就是空字串 —— 不佔位、不寫 N/A。
+        vrow.addStretch(1)
+        vcol.addLayout(vrow)
+        vrow2 = QHBoxLayout()
+        vrow2.setContentsMargins(0, 0, 0, 0)
+        vrow2.setSpacing(8)
         # **score 那個數字跟 bin 一起常駐**（F76 刀 4 之後）。以前它是特徵表
         # 最後一列、粗體、永遠不被收合走的那一格 —— 理由是「它是這張表的
         # 結論」。新面板把它歸進 `Score / Bin` 那一段，而那一段收得起來，
-        # 所以那條不變量搬到這裡：結論跟判定在同一行，永遠看得到。
+        # 所以那條不變量搬到這裡：結論跟判定在同一塊，永遠看得到。
         self.verdict_score = QLabel("", self.verdict_live)
         self.verdict_score.setStyleSheet("font-weight:700;")
-        vrow.addWidget(self.verdict_score)
+        vrow2.addWidget(self.verdict_score)
         # **膠囊寫著「—」的時候要說為什麼**（F99 P1-2）。預覽停在選到的那張卡
         # 是對的（F7 定調），但那一刻 Verdict 從「more than one box is off」
         # 變成一個破折號，而畫面上沒有任何東西講它為什麼不見 —— 看起來像剛剛
         # 還有判定、現在壞了。這一句住在膠囊旁邊，不住在狀態列。
         self.verdict_note = QLabel("", self.verdict_live)
         self.verdict_note.setObjectName("paramHint")
-        vrow.addWidget(self.verdict_note)
+        self.verdict_note.setWordWrap(True)
+        vrow2.addWidget(self.verdict_note, 1)
+        vcol.addLayout(vrow2)
         # **那一行點得下去**（U11）：走過的路旁邊沒有別的入口，而回溯以前只有
         # 「跑一整批 → Results → 點 score/bin」那一條路 —— 使用者手上明明就有
-        # 這一顆的每一個數字。做成連結而不是另加一顆鈕：這一列已經有三樣東西
-        # （Verdict、score、路徑），而底線本來就是「這個字可以點」的意思。
+        # 這一顆的每一個數字。做成連結而不是另加一顆鈕：底線本來就是
+        # 「這個字可以點」的意思。
         self.decide_path = QLabel("", self.verdict_live)
         self.decide_path.setObjectName("paramHint")
-        self.decide_path.setWordWrap(False)
+        self.decide_path.setWordWrap(True)      # 右欄裝不下一整條路徑
         self.decide_path.setTextFormat(Qt.RichText)
         self.decide_path.setOpenExternalLinks(False)
         self.decide_path.linkActivated.connect(
             lambda _href: self.toggle_preview_why())
-        vrow.addWidget(self.decide_path, 1)
+        vcol.addWidget(self.decide_path)
         strip.addWidget(self.verdict_live)
 
         # 這一顆為什麼判成這樣（U11）—— **跟 Results 那一份是同一個 widget**
@@ -1689,6 +1705,8 @@ class StudioWindow(QMainWindow):
             lambda name: self._on_why_item(self.why_preview.defect_id(),
                                            str(name)))
         lay.addWidget(self.why_preview)
+        # Verdict 列住在影像下面（F100 v2）：這一顆判成什麼，跟這一顆的圖挨著。
+        lay.addWidget(self.verdict_strip)
 
         # 還沒有判定的時候換成**一句可以照做的話 ＋ 那顆鈕**（推廣鐵則：
         # 講得出下一步，而那一步就在旁邊）。
@@ -2099,7 +2117,7 @@ class StudioWindow(QMainWindow):
         if root is None:
             return
         sizes = list(root.sizes())
-        if len(sizes) != 2 or sum(sizes) <= 0:
+        if len(sizes) != 3 or sum(sizes) <= 0:
             return
         want = self.library.minimumWidth()
         delta = want - sizes[0]
@@ -7546,8 +7564,7 @@ class StudioWindow(QMainWindow):
         # 那條路已經 return 了，所以按了取消的人草稿還在。
         self.autosave.stop()
         autosave.clear()
-        _save_sizes(COLUMNS_KEY, self.root_splitter.sizes())
-        # 只存 Tune 的比例與工作台的欄寬（F100，理由在 `WorkbenchLayout.remember`）。
+        # 只存 Tune 的比例與欄寬（F100，理由在 `WorkbenchLayout.remember`）。
         self.layout_modes.remember()
         for dlg in (self.welcome_dialog, self.library_dialog, self.results):
             try:

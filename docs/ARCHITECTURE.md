@@ -425,9 +425,9 @@ d4t/
     ├── focus_visible.py      #   焦點環只在鍵盤導覽時出現（F80）—— Qt 沒有
     │                         #     `:focus-visible`，這支把 QFocusEvent.reason()
     │                         #     翻成 `kbFocus` 屬性餵給 QSS
-    ├── workbench.py          #   Build／Tune 的幾何（F100）：畫布橫躺在上、工作台
-    │                         #     三格（設定區｜儀表板｜預覽影像）在下；`studio.py`
-    │                         #     只接線。`params_open` ＝ 工作台攤開著嗎
+    ├── workbench.py          #   Build／Tune 的幾何（F100 v2）：畫布當導覽在上、
+    │                         #     工作台（設定區｜儀表板）在下、影像右欄全高；
+    │                         #     `studio.py` 只接線。`params_open` ＝ 工作台攤開著嗎
     ├── card_menu.py          #   空白處右鍵、拖線到空白處的「加一張卡」選單（F99 P1-1）
     │                         #     —— 分組與相容性住這裡，畫布只發訊號
     ├── clipboard.py          #   Ctrl+C／V／D 的內容（F99 P1-8）：設定帶走、接線不帶

@@ -89,3 +89,15 @@ def test_every_stage_count_colour_clears_aa(name):
             assert ratio >= theme.AA_SMALL - 1e-6, (name, gid, col, ratio)
     finally:
         theme.set_theme(before)
+
+
+@pytest.mark.parametrize("name", sorted(theme.PALETTES))
+def test_the_region_dividers_are_actually_visible(name):
+    """畫布區、影像區、卡片區之間那條線要看得見（2026-09-09 使用者：「建議加入
+    細線去區分區域」——線一直在，是 `border_default` 跟 F81 之後的 `bg_page`
+    只差 ΔL* 1）。門檻 1.25 是「看得見一條線」的下限，不是文字的 AA。"""
+    pal = theme.PALETTES[name]
+    ratio = theme.contrast_ratio(pal["divider"], pal["bg_page"])
+    assert ratio >= 1.25, (name, pal["divider"], pal["bg_page"], ratio)
+    # 但不能搶過卡片邊框那一級的東西：比 `border_hover` 淡
+    assert ratio < theme.contrast_ratio(pal["border_hover"], pal["bg_page"])

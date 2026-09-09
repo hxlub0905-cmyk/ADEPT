@@ -164,6 +164,10 @@ class WiringSlot(QWidget):
         self.note = QLabel("", self)
         self.note.setObjectName("paramHint")
         self.note.setWordWrap(True)
+        # 這一句是三樣東西裡最不重要的（值、按鈕、說明）：格子窄的時候它先
+        # 讓（`resizeEvent`），而且它不准撐格子的最小寬度——不然「Change ▾」
+        # 那顆鈕會被推出格子外，畫面上只剩一個「C」（F100 v2 在 1366 上量到的）。
+        self.note.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         lay.addWidget(self.note, 1, Qt.AlignVCenter)
 
         self.button = QPushButton("", self)
@@ -173,6 +177,13 @@ class WiringSlot(QWidget):
         lay.addWidget(self.button, 0, Qt.AlignVCenter)
 
         self.set_text(self._value)
+
+    #: 窄到這個寬度以下，說明那一句收起來（值與按鈕留著）。
+    NOTE_MIN_W = 330
+
+    def resizeEvent(self, e) -> None:      # noqa: D102 - Qt hook
+        super().resizeEvent(e)
+        self.note.setVisible(bool(self.note.text()) and e.size().width() >= self.NOTE_MIN_W)
 
     # -- 值 ----------------------------------------------------------------
     def text_value(self) -> str:

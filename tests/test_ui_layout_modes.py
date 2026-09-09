@@ -210,22 +210,21 @@ def test_they_are_actually_side_by_side_on_screen(window, qapp):
     assert bottom > top, "參數與儀表沒有併排：%s vs %s" % (a, b)
 
 
-def test_the_image_has_its_own_cell_on_the_workbench(window):
-    """影像有自己的一格，而且不裝儀表。
+def test_the_image_stayed_in_its_own_column(window):
+    """影像有自己的一欄（全高），而且不裝儀表。
 
-    ⚠ F100（2026-09-08）把這一條的形狀改了：影像以前是右邊獨立的一欄
-    （「影像不搬」），現在是工作台的第三格 —— 那一欄的硬最小寬度讓整個視窗在
-    1366 上裝不下，而畫布因此只有一格窄的直立空間。**問題沒有變**：影像不跟
-    儀表擠在同一格。
+    ⚠ F100 第一版（2026-09-08 早上）曾把影像塞進工作台當第三格；v2 同一天
+    改回右欄 —— 調參數那一刻影像是主角，擠在那一列裡只剩 330×250。
+    **問題沒有變**：影像不跟儀表擠在同一格，儀表挨著參數。
     """
     wb = window.workbench
     cells = [wb.widget(i) for i in range(wb.count())]
-    assert cells == [window.stack, window.gauge_pane, window.preview_pane]
+    assert cells == [window.stack, window.gauge_pane]
     assert not window.preview_pane.isAncestorOf(window.gauge_pane), \
-        "儀表還留在影像那一格裡"
+        "儀表還留在影像那一欄裡"
     root = window.root_splitter
     assert [root.widget(i) for i in range(root.count())] == [
-        window.library, window.main_column], "F100：右邊整塊都是主欄"
+        window.library, window.main_column, window.preview_pane]
 
 
 def test_the_card_name_is_only_written_once(window, qapp):

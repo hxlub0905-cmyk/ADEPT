@@ -196,7 +196,7 @@ def test_the_canvas_is_the_top_block_and_settings_get_the_rest(window, qapp):
     # F100（2026-09-08）：影像住進工作台的第三格，所以**工作台開窗就攤開**
     # —— 收掉它等於把影像藏起來。F13-1 那條「沒選卡片時收起來」的理由（那塊
     # 空白壓到畫布）在新版面上不成立：畫布現在吃滿寬度、高度有保底。
-    assert window.params_row.widget(2) is window.preview_pane
+    assert window.root_splitter.widget(2) is window.preview_pane   # v2：右欄全高
     assert window.params_open() is True, "F100：工作台開窗就攤開（影像在裡面）"
     top, bottom = col.sizes()
     assert top > 0 and bottom > 0

@@ -61,7 +61,7 @@ def test_main_window_keeps_only_the_editing_surface(window):
     # 直方圖與 Gallery 仍然住在 Results 視窗。
     root = window.root_splitter
     assert [root.widget(i) for i in range(root.count())] == [
-        window.library, window.main_column]
+        window.library, window.main_column, window.preview_pane]
     assert window.canvas_column.widget(0) is window.pipeline
     assert window.canvas_column.widget(1) is window.workbench
     assert window.histogram.parent() is not window
@@ -75,13 +75,10 @@ def test_the_main_column_gets_the_width(window):
     看的是**設定值**而不是 ``sizes()``：QSplitter 要視窗真的 show 過才會排版，
     離屏測試裡 ``sizes()`` 只會回一組沒有意義的相等數字。
     """
-    from d4t.ui import workbench
-    lib, main = studio_mod.COLUMN_SIZES
-    assert main > lib * 3, studio_mod.COLUMN_SIZES
-    assert window.root_splitter.count() == 2
-    # 工作台三格：影像那一格的伸縮比不小於任何一格（它是「影像大一點」那句話
-    # 現在住的地方）。
-    assert workbench.COLUMN_STRETCH[2] == max(workbench.COLUMN_STRETCH)
+    lib, main, preview = studio_mod.COLUMN_SIZES
+    assert main > lib * 2, studio_mod.COLUMN_SIZES
+    assert preview > lib, "「影像大一點」：右欄比卡片庫寬"
+    assert window.root_splitter.count() == 3
 
 
 def test_results_window_is_not_shown_until_there_is_something_to_show(qapp, lot):
